@@ -1,8 +1,12 @@
 import os
 import time
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -16,6 +20,7 @@ engine = create_engine(
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 class Base(DeclarativeBase):
     pass
@@ -39,3 +44,24 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def run_database_bootstrap() -> None:
+    base_dir = Path(__file__).resolve().parents[1]
+    alembic_ini = base_dir / "alembic.ini"
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    if not alembic_ini.exists():
+        Base.metadata.create_all(bind=engine)
+        return
+
+    alembic_cfg = Config(str(alembic_ini))
+    alembic_cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
+
+    if not existing_tables:
+        Base.metadata.create_all(bind=engine)
+        command.stamp(alembic_cfg, "head")
+        return
+
+    command.upgrade(alembic_cfg, "head")

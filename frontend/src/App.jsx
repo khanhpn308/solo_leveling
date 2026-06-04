@@ -1,28 +1,32 @@
 import { useEffect, useMemo, useState } from 'react'
+import BossOverlay from './components/BossOverlay'
+import CertificateOverlay from './components/CertificateOverlay'
+import HomeTopBar from './components/HomeTopBar'
+import NavigationDrawer from './components/NavigationDrawer'
+import QuestOverlay from './components/QuestOverlay'
+import RoadmapHero from './components/RoadmapHero'
+import StatusModal from './components/StatusModal'
+import {
+  buildBossView,
+  buildDashboardView,
+  buildMainQuestMap,
+  buildPlayerSnapshot,
+  buildRoadmapBounds,
+  buildRoadmapPhaseTrack,
+  buildSuggestionInbox,
+  formatDate,
+  filterCertificateRecords,
+  getTodayISO,
+} from './dashboard-data'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
-const RANKS = ['F', 'E', 'D', 'C', 'B', 'A', 'S']
-const STAGES = ['Tháng 1–3', 'Tháng 4–6', 'Tháng 7–9', 'Tháng 10–12', 'Tháng 13–18']
 
-function formatDate(value) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value))
-}
-
-function rankProgress(xp) {
-  const thresholds = [0, 200, 500, 1000, 1700, 2500, 3500]
-  const next = thresholds.find((t) => t > xp) || 3500
-  const prev = [...thresholds].reverse().find((t) => t <= xp) || 0
-  if (xp >= 3500) return 100
-  return Math.round(((xp - prev) / (next - prev)) * 100)
-}
-
-function getTodayISO() {
-  const today = new Date()
-  const yyyy = today.getFullYear()
-  const mm = String(today.getMonth() + 1).padStart(2, '0')
-  const dd = String(today.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+const EMPTY_CHECKIN_DRAFT = {
+  mood: 3,
+  energy: 3,
+  focus: 3,
+  note: '',
+  avatarPicker: false,
 }
 
 async function api(path, options = {}) {
@@ -30,228 +34,411 @@ async function api(path, options = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })
+
   if (!response.ok) {
     const text = await response.text()
     throw new Error(text || 'API error')
   }
+
   return response.json()
+}
+
+function formatHostDateTime(now) {
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(now)
 }
 
 function App() {
   const [summary, setSummary] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [quests, setQuests] = useState([])
   const [checkins, setCheckins] = useState([])
-  const [selectedStage, setSelectedStage] = useState('')
-  const [selectedWeek, setSelectedWeek] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [mood, setMood] = useState(3)
-  const [energy, setEnergy] = useState(3)
-  const [note, setNote] = useState('')
+  const [studyPlanWeeks, setStudyPlanWeeks] = useState([])
+  const [mainQuests, setMainQuests] = useState([])
+  const [weeklyMission, setWeeklyMission] = useState(null)
+  const [bossBattles, setBossBattles] = useState([])
+  const [rankSuggestions, setRankSuggestions] = useState([])
+  const [weaknessSuggestions, setWeaknessSuggestions] = useState([])
+  const [testRecords, setTestRecords] = useState([])
 
-  const completedThisWeek = useMemo(() => quests.filter(q => q.completed).length, [quests])
-  const totalThisWeek = quests.length
+  const [appLoading, setAppLoading] = useState(true)
+  const [appError, setAppError] = useState('')
+  const [mainQuestLoading, setMainQuestLoading] = useState(true)
+  const [mainQuestError, setMainQuestError] = useState('')
+  const [weeklyLoading, setWeeklyLoading] = useState(true)
+  const [weeklyError, setWeeklyError] = useState('')
+  const [suggestionsLoading, setSuggestionsLoading] = useState(true)
+  const [suggestionsError, setSuggestionsError] = useState('')
+  const [certificatesLoading, setCertificatesLoading] = useState(true)
+  const [certificatesError, setCertificatesError] = useState('')
 
-  async function loadData() {
+  const [isNavOpen, setIsNavOpen] = useState(false)
+  const [isInboxOpen, setIsInboxOpen] = useState(false)
+  const [isStatusOpen, setIsStatusOpen] = useState(false)
+  const [isQuestOpen, setIsQuestOpen] = useState(false)
+  const [isCertificateOpen, setIsCertificateOpen] = useState(false)
+  const [isBossOpen, setIsBossOpen] = useState(false)
+  const [activeQuestTab, setActiveQuestTab] = useState('main')
+  const [hostNow, setHostNow] = useState(() => new Date())
+  const [checkInDraft, setCheckInDraft] = useState(EMPTY_CHECKIN_DRAFT)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setHostNow(new Date())
+    }, 60000)
+
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    loadInitialData()
+    loadMainQuestData()
+    loadWeeklyMission()
+    loadSuggestions()
+    loadCertificates()
+    loadBossBattles()
+  }, [])
+
+  const view = useMemo(() => {
+    if (!summary) return null
+    return buildDashboardView(summary, quests, checkins)
+  }, [summary, quests, checkins])
+
+  const mainQuestMap = useMemo(
+    () => buildMainQuestMap(studyPlanWeeks, mainQuests),
+    [studyPlanWeeks, mainQuests],
+  )
+
+  const roadmapTrack = useMemo(() => buildRoadmapPhaseTrack(mainQuestMap), [mainQuestMap])
+  const roadmapBounds = useMemo(() => buildRoadmapBounds(studyPlanWeeks), [studyPlanWeeks])
+
+  const playerSnapshot = useMemo(() => {
+    if (!summary && !profile) return null
+    return buildPlayerSnapshot(summary?.player, profile ?? {})
+  }, [summary, profile])
+
+  const inboxItems = useMemo(
+    () => buildSuggestionInbox(rankSuggestions, weaknessSuggestions, view?.skills ?? []),
+    [rankSuggestions, weaknessSuggestions, view?.skills],
+  )
+
+  const certificateRecords = useMemo(() => filterCertificateRecords(testRecords), [testRecords])
+  const bossView = useMemo(() => buildBossView(bossBattles), [bossBattles])
+
+  useEffect(() => {
+    if (!view) return
+
+    const current = view.commandDeck.activeCheckIn
+    setCheckInDraft({
+      mood: current?.mood ?? 3,
+      energy: current?.energy ?? 3,
+      focus: current?.focus ?? 3,
+      note: current?.note ?? '',
+      avatarPicker: false,
+    })
+  }, [view])
+
+  async function loadInitialData() {
     try {
-      setLoading(true)
-      setError('')
-      const [summaryData, questData, checkinData] = await Promise.all([
+      setAppLoading(true)
+      setAppError('')
+
+      const [summaryData, profileData, questData, checkinData] = await Promise.all([
         api('/summary'),
-        api(selectedStage || selectedWeek ? `/quests?${new URLSearchParams({
-          ...(selectedStage ? { stage: selectedStage } : {}),
-          ...(selectedWeek ? { week_no: selectedWeek } : {}),
-        })}` : '/quests'),
+        api('/profile'),
+        api('/quests'),
         api('/checkins'),
       ])
+
       setSummary(summaryData)
+      setProfile(profileData)
       setQuests(questData)
       setCheckins(checkinData)
-    } catch (err) {
-      setError(err.message)
+    } catch (error) {
+      setAppError(error.message)
     } finally {
-      setLoading(false)
+      setAppLoading(false)
     }
   }
 
-  useEffect(() => {
-    loadData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStage, selectedWeek])
+  async function loadMainQuestData() {
+    try {
+      setMainQuestLoading(true)
+      setMainQuestError('')
+
+      const [weeksData, mainQuestData] = await Promise.all([api('/study-plan/weeks'), api('/main-quests')])
+      setStudyPlanWeeks(weeksData)
+      setMainQuests(mainQuestData)
+    } catch (error) {
+      setMainQuestError(error.message)
+    } finally {
+      setMainQuestLoading(false)
+    }
+  }
+
+  async function loadWeeklyMission() {
+    try {
+      setWeeklyLoading(true)
+      setWeeklyError('')
+      const mission = await api('/weekly-mission/current')
+      setWeeklyMission(mission)
+    } catch (error) {
+      setWeeklyError(error.message)
+    } finally {
+      setWeeklyLoading(false)
+    }
+  }
+
+  async function loadSuggestions() {
+    try {
+      setSuggestionsLoading(true)
+      setSuggestionsError('')
+
+      const [rankData, weaknessData] = await Promise.all([api('/rank-suggestions'), api('/weakness-suggestions')])
+      setRankSuggestions(rankData)
+      setWeaknessSuggestions(weaknessData)
+    } catch (error) {
+      setSuggestionsError(error.message)
+    } finally {
+      setSuggestionsLoading(false)
+    }
+  }
+
+  async function loadCertificates() {
+    try {
+      setCertificatesLoading(true)
+      setCertificatesError('')
+      const records = await api('/test-records')
+      setTestRecords(records)
+    } catch (error) {
+      setCertificatesError(error.message)
+    } finally {
+      setCertificatesLoading(false)
+    }
+  }
+
+  async function loadBossBattles() {
+    const data = await api('/boss-battles')
+    setBossBattles(data)
+  }
 
   async function toggleQuest(quest) {
-    await api(`/quests/${quest.id}/${quest.completed ? 'uncomplete' : 'complete'}`, { method: 'POST' })
-    await loadData()
+    await api(`/quests/${quest.id}/${quest.completed ? 'uncomplete' : 'complete'}`, {
+      method: 'POST',
+    })
+
+    await Promise.all([loadInitialData(), loadWeeklyMission(), loadSuggestions(), loadMainQuestData()])
   }
 
   async function saveCheckIn() {
     await api('/checkins', {
       method: 'POST',
-      body: JSON.stringify({ checkin_date: getTodayISO(), mood, energy, note }),
+      body: JSON.stringify({
+        checkin_date: getTodayISO(),
+        mood: checkInDraft.mood,
+        energy: checkInDraft.energy,
+        focus: checkInDraft.focus,
+        note: checkInDraft.note,
+      }),
     })
-    setNote('')
-    await loadData()
+
+    await loadInitialData()
   }
 
-  if (loading && !summary) {
-    return <div className="boot-screen">SYSTEM LOADING<span>.</span><span>.</span><span>.</span></div>
+  async function handleSuggestionAction(item, action) {
+    const path =
+      item.type === 'rank'
+        ? `/rank-suggestions/${item.id}/${action}`
+        : `/weakness-suggestions/${item.id}/${action}`
+
+    await api(path, { method: 'POST' })
+    await Promise.all([loadSuggestions(), loadInitialData()])
   }
 
-  if (error) {
-    return <div className="boot-screen error">API ERROR: {error}</div>
+  async function handleCreateCertificate(payload) {
+    await api('/test-records', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+
+    await Promise.all([loadCertificates(), loadSuggestions()])
   }
+
+  function handleCheckInDraftChange({ field, value }) {
+    setCheckInDraft((current) => ({ ...current, [field]: value }))
+  }
+
+  function openQuest(tab = 'main') {
+    setActiveQuestTab(tab)
+    setIsQuestOpen(true)
+    setIsNavOpen(false)
+  }
+
+  function openCertificates() {
+    setIsCertificateOpen(true)
+    setIsNavOpen(false)
+  }
+
+  function openBoss() {
+    setIsBossOpen(true)
+    setIsNavOpen(false)
+  }
+
+  if (appLoading && !summary) {
+    return <div className="boot-screen">SYSTEM LOADING...</div>
+  }
+
+  if (appError) {
+    return <div className="boot-screen boot-screen--error">API ERROR: {appError}</div>
+  }
+
+  if (!view || !playerSnapshot) return null
+
+  const mainQuestCleared = mainQuests.filter((quest) => quest.completed).length
+
+  const statCards = [
+    {
+      label: 'Streak',
+      value: `${playerSnapshot.currentStreak} ngay`,
+      detail: `Best ${playerSnapshot.bestStreak} ngay`,
+      tone: 'cyan',
+    },
+    {
+      label: 'Shield',
+      value: `${playerSnapshot.shieldCount} / 2`,
+      detail: `Regen ${playerSnapshot.shieldRegenProgress}%`,
+      tone: 'amber',
+    },
+    {
+      label: 'Main Quest Cleared',
+      value: `${mainQuestCleared}`,
+      detail: `${mainQuests.length} total main quests`,
+      tone: 'violet',
+    },
+  ]
 
   return (
-    <main className="app-shell">
-      <section className="hero-panel glass-frame">
-        <div className="scanline" />
-        <div className="hero-left">
-          <p className="eyebrow">IELTS SYSTEM INTERFACE</p>
-          <h1>IELTS Quest Dashboard</h1>
-          <p className="subtitle">18 months to Band 7.0–7.5 · Local React + FastAPI + MySQL</p>
-          <div className="player-grid">
-            <Stat label="Level" value={summary.player.total_xp < 500 ? '18' : Math.floor(summary.player.total_xp / 180) + 18} />
-            <Stat label="Title" value={summary.player.title} />
-            <Stat label="Target" value={summary.player.target} />
-            <Stat label="Start" value={formatDate(summary.player.start_date)} />
-          </div>
-        </div>
-        <div className="status-card">
-          <p className="card-label">STATUS</p>
-          <div className="big-level">{summary.player.total_xp}</div>
-          <p className="xp-label">TOTAL XP</p>
-          <div className="bar-wrap"><div style={{ width: `${Math.min(100, summary.player.total_xp / 35)}%` }} /></div>
-          <p className="tiny">Week: {formatDate(summary.player.week_start)} → {formatDate(summary.player.week_end)}</p>
+    <main className="home-shell">
+      <div className="app-shell__texture" />
+
+      <HomeTopBar
+        player={playerSnapshot}
+        hostDateTime={formatHostDateTime(hostNow)}
+        pendingCount={inboxItems.length}
+        isInboxOpen={isInboxOpen}
+        inboxItems={inboxItems}
+        suggestionsLoading={suggestionsLoading}
+        suggestionsError={suggestionsError}
+        onToggleInbox={() => setIsInboxOpen((current) => !current)}
+        onApplySuggestion={(item) => handleSuggestionAction(item, 'apply')}
+        onDismissSuggestion={(item) => handleSuggestionAction(item, 'dismiss')}
+        onOpenNav={() => setIsNavOpen(true)}
+        onOpenStatus={() => setIsStatusOpen(true)}
+      />
+
+      <section className="home-shell__surface">
+        <RoadmapHero
+          player={playerSnapshot}
+          roadmap={roadmapTrack}
+          currentPhaseLabel={view.player.phaseLabel}
+          statCards={statCards}
+          roadmapBounds={
+            roadmapBounds
+              ? {
+                  startDate: formatDate(roadmapBounds.startDate),
+                  endDate: formatDate(roadmapBounds.endDate),
+                }
+              : null
+          }
+        />
+
+        <div className="home-shell__support">
+          <article className="support-panel">
+            <p>Today Sync</p>
+            <strong>{view.commandDeck.activeCheckIn ? 'Check-in ready' : 'Need check-in'}</strong>
+            <span>{view.summary.todayXp} XP earned today</span>
+          </article>
+
+          <article className="support-panel">
+            <p>Weekly Mission</p>
+            <strong>{weeklyLoading ? 'Loading...' : weeklyError ? 'Unavailable' : weeklyMission?.title || '--'}</strong>
+            <span>
+              {weeklyLoading
+                ? 'Dang tai weekly mission.'
+                : weeklyError
+                  ? weeklyError
+                  : `${weeklyMission?.items?.length ?? 0} objectives`}
+            </span>
+          </article>
+
+          <article className="support-panel">
+            <p>Boss Status</p>
+            <strong>{bossView.currentBoss?.title || 'No boss loaded'}</strong>
+            <span>{bossView.currentBoss?.status || 'Pending'}</span>
+          </article>
         </div>
       </section>
 
-      <section className="dashboard-grid">
-        <section className="panel rank-panel">
-          <PanelHeader title="Skill Progress" tag="F → S Rank" />
-          <div className="rank-ladder">
-            {RANKS.slice().reverse().map(rank => <span key={rank} className={`rank-chip rank-${rank}`}>{rank}</span>)}
-          </div>
-          <div className="skill-list">
-            {summary.skills.map(skill => <SkillCard key={skill.id} skill={skill} />)}
-          </div>
-        </section>
+      <NavigationDrawer
+        open={isNavOpen}
+        onClose={() => setIsNavOpen(false)}
+        onOpenQuestTab={openQuest}
+        onOpenCertificates={openCertificates}
+        onOpenBoss={openBoss}
+      />
 
-        <section className="panel quests-panel">
-          <PanelHeader title="Quest Board" tag={`${completedThisWeek}/${totalThisWeek} done`} />
-          <div className="filters">
-            <select value={selectedStage} onChange={(e) => { setSelectedStage(e.target.value); setSelectedWeek('') }}>
-              <option value="">Current week</option>
-              {STAGES.map(stage => <option key={stage} value={stage}>{stage}</option>)}
-            </select>
-            <input
-              value={selectedWeek}
-              onChange={(e) => { setSelectedWeek(e.target.value); setSelectedStage('') }}
-              placeholder="Week no."
-              type="number"
-              min="1"
-              max="78"
-            />
-          </div>
-          <div className="quest-list">
-            {quests.slice(0, 21).map(quest => (
-              <button key={quest.id} className={`quest-card ${quest.completed ? 'completed' : ''}`} onClick={() => toggleQuest(quest)}>
-                <div>
-                  <p className="quest-date">Week {quest.week_no} · {formatDate(quest.quest_date)} · {quest.stage}</p>
-                  <h3>{quest.title}</h3>
-                  <p>{quest.details}</p>
-                  <span className="source">Source: {quest.source}</span>
-                </div>
-                <div className="quest-reward">
-                  <strong>+{quest.xp}</strong>
-                  <span>XP</span>
-                  <small>{quest.skill_name}</small>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
+      <StatusModal
+        open={isStatusOpen}
+        onClose={() => setIsStatusOpen(false)}
+        player={playerSnapshot}
+        activeCheckIn={view.commandDeck.activeCheckIn}
+        checkInDraft={checkInDraft}
+        onCheckInDraftChange={handleCheckInDraftChange}
+        onSaveCheckIn={saveCheckIn}
+        skills={view.skills}
+      />
 
-        <section className="panel mood-panel">
-          <PanelHeader title="Mood / Energy" tag="Daily Check-in" />
-          <div className="slider-row">
-            <label>Mood</label>
-            <input type="range" min="1" max="5" value={mood} onChange={(e) => setMood(Number(e.target.value))} />
-            <strong>{'★'.repeat(mood)}{'☆'.repeat(5 - mood)}</strong>
-          </div>
-          <div className="slider-row">
-            <label>Energy</label>
-            <input type="range" min="1" max="5" value={energy} onChange={(e) => setEnergy(Number(e.target.value))} />
-            <strong>{'⚡'.repeat(energy)}</strong>
-          </div>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ghi chú ngắn: hôm nay mệt vì..., học tốt vì..." />
-          <button className="primary-btn" onClick={saveCheckIn}>Save Check-in</button>
-          <div className="checkin-list">
-            {checkins.slice(0, 5).map(item => (
-              <div key={item.id} className="checkin-item">
-                <span>{formatDate(item.checkin_date)}</span>
-                <strong>M{item.mood}/E{item.energy}</strong>
-                <p>{item.note || 'No note'}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+      <QuestOverlay
+        open={isQuestOpen}
+        activeTab={activeQuestTab}
+        onTabChange={setActiveQuestTab}
+        onClose={() => setIsQuestOpen(false)}
+        mainQuestMap={mainQuestMap}
+        mainQuestLoading={mainQuestLoading}
+        mainQuestError={mainQuestError}
+        dailyQuests={view.todayQuests}
+        backlogQuests={view.backlogQuests}
+        commandDeck={view.commandDeck}
+        onToggleQuest={toggleQuest}
+        weeklyMission={
+          weeklyLoading || weeklyError
+            ? null
+            : weeklyMission || {
+                pattern_code: view.weeklyMission.code,
+                title: view.weeklyMission.title,
+                description: '',
+                reward_xp: view.weeklyMission.rewardXp,
+                items: [],
+              }
+        }
+      />
 
-        <section className="panel badge-panel">
-          <PanelHeader title="Badge Wall" tag="Achievements" />
-          <div className="badge-grid">
-            {summary.badges.map(badge => (
-              <div key={badge.id} className={`badge ${badge.unlocked ? 'unlocked' : 'locked'}`}>
-                <span>{badge.icon}</span>
-                <strong>{badge.name}</strong>
-                <p>{badge.description}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+      <CertificateOverlay
+        open={isCertificateOpen}
+        loading={certificatesLoading}
+        error={certificatesError}
+        records={certificateRecords}
+        onClose={() => setIsCertificateOpen(false)}
+        onCreate={handleCreateCertificate}
+      />
 
-        <section className="panel boss-panel">
-          <PanelHeader title="Boss Battles" tag="Monthly checkpoints" />
-          <div className="boss-list">
-            {summary.boss_battles.map(boss => (
-              <div key={boss.id} className="boss-card">
-                <div>
-                  <p>{formatDate(boss.battle_date)} · {boss.stage}</p>
-                  <h3>{boss.title}</h3>
-                  <span>{boss.goal}</span>
-                </div>
-                <strong>{boss.status}</strong>
-              </div>
-            ))}
-          </div>
-        </section>
-      </section>
+      <BossOverlay open={isBossOpen} bossView={bossView} onClose={() => setIsBossOpen(false)} />
     </main>
-  )
-}
-
-function Stat({ label, value }) {
-  return <div className="stat"><span>{label}</span><strong>{value}</strong></div>
-}
-
-function PanelHeader({ title, tag }) {
-  return <div className="panel-header"><h2>{title}</h2><span>{tag}</span></div>
-}
-
-function SkillCard({ skill }) {
-  const pct = rankProgress(skill.xp)
-  return (
-    <div className="skill-card">
-      <div className={`rank-badge rank-${skill.rank}`}>{skill.rank}</div>
-      <div className="skill-main">
-        <div className="skill-title-row">
-          <h3>{skill.icon} {skill.name}</h3>
-          <span>Lv.{skill.level}</span>
-        </div>
-        <div className="bar-wrap"><div style={{ width: `${pct}%` }} /></div>
-        <p>{skill.xp} XP · Last practiced: {formatDate(skill.last_practiced)}</p>
-        <small>{skill.weak_point}</small>
-      </div>
-    </div>
   )
 }
 

@@ -25,6 +25,7 @@ services:
     environment:
       DATABASE_URL: mysql+pymysql://ielts_user:ielts_password@mysql:3306/ielts_quest
       APP_START_DATE: "2026-06-04"
+      MATERIAL_PLAN_PATH: /app/material.md
       CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
     ports:
       - "8000:8000"
@@ -32,7 +33,8 @@ services:
       mysql:
         condition: service_healthy
     volumes:
-      - ./backend/app:/app/app
+      - ./backend:/app
+      - ./material.md:/app/material.md:ro
 
   frontend:
     build: ./frontend
