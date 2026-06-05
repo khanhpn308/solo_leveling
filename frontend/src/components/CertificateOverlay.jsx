@@ -125,13 +125,13 @@ function CertificateOverlay({ open, loading, error, records, onClose, onCreate }
         </form>
       ) : null}
 
-      {loading ? <div className="empty-state">Dang tai certificate records...</div> : null}
+      {loading ? <div className="empty-state">Loading certificate records...</div> : null}
       {!loading && error ? <div className="empty-state empty-state--warning">{error}</div> : null}
 
       {!loading && !error ? (
         <div className="certificate-list">
           {records.length === 0 ? (
-            <div className="empty-state">Chua co certificate record thuoc IELTS / Aptis / TOEIC / TOEFL.</div>
+            <div className="empty-state">No IELTS / Aptis / TOEIC / TOEFL certificate records yet.</div>
           ) : (
             records.map((record) => (
               <article key={record.id} className="certificate-card">
@@ -148,7 +148,7 @@ function CertificateOverlay({ open, loading, error, records, onClose, onCreate }
                   <span>W {record.writing_score || '--'}</span>
                   <span>S {record.speaking_score || '--'}</span>
                 </div>
-                <p>{record.note || 'Khong co ghi chu.'}</p>
+                <p>{record.note || 'No note.'}</p>
               </article>
             ))
           )}

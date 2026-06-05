@@ -1,6 +1,6 @@
 function WeeklyMissionCard({ mission }) {
   if (!mission) {
-    return <div className="empty-state">Chua tai duoc weekly mission.</div>
+    return <div className="empty-state">Could not load the weekly mission.</div>
   }
 
   return (

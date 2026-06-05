@@ -1,6 +1,6 @@
 import DailyQuestPanel from './DailyQuestPanel'
 import MainQuestMapPanel from './MainQuestMapPanel'
-import { formatDate } from '../dashboard-data'
+import { formatDate, getTodayISO } from '../dashboard-data'
 import OverlayFrame from './OverlayFrame'
 import WeeklyMissionCard from './WeeklyMissionCard'
 
@@ -8,7 +8,7 @@ const QUEST_TABS = [
   { key: 'main', label: 'Main' },
   { key: 'daily', label: 'Daily' },
   { key: 'weekly', label: 'Weekly' },
-  { key: 'archive', label: 'Archive', disabled: true },
+  { key: 'archive', label: 'Archive' },
 ]
 
 function QuestOverlay({
@@ -21,6 +21,7 @@ function QuestOverlay({
   mainQuestError,
   dailyQuests,
   backlogQuests,
+  allQuests,
   commandDeck,
   onToggleQuest,
   weeklyMission,
@@ -60,16 +61,16 @@ function QuestOverlay({
     >
       {activeTab === 'main' ? (
         <div className="quest-main-tab">
-          {mainQuestLoading ? <div className="empty-state">Dang tai main quest hien tai...</div> : null}
+          {mainQuestLoading ? <div className="empty-state">Loading the current main quest...</div> : null}
 
           {!mainQuestLoading && currentSession ? (
             <section className={`current-main-quest current-main-quest--${currentSession.statusTone}`}>
               <header>
                 <div>
-                  <p>Main Quest Hien Tai</p>
+                  <p>Current Main Quest</p>
                   <h3>{currentSession.skillText}</h3>
                   <strong>
-                    {formatDate(currentSession.study_date)} · {currentSession.weekday_label} · {currentSession.session_label}
+                    {formatDate(currentSession.study_date)} / {currentSession.weekday_label} / {currentSession.session_label}
                   </strong>
                 </div>
                 <div className="current-main-quest__reward">
@@ -108,8 +109,46 @@ function QuestOverlay({
 
       {activeTab === 'weekly' ? <WeeklyMissionCard mission={weeklyMission} /> : null}
 
-      {activeTab === 'archive' ? <div className="empty-state">Archive coming soon.</div> : null}
+      {activeTab === 'archive' ? <PanelArchive quests={allQuests} onToggleQuest={onToggleQuest} /> : null}
     </OverlayFrame>
+  )
+}
+
+function PanelArchive({ quests, onToggleQuest }) {
+  const todayIso = getTodayISO()
+  const sorted = [...quests].sort((left, right) => new Date(left.quest_date).getTime() - new Date(right.quest_date).getTime())
+
+  return (
+    <div className="quest-main-tab">
+      <div className="backlog-header">
+        <h3>Current Window Archive</h3>
+        <span>Browse and complete quests from the currently loaded quest window.</span>
+      </div>
+
+      <div className="backlog-list">
+        {sorted.length === 0 ? (
+          <div className="empty-state">There are no quests in the current window.</div>
+        ) : (
+          sorted.map((quest) => (
+            <button
+              key={quest.id}
+              className={`backlog-item backlog-item--${quest.status}`}
+              type="button"
+              disabled={quest.status === 'expired' || quest.quest_date > todayIso}
+              onClick={() => onToggleQuest(quest)}
+            >
+              <div>
+                <strong>{quest.title}</strong>
+                <p>
+                  {quest.skill_name} / {formatDate(quest.quest_date)} / Week {quest.week_no}
+                </p>
+              </div>
+              <span>{quest.statusLabel || quest.status}</span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
   )
 }
 

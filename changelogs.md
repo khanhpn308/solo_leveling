@@ -107,10 +107,1295 @@ MySQL CLI không khả dụng trong shell này
 - [ ] Tôi đã kiểm tra kết quả xác thực.
 - [ ] Tôi đã phê duyệt tác vụ này.
 
+## [2026-06-04 21:53] Frontend UI English localization pass
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Convert the current UI copy fully to English
+
+### 1. Summary
+
+Converted the active frontend UI copy from Vietnamese to English across dashboard panels, overlays, roadmap/main quest views, suggestion inbox, status/check-in surfaces, and certificate/weekly mission states. Also cleaned a few mojibake separators so the UI no longer shows broken encoding glyphs.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `frontend/src/dashboard-data.js` | Modified | diff hunks around `TRACKER_MODULES`, `MAIN_QUEST_PHASES`, `WEEKLY_MISSION_PATTERNS`, `getMainQuestStatusMeta`, `getSessionIntegrity`, `getSessionXpMeta`, `getCurrentPhaseLabel`, `buildWeaknessSuggestions`, `buildSuggestionInbox` | Converted derived UI labels/details to English so view-model data matches the new UI copy. |
+| `frontend/src/App.jsx` | Modified | diff hunk around stat cards + weekly mission loading | Converted streak/day strings and weekly mission loading copy to English. |
+| `frontend/src/components/DailyQuestPanel.jsx` | Modified | `statusLabel`, backlog header/list area | Converted daily/backlog labels to English. |
+| `frontend/src/components/MainQuestMapPanel.jsx` | Modified | full component rewrite, main quest map sections | Converted all map labels/states to English and replaced broken separators with ASCII-safe copy. |
+| `frontend/src/components/RoadmapHero.jsx` | Modified | full component rewrite, hero + phase overlay | Converted hero/phase overlay copy to English and removed mojibake separators. |
+| `frontend/src/components/QuestOverlay.jsx` | Modified | main/archive quest states | Converted overlay copy to English. |
+| `frontend/src/components/StatusModal.jsx` | Modified | check-in, badge, history sections | Converted status modal helper copy and empty states to English. |
+| `frontend/src/components/CheckInPanel.jsx` | Modified | full component rewrite | Converted check-in UI to English and replaced broken star/separator glyphs with safe ASCII output. |
+| `frontend/src/components/CampaignPanel.jsx` | Modified | campaign metrics and labels | Converted campaign/streak labels to English. |
+| `frontend/src/components/CommandHeader.jsx` | Modified | hero subtitle and timeline fallback | Converted header copy to English. |
+| `frontend/src/components/SetupSummaryPanel.jsx` | Modified | title/tag/setup cards | Converted setup panel copy to English. |
+| `frontend/src/components/CertificateOverlay.jsx` | Modified | loading/empty/note fallback | Converted certificate overlay state copy to English. |
+| `frontend/src/components/SuggestionInboxDropdown.jsx` | Modified | loading/empty states | Converted inbox dropdown copy to English. |
+| `frontend/src/components/SuggestionInboxPanel.jsx` | Modified | empty state | Converted suggestion inbox panel copy to English. |
+| `frontend/src/components/WeeklyMissionCard.jsx` | Modified | empty state | Converted weekly mission fallback copy to English. |
+| `frontend/src/components/WeeklyMissionPanel.jsx` | Modified | progress label | Converted weekly mission summary copy to English. |
+| `frontend/src/components/BossOverlay.jsx` | Modified | empty state | Converted boss overlay empty state to English. |
+| `frontend/src/components/BossTimelinePanel.jsx` | Modified | timeline tag/date line | Converted timeline tag to English and replaced broken separator glyphs. |
+| `frontend/src/dashboard-data.test.js` | Modified | assertions around main quest map text | Updated string-based expectations to match the new English view-model copy. |
+| `changelogs.md` | Modified | tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Full English UI copy pass across active dashboard panels and overlays.
+- [x] Cleaned broken encoding separators in roadmap, boss timeline, check-in, and main quest map surfaces.
+
+### 4. Bugs fixed
+
+- [x] Suggestion, weekly mission, certificate, and quest/map fallback states no longer show Vietnamese copy.
+- [x] Several mojibake sequences like `Â·` no longer appear in visible UI copy.
+- [x] Dashboard-data test expectations now match the new English UI-derived strings.
+
+### 5. Code removed
+
+- [x] Removed leftover Vietnamese / mojibake copy from active frontend surfaces.
+- [ ] None
+
+### 6. Commands run
+
+```bash
+rg -n "..." frontend/src
+Get-Content frontend/src/components/CertificateOverlay.jsx
+Get-Content frontend/src/components/SuggestionInboxDropdown.jsx
+Get-Content frontend/src/components/WeeklyMissionCard.jsx
+Get-Content frontend/src/components/BossTimelinePanel.jsx
+Get-Content frontend/src/components/CommandHeader.jsx
+Get-Content frontend/src/components/SetupSummaryPanel.jsx
+Get-Content frontend/src/components/SuggestionInboxPanel.jsx
+Get-Content frontend/src/components/WeeklyMissionPanel.jsx
+Get-Content frontend/src/dashboard-data.test.js
+Get-Content frontend/src/dashboard-data.js
+git diff --stat -- frontend/src changelogs.md
+git diff --unified=0 -- frontend/src/App.jsx frontend/src/dashboard-data.js frontend/src/dashboard-data.test.js frontend/src/components/BossOverlay.jsx frontend/src/components/BossTimelinePanel.jsx frontend/src/components/CampaignPanel.jsx frontend/src/components/CertificateOverlay.jsx frontend/src/components/CheckInPanel.jsx frontend/src/components/CommandHeader.jsx frontend/src/components/DailyQuestPanel.jsx frontend/src/components/MainQuestMapPanel.jsx frontend/src/components/QuestOverlay.jsx frontend/src/components/RoadmapHero.jsx frontend/src/components/SetupSummaryPanel.jsx frontend/src/components/StatusModal.jsx frontend/src/components/SuggestionInboxDropdown.jsx frontend/src/components/SuggestionInboxPanel.jsx frontend/src/components/WeeklyMissionCard.jsx frontend/src/components/WeeklyMissionPanel.jsx
+npm.cmd run build
+npm.cmd run test:dashboard-data
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed
+dashboard-data suite: 5 tests, 0 failures
+manual source scan: no Vietnamese copy matches remained in frontend/src for the searched patterns
+```
+
+### 8. Remaining issues
+
+- [ ] No browser-side visual review was run in this pass.
+- [ ] Date formatting still uses numeric local format; wording is English, but locale-specific date style was not changed in this task.
+
+### 9. Suggested next step
+
+- If you want the app fully English in presentation as well as wording, the next pass should standardize date/time formatting and review screenshots for any backend-provided Vietnamese content that may still appear at runtime.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 07:52] Quest surfaces English cleanup
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Convert the remaining daily / weekly / main quest UI copy fully to English
+
+### 1. Summary
+
+Cleaned the remaining quest-surface wording so the `main`, `daily`, and `archive` quest views no longer show mixed separators or leftover non-English-looking copy. Also normalized the current phase label generated from `dashboard-data.js`.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `frontend/src/components/DailyQuestPanel.jsx` | Modified | full component rewrite | Replaced broken separators with ASCII-safe `/`, adjusted the panel tag to `daily clears`, and kept all daily/backlog text consistently English. |
+| `frontend/src/components/QuestOverlay.jsx` | Modified | full component rewrite | Cleaned `Current Main Quest` and archive metadata lines so they use English-only copy and safe separators. |
+| `frontend/src/dashboard-data.js` | Modified | `getCurrentPhaseLabel()` | Normalized phase labels from `Month X-Y · ...` mojibake output to clean English `Month X-Y / ...`. |
+| `changelogs.md` | Modified | tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Quest overlays now use consistent English-only metadata separators.
+- [x] Current phase labels for quest-related views are now clean English strings.
+
+### 4. Bugs fixed
+
+- [x] Daily quest cards no longer show broken `Â·` separators.
+- [x] Main quest overlay header no longer shows mixed/broken separators.
+- [x] Archive quest lines no longer show mixed/broken separators.
+
+### 5. Code removed
+
+- [x] Removed leftover broken separator glyphs from quest-related UI copy.
+- [ ] None
+
+### 6. Commands run
+
+```bash
+rg -n "..." frontend/src/components/DailyQuestPanel.jsx frontend/src/components/QuestOverlay.jsx frontend/src/components/MainQuestMapPanel.jsx frontend/src/components/WeeklyMissionCard.jsx frontend/src/components/WeeklyMissionPanel.jsx frontend/src/dashboard-data.js
+npm.cmd run build
+npm.cmd run test:dashboard-data
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed
+dashboard-data suite: 5 tests, 0 failures
+manual source scan: the targeted quest surfaces no longer contain the broken separator copy that was still visible in runtime
+```
+
+### 8. Remaining issues
+
+- [ ] Weekly mission content coming from backend payloads can still vary in wording, but the frontend surface copy is now English.
+- [ ] No browser-automation screenshot pass was run in this fix.
+
+### 9. Suggested next step
+
+- Reload the Quest overlay and inspect the `Main`, `Daily`, `Weekly`, and `Archive` tabs. If any non-English text remains, it is likely backend-provided content and should be traced from the payload next.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 07:44] Status hero metric alignment tweak
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Center Level / Rank / Target content inside the status hero metric cards
+
+### 1. Summary
+
+Centered the content inside the `Level`, `Rank`, and `Target` cards in the status hero so labels and values sit cleanly in the middle of each card.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `frontend/src/styles.css` | Modified | `status-core__metrics article` block | Added centered grid alignment and centered text for the hero metric cards; also normalized the label spacing. |
+| `changelogs.md` | Modified | tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Centered layout for `Level`, `Rank`, and `Target` inside the status hero cards.
+
+### 4. Bugs fixed
+
+- [x] The `Rank F` and `Target 7.0-7.5` content no longer sits off-center inside their cards.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+npm.cmd run build
+npm.cmd run test:dashboard-data
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed
+dashboard-data suite: 5 tests, 0 failures
+```
+
+### 8. Remaining issues
+
+- [ ] Final visual balance still depends on runtime review after reload.
+
+### 9. Suggested next step
+
+- Reload the status modal and inspect the three hero cards; if the target card still feels optically low, the next tweak should reduce its font size slightly and increase top padding by 2-4px only for non-neon values.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 07:39] Status modal layout polish and framing fix
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Fix the status modal framing artifact and improve B1 Awakener layout balance
+
+### 1. Summary
+
+Adjusted the status modal layout so the large translucent frame no longer wraps the top two sections, enlarged the portrait block, compacted the Level / Rank / Target cards, and centered the Mood / Energy / Focus values for a cleaner game-panel presentation.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `frontend/src/styles.css` | Modified | `status modal` block around `overlay-frame--status`, `status-shell__hero`, `status-avatar`, `status-core__metrics`, `status-condition-card` | Disabled the extra overlay inner frame for the status modal, widened the portrait column, reduced the metric card footprint, and centered the daily-condition cards. |
+| `frontend/src/components/StatusModal.jsx` | Modified | recent check-in section near the bottom of the component | Replaced the remaining dot separator in recent check-in stats with ASCII-safe slash separators for visual consistency. |
+| `changelogs.md` | Modified | tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Status overlay no longer renders the extra inner frame around the top layout.
+- [x] The B1 Awakener hero block now gives more visual weight to the portrait area.
+- [x] Mood / Energy / Focus cards now center their values and labels more cleanly.
+
+### 4. Bugs fixed
+
+- [x] Removed the large faint framing artifact that visually wrapped the top two panels.
+- [x] Prevented the top layout from feeling oversized relative to the lower Badge Wall and Recent Check-ins cards.
+- [x] Cleaned the remaining recent-checkin separator style inside the modal.
+
+### 5. Code removed
+
+- [x] Removed the status modal's extra `overlay-frame::before` inner border treatment.
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content frontend/src/components/StatusModal.jsx
+Get-Content frontend/src/styles.css
+Get-Content frontend/src/components/OverlayFrame.jsx
+rg -n "status-modal|status-shell__hero|overlay-frame--status" frontend/src/styles.css frontend/src/components/StatusModal.jsx
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --unified=0 -- frontend/src/components/StatusModal.jsx frontend/src/styles.css
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed
+dashboard-data suite: 5 tests, 0 failures
+```
+
+### 8. Remaining issues
+
+- [ ] No browser-automation screenshot verification was run in this pass.
+- [ ] Final visual balance still depends on your runtime review after reload.
+
+### 9. Suggested next step
+
+- Reload the app and inspect the status modal again; if the hero area still feels too tall, the next bounded pass should reduce the portrait column by another 8-12px and tighten the skill matrix card heights to match.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-04 21:37] Map mau rank F-S theo tier-color cho skill cards
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Skill rank tier color polish
+
+### 1. Tóm tắt
+
+Áp màu chữ `rank` của từng skill card theo bảng màu trong `tier-color.png` thay vì theo màu accent của từng skill. Từ nay `F -> S` sẽ có màu tier cố định, nhất quán giữa các skill.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/components/SkillCards.jsx` | Chỉnh sửa | khoảng `L1-L24`, `L44-L52` | Thêm helper `getRankClass(rank)` và gắn class tier vào `skill-rank-badge`. |
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `.skill-rank-badge` khoảng `L1205-L1245` | Bỏ map màu rank theo `skill theme`, thay bằng map theo tier `S/A/B/C/D/E/F` với glow nhẹ theo từng màu. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry polish này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Rank của mỗi skill dùng màu tier cố định theo `tier-color.png`.
+
+### 4. Lỗi đã sửa
+
+- [x] Loại bỏ việc rank bị nhuộm theo màu skill theme thay vì theo tier.
+
+### 5. Mã đã loại bỏ
+
+- [x] Removed old `.skill-node--<accent> .skill-rank-badge strong` color mapping.
+
+### 6. Lệnh đã chạy
+
+```bash
+rg --files -g "*tier-color*" -g "*.png"
+Get-Content frontend/src/components/SkillCards.jsx | Select-Object -First 180
+npm.cmd run build
+npm.cmd run test:dashboard-data
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser screenshot sau đổi màu tier; cần nhìn runtime thật để tinh chỉnh độ sáng/glow nếu cần.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu cần bám ảnh mạnh hơn nữa, tinh chỉnh thêm gradient stroke hoặc outline cho chữ rank theo từng tier.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 21:29] Sửa layout lỗi nghiêm trọng của StatusModal
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** StatusModal emergency layout correction
+
+### 1. Tóm tắt
+
+Sửa lỗi layout nghiêm trọng của `StatusModal` theo screenshot mới: `rank` trong skill card bị trôi khỏi card, header status có quá nhiều text thừa, và bố cục chưa đúng ý đồ 4 phần. Bản vá này chuyển `StatusModal` thành layout 2x2 rõ ràng: 2 ô lớn hàng trên (`B1 Awakener`, `Skill Matrix`) và 2 ô nhỏ hàng dưới (`Badge Wall`, `Recent Check-ins`), đồng thời loại bỏ các text thừa mà user đã chỉ định.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/components/StatusModal.jsx` | Chỉnh sửa | khoảng `L1-L210` | Ẩn/loại text `Status Center`, subtitle, `Portrait profile`, note phụ của 3 condition card; chuyển structure modal sang 4 ô trực tiếp thay vì lồng `status-main-grid`; giữ `Badge Wall` và `Recent Check-ins` ở hàng dưới. |
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực status modal khoảng `L1650-L1835` và media query `L1988-L2000` | Thêm `status-modal--quad`, ẩn header copy của overlay status, sửa layout 2x2, sửa compact skill header/rank badge, và responsive collapse theo thứ tự 4 ô. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry fix layout này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] StatusModal chia thành 4 phần rõ ràng theo đúng layout user yêu cầu.
+- [x] Header status chỉ còn nút close, bỏ toàn bộ text overlay thừa.
+- [x] Compact skill cards giữ rank nằm đúng trong card.
+
+### 4. Lỗi đã sửa
+
+- [x] Sửa lỗi `rank` bị lệch hẳn khỏi skill cards.
+- [x] Sửa lỗi hierarchy rối và text thừa trong phần status.
+- [x] Sửa sai bố cục khiến `Badge Wall` và `Recent Check-ins` không nằm thành 2 ô nhỏ phía dưới.
+
+### 5. Mã đã loại bỏ
+
+- [x] Removed visible overlay header copy for `StatusModal`.
+- [x] Removed condition helper texts: `Tinh than hom nay`, `Nang luong hien tai`, `Do tap trung`.
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend/src/components/StatusModal.jsx | Select-Object -First 260
+Get-Content frontend/src/components/SkillCards.jsx | Select-Object -First 180
+Get-Content frontend/src/styles.css | Select-Object -Skip 1640 -First 240
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/components/StatusModal.jsx frontend/src/styles.css
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser walkthrough sau bản vá này; cần xác nhận lại bằng screenshot/runtime xem density của 4 ô đã hợp mắt chưa.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu 4 ô vẫn còn nặng, bước tiếp theo là giảm padding và giảm số cột của `Skill Matrix` trong modal.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 21:13] Retheme palette va redesign StatusModal theo color-ui/status-ui
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Palette retheme + compact status redesign
+
+### 1. Tóm tắt
+
+Đổi toàn bộ tone màu app sang hướng `teal/emerald` với `amber/gold` accent, bám gần hơn `color-ui.webp`. Đồng thời redesign `StatusModal` theo concept `status-ui.webp`: hero block cho `level/rank/xp`, số quan trọng có neon glow, `daily condition` gọn hơn, `Check-in` chuyển sang section expand, `skills` thành compact matrix, và `badge/history` thành phần phụ có thể thu gọn.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/components/StatusModal.jsx` | Chỉnh sửa | toàn bộ component khoảng `L1-L224` | Viết lại hierarchy của status modal: portrait tĩnh, hero stats, neon numbers, daily condition cards, expandable check-in, collapsible badge/history sections. |
+| `frontend/src/components/SkillCards.jsx` | Chỉnh sửa | khoảng `L3-L44` | `compact` mode giờ thực sự compact: chỉ giữ `name + rank + level + xp + progress`, bỏ note/last practiced ở mode compact. |
+| `frontend/src/styles.css` | Chỉnh sửa | `:root`, `body`, và khu status/skill styles khoảng `L1-L70`, `L1640-L1820`, cùng một số token dùng chung | Đổi palette toàn app sang teal/emerald + amber, thêm status neon-number treatment, layout mới cho status modal, style aux sections, compact skill cards, và panel lighting gần concept ảnh mẫu hơn. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry task redesign này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Palette toàn app đổi sang tone gần `color-ui.webp`.
+- [x] `StatusModal` có hero block rõ cho `level / rank / xp`.
+- [x] Số quan trọng trong `StatusModal` có hiệu ứng neon.
+- [x] `Daily condition` gọn thành 3 stat card.
+- [x] `Check-in` mở rộng theo nút thay vì lộ toàn bộ form ngay.
+- [x] `Badge Wall` và `Recent Check-ins` trở thành section phụ/collapsible.
+
+### 4. Lỗi đã sửa
+
+- [x] Giảm độ dài và sự rối của status modal cũ.
+- [x] Loại bỏ compact mode chưa đủ compact của khối skills trong status.
+- [x] Đồng bộ lại visual hierarchy để status screen có cảm giác system/game rõ hơn.
+
+### 5. Mã đã loại bỏ
+
+- [x] Removed avatar picker emphasis from `StatusModal`.
+- [x] Removed legacy full-detail compact skill rendering inside status modal.
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend/src/components/StatusModal.jsx | Select-Object -First 320
+Get-Content frontend/src/styles.css | Select-Object -First 260
+rg -n "compact ?=|compact\\}|compact \\?|SkillCards" frontend/src
+Get-Content frontend/src/components/SkillCards.jsx | Select-Object -First 260
+Get-Content frontend/src/components/BadgeWallPanel.jsx | Select-Object -First 220
+Get-Content frontend/src/styles.css | Select-String -Pattern 'status-modal|status-avatar|status-profile|xp-meter|profile-signal-grid|checkin-grid|checkin-history|skill-grid|skill-node|badge-grid|modal-block' -Context 3,10
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/components/StatusModal.jsx frontend/src/components/SkillCards.jsx frontend/src/styles.css
+git diff --unified=0 -- frontend/src/components/StatusModal.jsx frontend/src/components/SkillCards.jsx frontend/src/styles.css
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser screenshot walkthrough để xác nhận mức độ bám sát `color-ui.webp` và `status-ui.webp` trong runtime thật.
+- [ ] Một số panel ngoài `StatusModal` mới được retheme qua color tokens, chưa có redesign layout sâu.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu muốn bám concept mạnh hơn nữa, vòng tiếp theo nên polish riêng `HomeTopBar` và `Suggestion Inbox` theo cùng visual language của palette mới.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:48] Chuyen phase detail sang full overlay scroll rieng
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Roadmap phase overlay refinement
+
+### 1. Tóm tắt
+
+Điều chỉnh lại interaction của roadmap theo yêu cầu mới: bấm vào từng phase không còn bung detail inline trong hero nữa, mà mở một `full overlay` kích thước cố định. Bên trong overlay, danh sách `weeks + sessions` của phase có vùng scroll riêng để người dùng lăn chuột xem hết nội dung.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/components/RoadmapHero.jsx` | Chỉnh sửa | khu vực state + render roadmap/phase detail khoảng `L1-L167` | Thêm state mở overlay, đổi click phase sang mở `OverlayFrame`, loại bỏ panel detail inline, và render phase detail trong overlay với scroll area riêng. |
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `.overlay-frame--phase`, `.roadmap-phase-overlay__scroll`, roadmap phase detail block, mobile media query khoảng `L450-L590`, `L1645-L1658` | Bỏ container detail inline cũ, thêm style overlay phase cố định, count badge ở header actions, custom scrollbar và giới hạn chiều cao vùng scroll riêng. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry refinement này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Click phase mở full overlay riêng.
+- [x] Overlay phase có kích thước cố định.
+- [x] Weeks + sessions của phase cuộn trong vùng nội bộ bằng chuột.
+
+### 4. Lỗi đã sửa
+
+- [x] Loại bỏ cách hiển thị inline quá dài trong hero khi mở session của phase.
+
+### 5. Mã đã loại bỏ
+
+- [x] Removed inline `roadmap-phase-detail` container from the main hero flow.
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend/src/components/OverlayFrame.jsx | Select-Object -First 220
+Get-Content frontend/src/styles.css | Select-String -Pattern 'overlay-shell|overlay-frame|overlay-frame__body|overlay-frame__header' -Context 2,12
+Get-Content frontend/src/components/QuestOverlay.jsx | Select-Object -First 200
+Get-Date -Format "yyyy-MM-dd HH:mm"
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/components/RoadmapHero.jsx frontend/src/styles.css changelogs.md
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser walkthrough để kiểm tra cảm giác scroll của overlay phase trên dữ liệu dài thực tế.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu overlay còn quá dày thông tin, bước tiếp theo là cho từng week trong overlay collapse/expand.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:40] Bo chip current phase va mo session theo phase khi click
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Roadmap phase interaction refinement
+
+### 1. Tóm tắt
+
+Bỏ chip `Current phase` theo yêu cầu. Đồng thời biến 5 phase card trong `roadmap hero` thành các điểm chọn tương tác: khi bấm vào một phase, giao diện sẽ mở toàn bộ `weeks + sessions` thuộc riêng phase đó ngay bên dưới roadmap, thay vì chỉ có summary card.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/components/RoadmapHero.jsx` | Chỉnh sửa | toàn bộ component khoảng `L1-L156` | Thêm local state chọn phase, bỏ chip current, biến roadmap card thành button, render panel detail cho phase đang chọn, flatten sessions theo phase và group lại theo week. |
+| `frontend/src/App.jsx` | Chỉnh sửa | khu vực props truyền vào `RoadmapHero` khoảng `L255-L263` | Truyền `mainQuestMap` vào hero để lấy dữ liệu tuần/session đầy đủ cho phase detail. |
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực roadmap hero và media query mobile khoảng `L350-L560`, `L1640-L1650` | Bỏ style chip current phase cũ, thêm style cho roadmap card selectable, phase-detail panel, week/session card, selected state, và responsive layout cho detail panel. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry refinement này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Click vào phase để xem toàn bộ session của riêng phase đó.
+- [x] Phase detail hiển thị theo tuần và theo session ngay trong home hero.
+- [x] Phase được chọn có selected state riêng, tách biệt với current phase highlight.
+
+### 4. Lỗi đã sửa
+
+- [x] Loại bỏ chip `Current phase` khỏi roadmap theo yêu cầu mới.
+- [x] Bổ sung thiếu hụt UX khi roadmap chỉ cho xem summary mà không xem được session theo phase.
+
+### 5. Mã đã loại bỏ
+
+- [x] Removed `roadmap-phase__status` chip rendering and its CSS treatment.
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend/src/App.jsx | Select-Object -Skip 90 -First 320
+Get-Content frontend/src/dashboard-data.js | Select-Object -Skip 640 -First 90
+Get-Content frontend/src/components/MainQuestMapPanel.jsx | Select-Object -First 260
+Get-Date -Format "yyyy-MM-dd HH:mm"
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/components/RoadmapHero.jsx frontend/src/App.jsx frontend/src/styles.css changelogs.md
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser walkthrough để kiểm tra mật độ nội dung của phase-detail panel khi số session nhiều.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu phase-detail quá dài, bước tiếp theo là cho panel này collapse theo week hoặc mở trong overlay riêng.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:34] Tang do noi bat cho pha hien tai tren roadmap track
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Roadmap current phase highlight redesign
+
+### 1. Tóm tắt
+
+Thiết kế lại visual của 5 phase card trên `roadmap track` để pha hiện tại nổi bật rõ ràng hơn. Pha current giờ có `Current phase` chip riêng, card nhô cao hơn, viền/glow mạnh hơn, beam sáng hơn, progress bar sáng hơn, và halo phía trên để tạo cảm giác active command node thay vì chỉ đổi border nhẹ.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/components/RoadmapHero.jsx` | Chỉnh sửa | khu vực render `roadmap.map(...)` | Thêm `roadmap-phase__status` chip cho phase hiện tại. |
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `.roadmap-track`, `.roadmap-phase`, `.roadmap-phase__status`, `.roadmap-phase--current`, `@keyframes roadmap-current-pulse` khoảng `L350-L500` | Nâng cấp treatment của roadmap card: radius, layered background, hover, current halo/glow/lift, brighter beam, stronger progress, pulse beacon, reduced-motion fallback. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry redesign này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Current phase có chip nhãn riêng.
+- [x] Current phase được highlight bằng lift + halo + stronger beam/progress.
+- [x] Các phase upcoming/cleared có phân cấp thị giác rõ hơn.
+
+### 4. Lỗi đã sửa
+
+- [x] Sửa vấn đề current phase chưa đủ nổi bật trên roadmap track.
+
+### 5. Mã đã loại bỏ
+
+- [ ] None
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content C:\Users\Admin\.agents\skills\frontend-design\SKILL.md | Select-Object -First 120
+rg -n "roadmap|phase|currentPhase|isCurrent|roadmap-track|roadmap-phase" frontend/src
+Get-Content frontend/src/styles.css | Select-String -Pattern 'roadmap-track|roadmap-phase|hero-panel|phase' -Context 3,12
+Get-Content frontend/src/components/RoadmapHero.jsx | Select-Object -First 220
+Get-Content frontend/src/styles.css | Select-Object -Skip 340 -First 160
+Get-Date -Format "yyyy-MM-dd HH:mm"
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/components/RoadmapHero.jsx frontend/src/styles.css changelogs.md
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser screenshot verification sau redesign mới; cần bạn xem trực quan xem mức nổi bật đã đủ hay chưa.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu muốn current phase mạnh hơn nữa, có thể cho 4 phase còn lại thu nhỏ nhẹ hoặc nối chúng bằng track line có checkpoint sáng tại current node.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:23] Sua lai neo Suggestion Inbox theo topbar-cluster
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Suggestion Inbox viewport-right alignment follow-up
+
+### 1. Tóm tắt
+
+Ảnh runtime cho thấy dropdown vẫn chưa sát mép phải vì nó đang neo theo `bell button`, trong khi bên phải chuông vẫn còn cụm `HOST` nên mọi công thức `right` đều bị lệch gốc. Bản sửa này đổi containing block của dropdown sang `topbar-cluster`, rồi mới áp dụng offset theo shell margin + topbar padding để dropdown bám đúng về mép phải màn hình.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `.topbar-cluster`, `.inbox-cluster`, `.inbox-dropdown`, media query `max-width: 980px` | Đặt `topbar-cluster` thành containing block, đổi `inbox-cluster` sang `static`, cập nhật công thức `right` mới, và reset `right: 0` cho màn hình hẹp. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry follow-up này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Dropdown Suggestion Inbox neo theo cụm topbar phải, giúp canh viewport-right đúng hơn.
+
+### 4. Lỗi đã sửa
+
+- [x] Sửa sai gốc định vị khiến inbox vẫn lệch trái dù đã tăng offset.
+
+### 5. Mã đã loại bỏ
+
+- [ ] None
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend/src/components/HomeTopBar.jsx | Select-Object -First 220
+Get-Content frontend/src/styles.css | Select-String -Pattern 'topbar-cluster|topbar-clock|system-icon-button--bell|inbox-cluster|home-topbar' -Context 2,8
+Get-Date -Format "yyyy-MM-dd HH:mm"
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/styles.css changelogs.md
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Cần bạn xác nhận lại bằng screenshot/runtime sau khi reload vì đây là fix theo layout math.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu còn lệch nhẹ, tinh chỉnh cuối cùng chỉ còn là giảm/tăng thêm `8px-16px` trên `right` offset.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:17] Canh Suggestion Inbox sat le phai man hinh
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Suggestion Inbox viewport-right alignment
+
+### 1. Tóm tắt
+
+Điều chỉnh lại vị trí của `Suggestion Inbox` để dropdown không còn bám mép phải của `home shell`, mà dịch ra đúng về lề phải của màn hình. Cách sửa là đổi `right` offset sang công thức bù cả gutter 20px lẫn phần margin phát sinh khi shell bị khóa ở `1520px`.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `.inbox-dropdown` khoảng `L564-L570` | Đổi `right: 0`/neo shell sang công thức `calc(-20px - max(0px, (100vw - 1560px) / 2))` để bám lề phải viewport. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry bugfix/canh lề này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Dropdown Suggestion Inbox bám sát lề phải màn hình ổn định hơn trên cả viewport hẹp và rộng.
+
+### 4. Lỗi đã sửa
+
+- [x] Sửa lệch vị trí khi inbox chỉ bám mép phải của layout shell thay vì mép phải của màn hình.
+
+### 5. Mã đã loại bỏ
+
+- [ ] None
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Date -Format "yyyy-MM-dd HH:mm"
+Get-Content frontend/src/styles.css | Select-String -Pattern 'inbox-dropdown \\{|right: calc' -Context 0,4
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/styles.css changelogs.md
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser visual verification để xác nhận khoảng cách mép phải đúng như mong muốn ở mọi viewport.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu vẫn muốn sát hơn nữa, có thể đổi từ khoảng cách 20px xuống 12px hoặc 8px theo đúng cảm giác thị giác mong muốn của bạn.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:13] Them stagger nhe cho suggestion card trong Inbox
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Suggestion Inbox stagger animation polish
+
+### 1. Tóm tắt
+
+Tinh chỉnh thêm animation cho `Suggestion Inbox` bằng stagger nhẹ trên từng suggestion card khi dropdown mở. Cách này tăng cảm giác system UI nhưng không cần đổi logic click-outside hay state timing của dropdown.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `@keyframes suggestion-node-enter`, `.inbox-dropdown .suggestion-node`, `prefers-reduced-motion` khoảng `L600-L680`, `L1140-L1175` | Thêm keyframe enter cho card, delay theo `nth-child`, và đảm bảo reduced-motion đặt `opacity: 1` để không bị ẩn card. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry polish này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Suggestion card xuất hiện theo nhịp stagger nhẹ khi mở inbox.
+- [x] Motion vẫn có fallback reduced-motion an toàn.
+
+### 4. Lỗi đã sửa
+
+- [x] Không có bug logic mới; đây là polish animation cho danh sách suggestion.
+
+### 5. Mã đã loại bỏ
+
+- [ ] None
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend/src/styles.css | Select-String -Pattern 'suggestion-node:hover|inbox-dropdown-enter|prefers-reduced-motion|suggestion-list' -Context 2,10
+Get-Content frontend/src/styles.css | Select-Object -Skip 560 -First 120
+Get-Content frontend/src/styles.css | Select-Object -Skip 1120 -First 80
+Get-Date -Format "yyyy-MM-dd HH:mm"
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/styles.css changelogs.md
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser runtime verification để cảm nhận timing motion trên UI thật.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu muốn hoàn thiện hơn nữa, có thể thêm component/browser test cho open state hoặc tinh chỉnh timing theo số lượng suggestion thực tế.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:09] Them sticky header va motion nhe cho Suggestion Inbox
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Suggestion Inbox sticky header + entrance motion
+
+### 1. Tóm tắt
+
+Tinh chỉnh thêm `Suggestion Inbox` để phần header luôn bám trên cùng khi cuộn danh sách và dropdown có animation mở rất nhẹ theo hướng top-right. Đồng thời thêm fallback `prefers-reduced-motion` để tránh ép motion với người dùng muốn giảm chuyển động.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `.inbox-dropdown`, `.inbox-dropdown__header`, `@keyframes inbox-dropdown-enter` khoảng `L568-L650` | Thêm animation enter, đặt header thành `position: sticky`, bổ sung nền blur cho header, và thêm media query `prefers-reduced-motion`. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry polish này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Header của Suggestion Inbox sticky khi cuộn.
+- [x] Dropdown có entrance motion nhẹ hơn, hợp theme system UI.
+- [x] Có fallback reduced-motion cho accessibility.
+
+### 4. Lỗi đã sửa
+
+- [x] Không có bug logic mới; đây là polish tương tác/thị giác.
+
+### 5. Mã đã loại bỏ
+
+- [ ] None
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend/src/styles.css | Select-String -Pattern 'prefers-reduced-motion|inbox-dropdown__header|inbox-dropdown|@keyframes' -Context 2,8
+Get-Date -Format "yyyy-MM-dd HH:mm"
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/styles.css changelogs.md
+git diff --unified=0 -- frontend/src/styles.css changelogs.md
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser screenshot/runtime verification để quan sát motion thật.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu muốn hoàn thiện hơn nữa, có thể thêm click-outside transition hoặc subtle stagger cho từng suggestion card.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:08] Polish visual Suggestion Inbox theo theme game UI
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Suggestion Inbox visual polish
+
+### 1. Tóm tắt
+
+Tinh chỉnh thêm look-and-feel của `Suggestion Inbox` để đồng bộ hơn với dark fantasy / neon system UI: dropdown có lớp nền sâu hơn, header được tách bằng divider, scrollbar đổi sang cyan glow, và suggestion card có hover state rõ hơn nhưng vẫn giữ scope thuần CSS.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `inbox-dropdown`, `.suggestion-list`, `.suggestion-node`, `.suggestion-actions` khoảng `L560-L690` | Thêm background gradient, border-radius, multi-layer shadow, divider cho header, custom scrollbar, fade mask ở vùng scroll, hover glow cho suggestion card, và polish cho action button. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry visual polish này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Scrollbar custom theo theme neon-cyan.
+- [x] Suggestion card có hover feedback rõ hơn.
+- [x] Dropdown có chiều sâu thị giác và phân tách header/list tốt hơn.
+
+### 4. Lỗi đã sửa
+
+- [x] Không có bug logic mới; đây là polish trực quan cho vùng scroll và dropdown.
+
+### 5. Mã đã loại bỏ
+
+- [ ] None
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content C:\Users\Admin\.agents\skills\frontend-design\SKILL.md | Select-Object -First 120
+Get-Content C:\Users\Admin\.agents\skills\ui-ux-pro-max\SKILL.md | Select-Object -First 120
+Get-Content C:\Users\Admin\.agents\skills\vercel-react-best-practices\SKILL.md | Select-Object -First 120
+Get-Content frontend/src/styles.css | Select-String -Pattern 'inbox-dropdown|suggestion-node|suggestion-actions|system-badge|empty-state' -Context 3,10
+Get-Date -Format "yyyy-MM-dd HH:mm"
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/styles.css changelogs.md
+git diff --unified=0 -- frontend/src/styles.css changelogs.md
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser screenshot verification để chốt spacing/hover/scrollbar trên runtime thật.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu muốn polish thêm, có thể thêm sticky header hoặc subtle entrance animation cho inbox dropdown.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:05] Tinh chỉnh UI Suggestion Inbox dropdown
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Suggestion Inbox dropdown scroll + right alignment
+
+### 1. Tóm tắt
+
+Tinh chỉnh UI cho `Suggestion Inbox` để dropdown luôn bám về lề phải cụm top bar, chiều cao vùng danh sách được cố định ở mức tương đương khoảng 4 suggestion card, và có thể cuộn chuột để xem các item còn lại mà không làm dropdown kéo dài quá mức.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `inbox-dropdown` khoảng `L430-L450` | Khóa `left: auto` để dropdown bám mép phải, thêm giới hạn `max-height` + `overflow-y: auto` cho `.suggestion-list` bên trong inbox. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry task UI tweak này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Dropdown Suggestion Inbox có vùng list cao cố định và cuộn được.
+- [x] Dropdown bám lề phải của top bar ổn định hơn.
+
+### 4. Lỗi đã sửa
+
+- [x] Suggestion Inbox không còn nở quá dài khi có nhiều item.
+- [x] Suggestion Inbox giữ canh phải thay vì lệch vào giữa khi mở dropdown.
+
+### 5. Mã đã loại bỏ
+
+- [ ] None
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend/src/styles.css | Select-String -Pattern 'inbox-cluster|inbox-dropdown|suggestion-list|home-topbar' -Context 3,12
+Get-Content frontend/src/components/SuggestionInboxDropdown.jsx | Select-Object -First 220
+Get-Content changelogs.md | Select-Object -Last 120
+Get-Date -Format "yyyy-MM-dd HH:mm"
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/styles.css changelogs.md
+git diff --unified=0 -- frontend/src/styles.css changelogs.md
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Chưa có browser visual verification để chụp dropdown thật trong runtime.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu cần khóa chặt hơn hành vi UI, bổ sung component/browser test cho Suggestion Inbox open/scroll/alignment.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 20:00] Sửa dropdown Suggestion Inbox bị ẩn ở top bar
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Home dashboard redesign post-accept bugfix
+
+### 1. Tóm tắt
+
+Đã sửa lỗi khi bấm icon chuông không thấy Suggestion Inbox. Nguyên nhân là `home-topbar` đang dùng `overflow: hidden`, làm dropdown được render nhưng bị cắt khỏi vùng nhìn thấy. Patch này mở overflow cho top bar và nâng `z-index` của cụm inbox để dropdown nổi đúng trên header.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/styles.css` | Chỉnh sửa | khu vực `.home-topbar`, `.inbox-cluster` | Đổi `home-topbar` sang `overflow: visible`, thêm `z-index`, và nâng `z-index` cho `inbox-cluster`. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry bugfix này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Không có
+
+### 4. Lỗi đã sửa
+
+- [x] Sửa lỗi dropdown Suggestion Inbox bị cắt và không hiển thị khi bấm icon chuông.
+
+### 5. Mã đã loại bỏ
+
+- [x] None
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend\src\components\SuggestionInboxDropdown.jsx
+Get-Content frontend\src\components\HomeTopBar.jsx
+rg -n "inbox|suggestion|bell|topbar|overflow|z-index|home-topbar" frontend/src/styles.css frontend/src/App.jsx frontend/src/components
+Get-Content frontend\src\styles.css | Select-Object -Skip 120 -First 220
+Get-Date -Format "yyyy-MM-dd HH:mm"
+npm.cmd run build
+npm.cmd run test:dashboard-data
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed
+dashboard-data suite: 5 tests, 0 failures
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Browser visual walkthrough vẫn chưa có, nên fix này mới được xác minh bằng code path + build/test chứ chưa có screenshot thủ công.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Khi có browser walkthrough, xác nhận thêm dropdown layering và click-outside behavior trên viewport thật.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
 ## [2026-06-04 17:35] Home dashboard redesign - compact hero shell
 
-**Agent:** coder-gpt54  
-**Status:** Done  
+**Agent:** coder-gpt54
+**Status:** Done
 **Related task:** approved frontend-first home-dashboard redesign
 
 ### 1. Summary
@@ -215,8 +1500,8 @@ npm.cmd run test:dashboard-data: passed
 
 ## [2026-06-04 18:01] Home dashboard redesign - focused spec fix cycle
 
-**Agent:** coder-gpt54  
-**Status:** Done  
+**Agent:** coder-gpt54
+**Status:** Done
 **Related task:** orchestrator review fix cycle for home-dashboard redesign
 
 ### 1. Summary
@@ -514,8 +1799,8 @@ docker compose ps: no running services
 
 ## [2026-06-04 08:44] Daily Quest DST regression fix trong dashboard-data
 
-**Agent:** coder-gpt54  
-**Status:** Done  
+**Agent:** coder-gpt54
+**Status:** Done
 **Related task:** MQM reviewer follow-up - Daily Quest DST regression
 
 ### 1. Summary
@@ -761,6 +2046,102 @@ TZ=America/Los_Angeles => npm.cmd run test:dashboard-data passed (5 tests, 0 fai
 ### 9. Bước tiếp theo được đề xuất
 
 - Nếu cần mở rộng thêm coverage, bổ sung các ca biên cho `buildMainQuestMap` khi API trả về tuần trống hoặc dữ liệu ngày không hợp lệ, hoặc đưa suite này vào pipeline frontend chung sau này.
+
+### 10. Checklist người dùng cần rà soát
+
+- [ ] Tôi đã rà soát các tệp được thay đổi.
+- [ ] Tôi đã kiểm tra phạm vi dòng được thay đổi.
+- [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
+- [ ] Tôi đã kiểm tra kết quả xác thực.
+- [ ] Tôi đã phê duyệt tác vụ này.
+
+## [2026-06-04 19:48] Home dashboard redesign - reviewer fix cycle
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Home dashboard redesign reviewer fix cycle
+
+### 1. Tóm tắt
+
+Đã sửa các lỗi P1 còn lại sau review cho home dashboard redesign: backlog/archive không còn gọi đường lỗi backend với quest expired hoặc future, boss UI ưu tiên `result_status` khi có, status modal hiển thị lại Badge Wall và recent check-ins, và overlay/drawer có focus management + Escape handling mà không còn giật focus về nút close khi form re-render.
+
+### 2. Tệp đã thay đổi
+
+| Tệp | Loại thay đổi | Dòng / khu vực thay đổi | Nội dung thay đổi |
+|---|---|---|---|
+| `frontend/src/components/DailyQuestPanel.jsx` | Chỉnh sửa | `@@ -2 +2 @@`, `@@ -11 +12,2 @@`, `@@ -70 +72,7 @@` | Thêm `getTodayISO()` và chặn click cho backlog quest expired/future; backlog quest hợp lệ trở thành nút complete thật. |
+| `frontend/src/components/QuestOverlay.jsx` | Chỉnh sửa | `@@ -3 +3 @@`, `@@ -11 +11 @@`, `@@ -111 +112 @@`, `@@ -117 +117,38 @@` | Bật tab Archive, thêm panel archive từ quest window hiện tại, và disable action cho quest expired/future. |
+| `frontend/src/components/OverlayFrame.jsx` | Chỉnh sửa | khoảng `L1-L95` | Đổi overlay sang dialog có `aria-labelledby`, focus trap, Escape close, restore focus, và dùng `onCloseRef` để tránh cướp focus khi re-render. |
+| `frontend/src/components/NavigationDrawer.jsx` | Chỉnh sửa | khoảng `L1-L113` | Thêm dialog semantics, focus trap, Escape close, nút close riêng, và bật Archive trong submenu Quest. |
+| `frontend/src/dashboard-data.js` | Chỉnh sửa | `@@ -748 +749 @@`, `@@ -759 +760 @@`, `@@ -770 +771,2 @@`, `@@ -775 +777,2 @@` | Boss view dùng `result_status` ưu tiên để tính `uiStatus` và `displayStatus`. |
+| `frontend/src/components/BossTimelinePanel.jsx` | Chỉnh sửa | `@@ -18 +18 @@` | Timeline hiển thị `displayStatus` + `uiStatus` thay vì `status` thô. |
+| `frontend/src/components/BossOverlay.jsx` | Chỉnh sửa | `@@ -26 +26 @@` | Boss hero hiển thị `displayStatus`. |
+| `frontend/src/components/StatusModal.jsx` | Chỉnh sửa | `@@ -1 +2 @@`, `@@ -27 +30,2 @@`, `@@ -170 +174 @@`, `@@ -173 +177,25 @@` | Khôi phục Badge Wall thật và recent check-in history trong status modal. |
+| `frontend/src/App.jsx` | Chỉnh sửa | `@@ -382 +382 @@`, `@@ -403 +404,2 @@`, `@@ -415 +418 @@` | Truyền `badges`, `recentCheckins`, `allQuests`; support panel boss dùng `displayStatus`. |
+| `frontend/src/styles.css` | Chỉnh sửa | `@@ -793 +794,6 @@`, `@@ -1172 +1179,11 @@`, `@@ -1219 +1236,2 @@` | Bổ sung style cho backlog button, nav drawer header/close button, và icon close navigation. |
+| `changelogs.md` | Chỉnh sửa | tail section | Thêm entry fix cycle này theo format AGENTS. |
+
+### 3. Tính năng đã thêm
+
+- [x] Archive tab khả dụng để duyệt quest trong cửa sổ hiện tại.
+- [x] Overlay và navigation drawer có keyboard handling tốt hơn.
+- [x] Status modal hiển thị lại badge và recent check-ins thật.
+
+### 4. Lỗi đã sửa
+
+- [x] Không còn cho complete quest expired hoặc future từ backlog/archive.
+- [x] Không còn dùng sai `status` khi backend có `result_status` cho boss result.
+- [x] Không còn giật focus về nút close khi nhập/check-in trong status modal.
+- [x] Không còn thiếu Badge Wall và recent check-in history trong status modal.
+
+### 5. Mã đã loại bỏ
+
+- [x] Removed broken close-handler dependency pattern that re-focused overlays on every re-render.
+- [ ] None
+
+### 6. Lệnh đã chạy
+
+```bash
+Get-Content frontend\src\components\DailyQuestPanel.jsx
+Get-Content frontend\src\components\BossTimelinePanel.jsx
+Get-Content frontend\src\components\OverlayFrame.jsx
+Get-Content frontend\src\components\StatusModal.jsx
+Get-Content frontend\src\dashboard-data.js | Select-Object -Skip 720 -First 90
+Get-Content frontend\src\App.jsx | Select-Object -Skip 300 -First 180
+Get-Content backend\app\services.py | Select-Object -Skip 220 -First 60
+Get-Content frontend\src\components\QuestOverlay.jsx
+Get-Content frontend\src\components\NavigationDrawer.jsx
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/App.jsx frontend/src/styles.css frontend/src/dashboard-data.js frontend/src/components/DailyQuestPanel.jsx frontend/src/components/BossTimelinePanel.jsx frontend/src/components/BossOverlay.jsx frontend/src/components/OverlayFrame.jsx frontend/src/components/NavigationDrawer.jsx frontend/src/components/QuestOverlay.jsx frontend/src/components/StatusModal.jsx
+git diff --unified=0 -- frontend/src/components/DailyQuestPanel.jsx frontend/src/components/BossTimelinePanel.jsx frontend/src/components/BossOverlay.jsx frontend/src/components/OverlayFrame.jsx frontend/src/components/NavigationDrawer.jsx frontend/src/components/QuestOverlay.jsx frontend/src/components/StatusModal.jsx frontend/src/dashboard-data.js frontend/src/App.jsx frontend/src/styles.css
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Kết quả kiểm tra
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed
+dashboard-data suite: 5 tests, 0 failures
+git diff --check: passed except LF/CRLF normalization warnings only
+reviewer-gpt55 rerun: ACCEPT
+```
+
+### 8. Vấn đề còn lại
+
+- [ ] Browser visual walkthrough vẫn chưa có.
+- [x] Không còn P0/P1 sau reviewer rerun.
+
+### 9. Bước tiếp theo được đề xuất
+
+- Nếu cần tăng độ tin cậy UI, bổ sung browser visual walkthrough hoặc component/browser tests cho focus trap và disabled quest actions.
 
 ### 10. Checklist người dùng cần rà soát
 

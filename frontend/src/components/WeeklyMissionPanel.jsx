@@ -10,7 +10,7 @@ function WeeklyMissionPanel({ weeklyMission }) {
         </div>
         <div className="weekly-progress">
           <strong>{weeklyMission.progress}</strong>
-          <span>quest tuần đã hoàn thành</span>
+          <span>weekly quests completed</span>
         </div>
       </div>
 

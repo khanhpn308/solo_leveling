@@ -3,20 +3,17 @@ import { TEST_EVIDENCE } from '../dashboard-data'
 
 function SetupSummaryPanel({ player, skills }) {
   return (
-    <PanelFrame
-      title="Thiết lập chiến dịch"
-      tag={player.hasStarted ? 'Đã khóa mốc bắt đầu' : `Còn ${player.daysUntilStart} ngày`}
-    >
+    <PanelFrame title="Campaign Setup" tag={player.hasStarted ? 'Start locked in' : `${player.daysUntilStart} days left`}>
       <div className="setup-grid">
         <div className="setup-card">
           <span className="setup-card__label">Target</span>
           <strong>{player.target}</strong>
-          <p>B1 hiện tại, Listening mạnh hơn Reading.</p>
+          <p>Current level is around B1, with Listening stronger than Reading.</p>
         </div>
         <div className="setup-card">
           <span className="setup-card__label">Evidence</span>
-          <strong>{TEST_EVIDENCE.length} nguồn điểm đầu vào</strong>
-          <p>IELTS/TOEIC/Aptis/CEFR sẽ dùng để gợi ý skill rank.</p>
+          <strong>{TEST_EVIDENCE.length} baseline evidence sources</strong>
+          <p>IELTS / TOEIC / Aptis / CEFR records are used to suggest skill ranks.</p>
         </div>
       </div>
 
@@ -34,7 +31,7 @@ function SetupSummaryPanel({ player, skills }) {
       </div>
 
       <div className="setup-section">
-        <h3>Confirmed Skill Rank</h3>
+        <h3>Confirmed Skill Ranks</h3>
         <div className="rank-row">
           {skills.map((skill) => (
             <div key={skill.id} className={`rank-token rank-token--${skill.theme.accent}`}>

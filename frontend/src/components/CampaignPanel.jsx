@@ -8,27 +8,27 @@ function CampaignPanel({ player, summary }) {
         <div className="campaign-metric">
           <span>Roadmap</span>
           <strong>{player.phaseLabel}</strong>
-          <p>Bắt đầu: {formatDate(player.start_date)}</p>
+          <p>Start: {formatDate(player.start_date)}</p>
         </div>
         <div className="campaign-metric">
           <span>Shield</span>
           <strong>2 / 2</strong>
-          <p>UI sẵn sàng, backend shield chưa mở.</p>
+          <p>UI is ready, but backend shield logic is not enabled yet.</p>
         </div>
         <div className="campaign-metric">
           <span>Perfect Day</span>
-          <strong>{summary.todayXp > 0 ? 'Có hoạt động' : 'Chưa kích hoạt'}</strong>
-          <p>Điều kiện: đủ 3 daily quest + check-in trong ngày.</p>
+          <strong>{summary.todayXp > 0 ? 'Activity detected' : 'Not activated'}</strong>
+          <p>Condition: complete 3 daily quests and submit a check-in on the same day.</p>
         </div>
       </div>
 
       <div className="timeline-mini">
         <div className="timeline-mini__item is-active">
-          <span>Phase hiện tại</span>
+          <span>Current phase</span>
           <strong>{player.phaseLabel}</strong>
         </div>
         <div className="timeline-mini__item">
-          <span>Quest đã clear</span>
+          <span>Quests cleared</span>
           <strong>
             {summary.totalCompletedQuests}/{summary.totalQuests}
           </strong>

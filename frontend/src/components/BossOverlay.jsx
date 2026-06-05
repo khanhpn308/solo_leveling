@@ -23,12 +23,12 @@ function BossOverlay({ open, bossView, onClose }) {
             <span>{bossView.currentBoss.practice_suggestion || 'No extra practice suggestion.'}</span>
           </div>
           <div className="boss-hero__reward">
-            <em>{bossView.currentBoss.status}</em>
+            <em>{bossView.currentBoss.displayStatus}</em>
             <strong>+{bossView.currentBoss.reward_xp} XP</strong>
           </div>
         </section>
       ) : (
-        <div className="empty-state">Chua co boss battle data.</div>
+        <div className="empty-state">No boss battle data is available yet.</div>
       )}
 
       <BossTimelinePanel bosses={bossView.timeline} />

@@ -38,20 +38,17 @@ function MainQuestMapPanel({ map, loading, error }) {
   }
 
   return (
-    <PanelFrame
-      title="Main Quest Map"
-      tag={loading ? 'Syncing...' : `Read-only · ${map?.totalWeeks ?? 0} tuan`}
-    >
-      {loading ? <div className="empty-state">Dang dong bo Main Quest Map tu backend...</div> : null}
+    <PanelFrame title="Main Quest Map" tag={loading ? 'Syncing...' : `Read-only / ${map?.totalWeeks ?? 0} weeks`}>
+      {loading ? <div className="empty-state">Syncing Main Quest Map from the backend...</div> : null}
 
       {!loading && error ? (
         <div className="empty-state empty-state--warning">
-          Khong tai duoc Main Quest Map. Daily Quest van hoat dong binh thuong.
+          Main Quest Map could not be loaded. Daily Quests still work normally.
         </div>
       ) : null}
 
       {!loading && !error && (!map || map.totalWeeks === 0) ? (
-        <div className="empty-state">Chua co study-plan data de ve Main Quest Map.</div>
+        <div className="empty-state">No study-plan data is available to render the Main Quest Map.</div>
       ) : null}
 
       {!loading && !error && map ? (
@@ -75,7 +72,7 @@ function MainQuestMapPanel({ map, loading, error }) {
             <div className="main-quest-integrity">
               <strong>Integrity warning</strong>
               <p>
-                Missing: {map.integrity.missingSessions} · Duplicate: {map.integrity.duplicateSessions} · Orphan:{' '}
+                Missing: {map.integrity.missingSessions} / Duplicate: {map.integrity.duplicateSessions} / Orphan:{' '}
                 {map.integrity.orphanQuests}
               </p>
             </div>
@@ -101,12 +98,12 @@ function MainQuestMapPanel({ map, loading, error }) {
                     <div>
                       <p className="main-quest-phase__eyebrow">{phase.code}</p>
                       <h3>
-                        {phase.title} · {phase.subtitle}
+                        {phase.title} / {phase.subtitle}
                       </h3>
                       <p className="main-quest-phase__meta">
-                        Week {phase.weekStart}-{phase.weekEnd} · {phase.totalWeeks} tuan ·{' '}
-                        {phase.completedSessions}/{phase.totalSessions} session da xong
-                        {phase.warningSessions > 0 ? ` · ${phase.warningSessions} warning` : ''}
+                        Week {phase.weekStart}-{phase.weekEnd} / {phase.totalWeeks} weeks /{' '}
+                        {phase.completedSessions}/{phase.totalSessions} sessions completed
+                        {phase.warningSessions > 0 ? ` / ${phase.warningSessions} warning` : ''}
                       </p>
                     </div>
                     <span className="panel-chip">{isPhaseOpen ? 'Collapse' : 'Expand'}</span>
@@ -132,7 +129,7 @@ function MainQuestMapPanel({ map, loading, error }) {
                             >
                               <div>
                                 <p className="main-quest-week__meta">
-                                  Tuan {week.week_no} · {week.weekRangeLabel}
+                                  Week {week.week_no} / {week.weekRangeLabel}
                                 </p>
                                 <h4>{week.weekly_focus}</h4>
                                 <p className="main-quest-week__output">{week.weekly_output}</p>
@@ -143,7 +140,7 @@ function MainQuestMapPanel({ map, loading, error }) {
                                   <span className="panel-chip panel-chip--warning">{week.warningSessions} warning</span>
                                 ) : null}
                                 <span className="panel-chip">
-                                  {week.completedSessions}/{week.sessions.length} clear
+                                  {week.completedSessions}/{week.sessions.length} complete
                                 </span>
                               </div>
                             </button>
@@ -151,7 +148,7 @@ function MainQuestMapPanel({ map, loading, error }) {
                             {isWeekOpen ? (
                               <div className="main-quest-week__body" id={weekBodyId}>
                                 <div className="main-quest-week__materials">
-                                  <strong>Tai lieu tuan</strong>
+                                  <strong>Week materials</strong>
                                   {week.materials.length > 0 ? (
                                     <ul className="main-quest-inline-list">
                                       {week.materials.map((item) => (
@@ -159,7 +156,7 @@ function MainQuestMapPanel({ map, loading, error }) {
                                       ))}
                                     </ul>
                                   ) : (
-                                    <p>Chua co material summary o cap tuan.</p>
+                                    <p>No week-level material summary yet.</p>
                                   )}
                                 </div>
 
@@ -174,11 +171,10 @@ function MainQuestMapPanel({ map, loading, error }) {
                                       <div className="main-quest-session__head">
                                         <div>
                                           <p className="main-quest-session__meta">
-                                            {formatDate(session.study_date)} · {session.weekday_label} ·{' '}
-                                            {session.session_label}
+                                            {formatDate(session.study_date)} / {session.weekday_label} / {session.session_label}
                                           </p>
                                           <h5>
-                                            {session.skillText} {session.isCurrentSession ? '· Hom nay' : ''}
+                                            {session.skillText} {session.isCurrentSession ? '/ Today' : ''}
                                           </h5>
                                         </div>
                                         <div className="main-quest-session__status">
@@ -212,7 +208,7 @@ function MainQuestMapPanel({ map, loading, error }) {
                                       <p className="main-quest-session__xp-detail">{session.xpMeta.detail}</p>
 
                                       <div className="main-quest-session__materials">
-                                        <span className="main-quest-session__label">Tai lieu</span>
+                                        <span className="main-quest-session__label">Materials</span>
                                         {session.materialItems.length > 0 ? (
                                           <ul className="main-quest-inline-list">
                                             {session.materialItems.map((item) => (
@@ -220,7 +216,7 @@ function MainQuestMapPanel({ map, loading, error }) {
                                             ))}
                                           </ul>
                                         ) : (
-                                          <p>{session.sourceText || 'Chua co tai lieu cho session nay.'}</p>
+                                          <p>{session.sourceText || 'No materials listed for this session yet.'}</p>
                                         )}
                                       </div>
                                     </article>

@@ -175,7 +175,7 @@ test('buildMainQuestMap flags missing, duplicate, and orphan quest links while k
   assert.deepEqual(linkedSession.xpMeta, {
     value: 25,
     label: 'Reward',
-    detail: 'XP thuong neu hoan thanh.',
+    detail: 'Reward XP if completed.',
   })
 
   const duplicateSession = weekTwo.sessions[1]
@@ -183,7 +183,7 @@ test('buildMainQuestMap flags missing, duplicate, and orphan quest links while k
   assert.equal(duplicateSession.status, 'warning')
   assert.equal(duplicateSession.statusLabel, 'Duplicate quest link')
   assert.equal(duplicateSession.statusTone, 'warning')
-  assert.equal(duplicateSession.integrity?.detail.includes('quest dau tien'), true)
+  assert.equal(duplicateSession.integrity?.detail.includes('Showing the first one for now.'), true)
   assert.deepEqual(duplicateSession.materialItems, ['Notebook', 'Cambridge 17', 'Grammar in Use'])
 
   const missingSession = weekTwo.sessions[2]
@@ -192,7 +192,7 @@ test('buildMainQuestMap flags missing, duplicate, and orphan quest links while k
   assert.deepEqual(missingSession.xpMeta, {
     value: '--',
     label: 'XP unavailable',
-    detail: 'Chua xac dinh duoc Main Quest de doc reward/earned XP.',
+    detail: 'Main Quest could not be resolved, so reward and earned XP are unavailable.',
   })
 
   assert.equal(weekTwo.warningSessions, 2)

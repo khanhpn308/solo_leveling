@@ -6,7 +6,7 @@ Last updated: 2026-06-04
 
 ## Current Project State
 
-- The frontend home dashboard redesign is complete and frontend-only.
+- The frontend home dashboard redesign is complete, reviewer-accepted, and frontend-only.
 - No API contract changes, no database/schema changes, and no Docker Compose changes were required for this redesign.
 - The new home shell now includes:
   - compact top bar with level/rank, avatar status modal trigger, suggestion inbox dropdown, and host date/time
@@ -22,6 +22,7 @@ Last updated: 2026-06-04
   - `npm.cmd run build`: passed
   - `npm.cmd run test:dashboard-data`: passed
   - `5 tests, 0 failures`
+  - `reviewer-gpt55`: `ACCEPT`
 - No browser screenshot or visual walkthrough was captured.
 
 ## Completed
@@ -40,7 +41,6 @@ Last updated: 2026-06-04
 ## In Progress
 
 - Browser visual walkthrough / screenshot verification remains pending.
-- Optional UI polish may still be needed after visual review, but no blocking functional issues are recorded.
 
 ## Known Issues / Risks
 

@@ -32,26 +32,26 @@ export const TRACKER_MODULES = [
   {
     key: 'error-log',
     title: 'Error Log',
-    status: 'Sẵn sàng',
-    description: 'Lưu lỗi đã hiểu và đã sửa, gắn tag để sinh weakness suggestion.',
+    status: 'Ready',
+    description: 'Store reviewed and corrected mistakes, tagged to generate weakness suggestions.',
   },
   {
     key: 'writing',
     title: 'Writing Tracker',
-    status: 'Chuẩn bị',
-    description: 'Theo dõi prompt, draft, feedback và bản sửa lại.',
+    status: 'Preparing',
+    description: 'Track prompts, drafts, feedback, and revised versions.',
   },
   {
     key: 'speaking',
     title: 'Speaking Tracker',
-    status: 'Chuẩn bị',
-    description: 'Theo dõi topic, cue card, self note và transcript summary.',
+    status: 'Preparing',
+    description: 'Track topics, cue cards, self notes, and transcript summaries.',
   },
   {
     key: 'mock-test',
     title: 'Mock Test Tracker',
-    status: 'Chuẩn bị',
-    description: 'Theo dõi full/partial test, raw score và estimated band.',
+    status: 'Preparing',
+    description: 'Track full or partial tests, raw scores, and estimated bands.',
   },
 ]
 
@@ -60,35 +60,35 @@ export const CERTIFICATE_TYPES = ['IELTS', 'APTIS', 'TOEIC', 'TOEFL']
 export const MAIN_QUEST_PHASES = [
   {
     code: 'P1',
-    title: 'Thang 1-3',
+    title: 'Month 1-3',
     subtitle: 'Foundation',
     weekStart: 1,
     weekEnd: 13,
   },
   {
     code: 'P2',
-    title: 'Thang 4-6',
+    title: 'Month 4-6',
     subtitle: 'Format Training',
     weekStart: 14,
     weekEnd: 26,
   },
   {
     code: 'P3',
-    title: 'Thang 7-9',
+    title: 'Month 7-9',
     subtitle: 'Band 6 Push',
     weekStart: 27,
     weekEnd: 39,
   },
   {
     code: 'P4',
-    title: 'Thang 10-12',
+    title: 'Month 10-12',
     subtitle: 'Partial Tests',
     weekStart: 40,
     weekEnd: 52,
   },
   {
     code: 'P5',
-    title: 'Thang 13-18',
+    title: 'Month 13-18',
     subtitle: 'Mock Arena',
     weekStart: 53,
     weekEnd: 78,
@@ -100,27 +100,27 @@ const WEEKLY_MISSION_PATTERNS = [
     code: 'A',
     title: 'Mission A · Reading Pressure',
     lines: [
-      'Hoàn thành 4 phiên học chính trong tuần',
-      'Có ít nhất 2 quest Reading hoàn thành đúng hạn',
-      'Cập nhật 1 Error Log liên quan từ vựng hoặc câu dài',
+      'Complete 4 core study sessions this week',
+      'Finish at least 2 Reading quests on time',
+      'Update 1 Error Log entry related to vocabulary or long sentences',
     ],
   },
   {
     code: 'B',
     title: 'Mission B · Grammar Relay',
     lines: [
-      'Hoàn thành 4 phiên học chính trong tuần',
-      'Cập nhật 1 check-in có ghi chú rõ trạng thái học',
-      'Hoàn thành 1 quest Grammar hoặc Vocabulary quá hạn',
+      'Complete 4 core study sessions this week',
+      'Submit 1 check-in with a clear study-status note',
+      'Finish 1 overdue Grammar or Vocabulary quest',
     ],
   },
   {
     code: 'C',
     title: 'Mission C · Mixed Discipline',
     lines: [
-      'Hoàn thành 4 phiên học chính trong tuần',
-      'Có ít nhất 1 quest Writing hoặc Speaking',
-      'Giữ không quá 2 quest overdue trong tuần',
+      'Complete 4 core study sessions this week',
+      'Finish at least 1 Writing or Speaking quest',
+      'Keep overdue quests under 2 for the week',
     ],
   },
 ]
@@ -215,18 +215,18 @@ export function getMainQuestPhaseMeta(weekNo) {
 
 function getMainQuestStatusMeta(status) {
   if (status === 'completed') {
-    return { label: 'Da xong', tone: 'completed' }
+    return { label: 'Completed', tone: 'completed' }
   }
 
   if (status === 'overdue') {
-    return { label: 'Qua han', tone: 'overdue' }
+    return { label: 'Overdue', tone: 'overdue' }
   }
 
   if (status === 'expired') {
-    return { label: 'Het han', tone: 'expired' }
+    return { label: 'Expired', tone: 'expired' }
   }
 
-  return { label: 'Dang cho', tone: 'pending' }
+  return { label: 'Pending', tone: 'pending' }
 }
 
 function getSessionIntegrity(matches) {
@@ -234,7 +234,7 @@ function getSessionIntegrity(matches) {
     return {
       level: 'warning',
       label: 'Missing quest link',
-      detail: 'Study session chua co Main Quest khop study_plan_session_id.',
+      detail: 'This study session does not have a Main Quest linked by study_plan_session_id.',
     }
   }
 
@@ -242,7 +242,7 @@ function getSessionIntegrity(matches) {
     return {
       level: 'warning',
       label: 'Duplicate quest link',
-      detail: `Co ${matches.length} Main Quest cung tro den session nay. Dang dung quest dau tien de hien thi.`,
+      detail: `${matches.length} Main Quests point to this session. Showing the first one for now.`,
     }
   }
 
@@ -254,7 +254,7 @@ function getSessionXpMeta(quest, integrity) {
     return {
       value: '--',
       label: 'XP unavailable',
-      detail: 'Chua xac dinh duoc Main Quest de doc reward/earned XP.',
+      detail: 'Main Quest could not be resolved, so reward and earned XP are unavailable.',
     }
   }
 
@@ -262,7 +262,7 @@ function getSessionXpMeta(quest, integrity) {
     return {
       value: '--',
       label: 'XP unavailable',
-      detail: 'Khong co du lieu XP cho session nay.',
+      detail: 'No XP data available for this session.',
     }
   }
 
@@ -272,14 +272,14 @@ function getSessionXpMeta(quest, integrity) {
     return {
       value: quest.earned_xp ?? '--',
       label: 'Earned',
-      detail: rewardXp != null ? `Reward ${rewardXp} XP` : 'Khong co base reward tu API.',
+      detail: rewardXp != null ? `Reward ${rewardXp} XP` : 'No base reward returned by the API.',
     }
   }
 
   return {
     value: rewardXp ?? '--',
     label: 'Reward',
-    detail: rewardXp != null ? 'XP thuong neu hoan thanh.' : 'Khong co reward XP tu API.',
+    detail: rewardXp != null ? 'Reward XP if completed.' : 'No reward XP returned by the API.',
   }
 }
 
@@ -327,7 +327,7 @@ export function buildMainQuestMap(studyPlanWeeks, mainQuests, todayIso = getToda
           duplicateQuestCount: matches.length > 1 ? matches.length : 0,
           integrity,
           materialItems,
-          deliverableText: session.deliverable || 'Chua co deliverable',
+          deliverableText: session.deliverable || 'No deliverable yet',
           status: status ?? 'pending',
           statusLabel: integrity?.label ?? statusMeta.label,
           statusTone: integrity?.level ?? statusMeta.tone,
@@ -454,11 +454,11 @@ function getCurrentWeekNo(quests, player) {
 }
 
 function getCurrentPhaseLabel(weekNo) {
-  if (weekNo <= 13) return 'Tháng 1-3 · Foundation'
-  if (weekNo <= 26) return 'Tháng 4-6 · Format Training'
-  if (weekNo <= 39) return 'Tháng 7-9 · Band 6 Push'
-  if (weekNo <= 52) return 'Tháng 10-12 · Partial Tests'
-  return 'Tháng 13-18 · Mock Arena'
+  if (weekNo <= 13) return 'Month 1-3 / Foundation'
+  if (weekNo <= 26) return 'Month 4-6 / Format Training'
+  if (weekNo <= 39) return 'Month 7-9 / Band 6 Push'
+  if (weekNo <= 52) return 'Month 10-12 / Partial Tests'
+  return 'Month 13-18 / Mock Arena'
 }
 
 function getWeeklyPattern(weekNo) {
@@ -502,7 +502,7 @@ function buildWeaknessSuggestions(skills, quests) {
       suggestions.push({
         id: `${skill.name}-weakness`,
         skill: skill.name,
-        title: 'Nhắc lại điểm yếu chính',
+        title: 'Main weakness reminder',
         detail: skill.weak_point,
         severity: 'medium',
       })
@@ -512,8 +512,8 @@ function buildWeaknessSuggestions(skills, quests) {
       suggestions.push({
         id: `${skill.name}-stale`,
         skill: skill.name,
-        title: 'Lâu chưa luyện',
-        detail: `${skill.name} đã nghỉ ${staleDays} ngày. Cần kéo lại nhịp trong tuần này.`,
+        title: 'Inactive too long',
+        detail: `${skill.name} has been inactive for ${staleDays} days. Bring it back into this week's rhythm.`,
         severity: 'high',
       })
     }
@@ -522,8 +522,8 @@ function buildWeaknessSuggestions(skills, quests) {
       suggestions.push({
         id: `${skill.name}-overdue`,
         skill: skill.name,
-        title: 'Có dấu hiệu né skill',
-        detail: `Có nhiều quest ${skill.name} đang overdue/expired. Nên ưu tiên xử lý backlog.`,
+        title: 'Possible skill avoidance',
+        detail: `Multiple ${skill.name} quests are overdue or expired. Prioritize backlog recovery.`,
         severity: 'high',
       })
     }
@@ -708,11 +708,11 @@ export function buildSuggestionInbox(rankSuggestions = [], weaknessSuggestions =
     type: 'rank',
     skillId: item.skill_id,
     skillName: skillNameById.get(item.skill_id) || `Skill ${item.skill_id}`,
-    title: `Cap nhat rank ${item.current_rank} -> ${item.suggested_rank}`,
+    title: `Update rank ${item.current_rank} -> ${item.suggested_rank}`,
     detail:
       item.direction === 'up'
-        ? 'De xuat tang rank tu ket qua test gan nhat.'
-        : 'De xuat dieu chinh rank de phan anh dung nang luc hien tai.',
+        ? 'Suggested rank increase based on the latest test result.'
+        : 'Suggested rank adjustment to reflect current ability more accurately.',
     severity: item.direction === 'down' ? 'high' : 'medium',
     createdAt: item.created_at,
     status: item.status,
@@ -746,6 +746,7 @@ function normalizeBossState(status = '') {
   const value = String(status).toLowerCase()
   if (['cleared', 'completed', 'won'].includes(value)) return 'cleared'
   if (['active', 'current', 'ongoing'].includes(value)) return 'current'
+  if (['underprepared', 'failed', 'lost', 'missed'].includes(value)) return 'locked'
   return 'locked'
 }
 
@@ -756,10 +757,10 @@ export function buildBossView(bosses = [], todayIso = getTodayISO()) {
 
   const currentBoss =
     orderedBosses.find((boss) => {
-      const state = normalizeBossState(boss.status)
+      const state = normalizeBossState(boss.result_status || boss.status)
       return state === 'current' || (state !== 'cleared' && toIsoDate(boss.battle_date) >= todayIso)
     }) ??
-    orderedBosses.find((boss) => normalizeBossState(boss.status) !== 'cleared') ??
+    orderedBosses.find((boss) => normalizeBossState(boss.result_status || boss.status) !== 'cleared') ??
     orderedBosses[0] ??
     null
 
@@ -767,12 +768,14 @@ export function buildBossView(bosses = [], todayIso = getTodayISO()) {
     currentBoss: currentBoss
       ? {
           ...currentBoss,
-          uiStatus: normalizeBossState(currentBoss.status),
+          uiStatus: normalizeBossState(currentBoss.result_status || currentBoss.status),
+          displayStatus: currentBoss.result_status || currentBoss.status,
         }
       : null,
     timeline: orderedBosses.map((boss) => ({
       ...boss,
-      uiStatus: normalizeBossState(boss.status),
+      uiStatus: normalizeBossState(boss.result_status || boss.status),
+      displayStatus: boss.result_status || boss.status,
     })),
   }
 }

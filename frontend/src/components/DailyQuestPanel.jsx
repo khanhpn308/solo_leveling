@@ -1,18 +1,20 @@
 import PanelFrame from './PanelFrame'
-import { formatDate } from '../dashboard-data'
+import { formatDate, getTodayISO } from '../dashboard-data'
 
 function statusLabel(status) {
-  if (status === 'completed') return 'Đã xong'
-  if (status === 'overdue') return 'Quá hạn'
-  if (status === 'expired') return 'Hết hạn'
-  return 'Đang chờ'
+  if (status === 'completed') return 'Completed'
+  if (status === 'overdue') return 'Overdue'
+  if (status === 'expired') return 'Expired'
+  return 'Pending'
 }
 
 function DailyQuestPanel({ quests, backlog, onToggleQuest, commandDeck }) {
+  const todayIso = getTodayISO()
+
   return (
     <PanelFrame
       title="Quest Board"
-      tag={`${commandDeck.completedToday}/${Math.max(commandDeck.totalToday, 3)} daily clear`}
+      tag={`${commandDeck.completedToday}/${Math.max(commandDeck.totalToday, 3)} daily clears`}
     >
       <div className="quest-summary">
         <div className="quest-summary__card">
@@ -39,7 +41,7 @@ function DailyQuestPanel({ quests, backlog, onToggleQuest, commandDeck }) {
           >
             <div className="quest-node__main">
               <p className="quest-node__meta">
-                {formatDate(quest.quest_date)} · Week {quest.week_no} · {quest.skill_name}
+                {formatDate(quest.quest_date)} / Week {quest.week_no} / {quest.skill_name}
               </p>
               <h3>{quest.title}</h3>
               <p>{quest.details}</p>
@@ -59,23 +61,29 @@ function DailyQuestPanel({ quests, backlog, onToggleQuest, commandDeck }) {
       <div className="subsection-divider" />
 
       <div className="backlog-header">
-        <h3>Backlog quá hạn</h3>
-        <span>Làm bù chỉ nhận 50% XP, quá 3 ngày sẽ expired.</span>
+        <h3>Overdue Backlog</h3>
+        <span>Recovery completions only earn 50% XP. After 3 days, quests expire.</span>
       </div>
       <div className="backlog-list">
         {backlog.length === 0 ? (
-          <div className="empty-state">Hiện chưa có backlog quá hạn.</div>
+          <div className="empty-state">There is no overdue backlog right now.</div>
         ) : (
           backlog.map((quest) => (
-            <div key={quest.id} className={`backlog-item backlog-item--${quest.status}`}>
+            <button
+              key={quest.id}
+              className={`backlog-item backlog-item--${quest.status}`}
+              type="button"
+              disabled={quest.status === 'expired' || quest.quest_date > todayIso}
+              onClick={() => onToggleQuest(quest)}
+            >
               <div>
                 <strong>{quest.title}</strong>
                 <p>
-                  {quest.skill_name} · {formatDate(quest.quest_date)}
+                  {quest.skill_name} / {formatDate(quest.quest_date)}
                 </p>
               </div>
               <span>{statusLabel(quest.status)}</span>
-            </div>
+            </button>
           ))
         )}
       </div>

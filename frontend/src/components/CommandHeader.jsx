@@ -7,7 +7,7 @@ function CommandHeader({ player, summary }) {
         <p className="system-kicker">Hunter System / IELTS Command Center</p>
         <h1>IELTS Quest Dashboard</h1>
         <p className="command-header__subtitle">
-          Theo dõi campaign 18 tháng, giữ streak, nhìn thấy tiến bộ mỗi ngày.
+          Track the 18-month campaign, protect your streak, and see progress every day.
         </p>
         <div className="hero-stats">
           <div className="hero-stat">
@@ -24,7 +24,7 @@ function CommandHeader({ player, summary }) {
           </div>
           <div className="hero-stat">
             <span>Current Streak</span>
-            <strong>{summary.currentStreak} ngày</strong>
+            <strong>{summary.currentStreak} days</strong>
           </div>
         </div>
       </div>
@@ -41,7 +41,7 @@ function CommandHeader({ player, summary }) {
           <p>
             {player.week_start && player.week_end
               ? `${formatDate(player.week_start)} - ${formatDate(player.week_end)}`
-              : 'Đang chờ đồng bộ backend'}
+              : 'Waiting for backend sync'}
           </p>
         </div>
       </div>

@@ -304,8 +304,8 @@ function App() {
   const statCards = [
     {
       label: 'Streak',
-      value: `${playerSnapshot.currentStreak} ngay`,
-      detail: `Best ${playerSnapshot.bestStreak} ngay`,
+      value: `${playerSnapshot.currentStreak} days`,
+      detail: `Best ${playerSnapshot.bestStreak} days`,
       tone: 'cyan',
     },
     {
@@ -345,6 +345,7 @@ function App() {
         <RoadmapHero
           player={playerSnapshot}
           roadmap={roadmapTrack}
+          mainQuestMap={mainQuestMap}
           currentPhaseLabel={view.player.phaseLabel}
           statCards={statCards}
           roadmapBounds={
@@ -369,7 +370,7 @@ function App() {
             <strong>{weeklyLoading ? 'Loading...' : weeklyError ? 'Unavailable' : weeklyMission?.title || '--'}</strong>
             <span>
               {weeklyLoading
-                ? 'Dang tai weekly mission.'
+                ? 'Loading weekly mission.'
                 : weeklyError
                   ? weeklyError
                   : `${weeklyMission?.items?.length ?? 0} objectives`}
@@ -379,7 +380,7 @@ function App() {
           <article className="support-panel">
             <p>Boss Status</p>
             <strong>{bossView.currentBoss?.title || 'No boss loaded'}</strong>
-            <span>{bossView.currentBoss?.status || 'Pending'}</span>
+            <span>{bossView.currentBoss?.displayStatus || 'Pending'}</span>
           </article>
         </div>
       </section>
@@ -401,6 +402,8 @@ function App() {
         onCheckInDraftChange={handleCheckInDraftChange}
         onSaveCheckIn={saveCheckIn}
         skills={view.skills}
+        badges={view.badges}
+        recentCheckins={view.commandDeck.recentCheckins}
       />
 
       <QuestOverlay
@@ -413,6 +416,7 @@ function App() {
         mainQuestError={mainQuestError}
         dailyQuests={view.todayQuests}
         backlogQuests={view.backlogQuests}
+        allQuests={view.quests}
         commandDeck={view.commandDeck}
         onToggleQuest={toggleQuest}
         weeklyMission={

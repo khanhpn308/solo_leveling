@@ -30,13 +30,13 @@ function SuggestionInboxDropdown({
             </div>
           </header>
 
-          {loading ? <div className="empty-state">Dang tai suggestion...</div> : null}
+          {loading ? <div className="empty-state">Loading suggestions...</div> : null}
           {!loading && error ? <div className="empty-state empty-state--warning">{error}</div> : null}
 
           {!loading && !error ? (
             <div className="suggestion-list">
               {suggestions.length === 0 ? (
-                <div className="empty-state">Khong co de xuat dang mo.</div>
+                <div className="empty-state">No open suggestions.</div>
               ) : (
                 suggestions.map((item) => (
                   <article key={item.key} className={`suggestion-node suggestion-node--${item.severity}`}>

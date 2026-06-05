@@ -2,7 +2,7 @@ import PanelFrame from './PanelFrame'
 import { formatDate } from '../dashboard-data'
 
 function renderMoodStars(value) {
-  return `${'★'.repeat(value)}${'☆'.repeat(5 - value)}`
+  return `${'*'.repeat(value)}${'-'.repeat(5 - value)}`
 }
 
 function CheckInPanel({
@@ -18,7 +18,7 @@ function CheckInPanel({
   recentCheckins,
 }) {
   return (
-    <PanelFrame title="Mood / Energy / Focus" tag="1 check-in / ngày">
+    <PanelFrame title="Mood / Energy / Focus" tag="1 check-in / day">
       <div className="slider-stack">
         <label className="slider-field">
           <span>Mood</span>
@@ -41,26 +41,26 @@ function CheckInPanel({
         className="system-textarea"
         value={note}
         onChange={onNoteChange}
-        placeholder="Ghi chú ngắn: hôm nay mệt vì..., Reading tốt vì..., cần tránh điều gì..."
+        placeholder="Short note: tired because..., Reading felt strong because..., what should be avoided..."
       />
       <button className="system-button" onClick={onSave} type="button">
-        Ghi check-in hôm nay
+        Save today's check-in
       </button>
 
       <div className="subsection-divider" />
 
       <div className="backlog-header">
-        <h3>Lịch sử gần nhất</h3>
-        <span>Backend hiện mới lưu mood và energy.</span>
+        <h3>Recent history</h3>
+        <span>The backend currently stores mood and energy only.</span>
       </div>
       <div className="checkin-history">
         {recentCheckins.map((item) => (
           <div key={item.id} className="checkin-history__item">
             <span>{formatDate(item.checkin_date)}</span>
             <strong>
-              M{item.mood} · E{item.energy}
+              M{item.mood} / E{item.energy}
             </strong>
-            <p>{item.note || 'Không có ghi chú.'}</p>
+            <p>{item.note || 'No note.'}</p>
           </div>
         ))}
       </div>
