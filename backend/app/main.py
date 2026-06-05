@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session, joinedload
 from .database import get_db, run_database_bootstrap, wait_for_database
 from .models import (
     Badge,
+    BadgeUnlock,
     BossBattle,
+    CampaignSkillState,
     Campaign,
     CheckIn,
     ErrorLog,
@@ -43,6 +45,7 @@ from .schemas import (
     MockTestIn,
     MockTestOut,
     PlayerProfileOut,
+    QuestCompletionIn,
     QuestOut,
     QuestTemplateOut,
     RoadmapPhaseOut,
@@ -75,6 +78,7 @@ from .services import (
     estimate_band_from_mock,
     get_active_campaign,
     get_active_player,
+    get_campaign_skill_state_map,
     refresh_progress_state,
     uncomplete_quest_instance,
 )
@@ -131,8 +135,55 @@ def serialize_quest(quest: Quest) -> QuestOut:
         raw_score=quest.raw_score,
         tracker_type=quest.tracker_type,
         tracker_entry_id=quest.tracker_entry_id,
+        daily_slot_code=quest.daily_slot_code,
+        error_log_id=quest.error_log_id,
+        writing_entry_id=quest.writing_entry_id,
+        speaking_entry_id=quest.speaking_entry_id,
+        mock_test_id=quest.mock_test_id,
         expired_at=quest.expired_at,
     )
+
+
+def serialize_skill_state(state: CampaignSkillState) -> SkillOut:
+    skill = state.skill
+    return SkillOut(
+        id=skill.id,
+        name=skill.name,
+        icon=skill.icon,
+        xp=state.xp,
+        rank=state.rank,
+        confirmed_rank=state.confirmed_rank,
+        level=state.level,
+        streak=state.streak,
+        last_practiced=state.last_practiced,
+        weak_point=state.weak_point,
+        user_weakness_note=state.user_weakness_note,
+    )
+
+
+def get_campaign_skill_outputs(db: Session, campaign: Campaign) -> list[SkillOut]:
+    state_map = get_campaign_skill_state_map(db, campaign)
+    states = sorted(state_map.values(), key=lambda item: item.skill.id if item.skill else item.skill_id)
+    return [serialize_skill_state(state) for state in states]
+
+
+def get_campaign_badge_outputs(db: Session, player: Player, campaign: Campaign) -> list[BadgeOut]:
+    unlock_map = {
+        item.badge_id: item
+        for item in db.query(BadgeUnlock).filter(BadgeUnlock.campaign_id == campaign.id).all()
+    }
+    badges = db.query(Badge).order_by(Badge.id).all()
+    return [
+        BadgeOut(
+            id=badge.id,
+            name=badge.name,
+            icon=badge.icon,
+            description=badge.description,
+            unlocked=badge.id in unlock_map,
+            unlocked_at=unlock_map[badge.id].unlocked_at if badge.id in unlock_map else None,
+        )
+        for badge in badges
+    ]
 
 
 def get_player_or_404(db: Session) -> Player:
@@ -198,8 +249,8 @@ def get_summary(db: Session = Depends(get_db)):
         .count()
     )
     total = db.query(Quest).filter(Quest.campaign_id == campaign.id, Quest.session_type == "Daily Quest").count()
-    skills = db.query(Skill).order_by(Skill.id).all()
-    badges = db.query(Badge).order_by(Badge.id).all()
+    skills = get_campaign_skill_outputs(db, campaign)
+    badges = get_campaign_badge_outputs(db, player, campaign)
     boss_battles = (
         db.query(BossBattle)
         .filter(BossBattle.campaign_id == campaign.id)
@@ -291,7 +342,8 @@ def get_current_campaign(db: Session = Depends(get_db)):
 @app.get("/api/skills", response_model=list[SkillOut])
 def get_skills(db: Session = Depends(get_db)):
     refresh_progress_state(db)
-    return db.query(Skill).order_by(Skill.id).all()
+    campaign = get_campaign_or_404(db, get_player_or_404(db))
+    return get_campaign_skill_outputs(db, campaign)
 
 
 @app.get("/api/quest-templates", response_model=list[QuestTemplateOut])
@@ -449,7 +501,7 @@ def get_backlog_quests(db: Session = Depends(get_db)):
 
 
 @app.post("/api/quests/{quest_id}/complete", response_model=QuestOut)
-def complete_quest(quest_id: int, db: Session = Depends(get_db)):
+def complete_quest(quest_id: int, payload: QuestCompletionIn | None = None, db: Session = Depends(get_db)):
     quest = (
         db.query(Quest)
         .options(joinedload(Quest.skill), joinedload(Quest.phase), joinedload(Quest.material))
@@ -458,8 +510,22 @@ def complete_quest(quest_id: int, db: Session = Depends(get_db)):
     )
     if not quest:
         raise HTTPException(status_code=404, detail="Quest not found")
+    payload = payload or QuestCompletionIn()
     try:
-        return serialize_quest(complete_quest_instance(db, quest))
+        return serialize_quest(
+            complete_quest_instance(
+                db,
+                quest,
+                tracker_type=payload.tracker_type,
+                tracker_entry_id=payload.tracker_entry_id,
+                error_log_id=payload.error_log_id,
+                writing_entry_id=payload.writing_entry_id,
+                speaking_entry_id=payload.speaking_entry_id,
+                mock_test_id=payload.mock_test_id,
+                raw_score=payload.raw_score,
+                completion_note=payload.completion_note,
+            )
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -550,7 +616,12 @@ def claim_weekly_mission_reward(mission_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/checkins", response_model=CheckInOut)
 def upsert_checkin(payload: CheckInIn, db: Session = Depends(get_db)):
-    item = db.query(CheckIn).filter(CheckIn.checkin_date == payload.checkin_date).first()
+    campaign = get_campaign_or_404(db, get_player_or_404(db))
+    item = (
+        db.query(CheckIn)
+        .filter(CheckIn.campaign_id == campaign.id, CheckIn.checkin_date == payload.checkin_date)
+        .first()
+    )
     if item:
         item.mood = payload.mood
         item.energy = payload.energy
@@ -558,6 +629,7 @@ def upsert_checkin(payload: CheckInIn, db: Session = Depends(get_db)):
         item.note = payload.note
     else:
         item = CheckIn(
+            campaign_id=campaign.id,
             checkin_date=payload.checkin_date,
             mood=payload.mood,
             energy=payload.energy,
@@ -573,7 +645,8 @@ def upsert_checkin(payload: CheckInIn, db: Session = Depends(get_db)):
 
 @app.get("/api/checkins", response_model=list[CheckInOut])
 def get_checkins(db: Session = Depends(get_db), start: date | None = None, end: date | None = None):
-    query = db.query(CheckIn)
+    campaign = get_campaign_or_404(db, get_player_or_404(db))
+    query = db.query(CheckIn).filter(CheckIn.campaign_id == campaign.id)
     if start:
         query = query.filter(CheckIn.checkin_date >= start)
     if end:
@@ -584,7 +657,9 @@ def get_checkins(db: Session = Depends(get_db), start: date | None = None, end: 
 @app.get("/api/badges", response_model=list[BadgeOut])
 def get_badges(db: Session = Depends(get_db)):
     refresh_progress_state(db)
-    return db.query(Badge).order_by(Badge.id).all()
+    player = get_player_or_404(db)
+    campaign = get_campaign_or_404(db, player)
+    return get_campaign_badge_outputs(db, player, campaign)
 
 
 @app.get("/api/boss-battles", response_model=list[BossBattleOut])
@@ -612,7 +687,8 @@ def get_test_records(db: Session = Depends(get_db)):
 @app.post("/api/test-records", response_model=TestRecordOut)
 def create_test_record(payload: TestRecordIn, db: Session = Depends(get_db)):
     player = get_player_or_404(db)
-    record = TestRecord(player_id=player.id, **payload.model_dump())
+    campaign = get_campaign_or_404(db, player)
+    record = TestRecord(player_id=player.id, campaign_id=campaign.id, **payload.model_dump())
     db.add(record)
     db.flush()
     create_rank_suggestions_for_test(db, record)
@@ -623,7 +699,12 @@ def create_test_record(payload: TestRecordIn, db: Session = Depends(get_db)):
 
 @app.get("/api/rank-suggestions", response_model=list[SkillRankSuggestionOut])
 def get_rank_suggestions(db: Session = Depends(get_db), include_resolved: bool = False):
-    query = db.query(SkillRankSuggestion).order_by(SkillRankSuggestion.created_at.desc(), SkillRankSuggestion.id.desc())
+    campaign = get_campaign_or_404(db, get_player_or_404(db))
+    query = (
+        db.query(SkillRankSuggestion)
+        .filter(SkillRankSuggestion.campaign_id == campaign.id)
+        .order_by(SkillRankSuggestion.created_at.desc(), SkillRankSuggestion.id.desc())
+    )
     if not include_resolved:
         query = query.filter(SkillRankSuggestion.status == "pending")
     return query.all()
@@ -639,6 +720,9 @@ def post_apply_rank_suggestion(suggestion_id: int, db: Session = Depends(get_db)
     )
     if not suggestion:
         raise HTTPException(status_code=404, detail="Rank suggestion not found")
+    campaign = get_campaign_or_404(db, get_player_or_404(db))
+    if suggestion.campaign_id != campaign.id:
+        raise HTTPException(status_code=404, detail="Rank suggestion not found")
     return apply_rank_suggestion(db, suggestion)
 
 
@@ -646,6 +730,9 @@ def post_apply_rank_suggestion(suggestion_id: int, db: Session = Depends(get_db)
 def post_dismiss_rank_suggestion(suggestion_id: int, db: Session = Depends(get_db)):
     suggestion = db.query(SkillRankSuggestion).filter(SkillRankSuggestion.id == suggestion_id).first()
     if not suggestion:
+        raise HTTPException(status_code=404, detail="Rank suggestion not found")
+    campaign = get_campaign_or_404(db, get_player_or_404(db))
+    if suggestion.campaign_id != campaign.id:
         raise HTTPException(status_code=404, detail="Rank suggestion not found")
     return dismiss_rank_suggestion(db, suggestion)
 
@@ -745,6 +832,7 @@ def get_weakness_suggestions(db: Session = Depends(get_db), include_resolved: bo
     query = (
         db.query(WeaknessSuggestion)
         .options(joinedload(WeaknessSuggestion.skill))
+        .filter(WeaknessSuggestion.campaign_id == campaign.id)
         .order_by(WeaknessSuggestion.created_at.desc(), WeaknessSuggestion.id.desc())
     )
     if not include_resolved:
@@ -762,6 +850,9 @@ def post_apply_weakness_suggestion(suggestion_id: int, db: Session = Depends(get
     )
     if not suggestion:
         raise HTTPException(status_code=404, detail="Weakness suggestion not found")
+    campaign = get_campaign_or_404(db, get_player_or_404(db))
+    if suggestion.campaign_id != campaign.id:
+        raise HTTPException(status_code=404, detail="Weakness suggestion not found")
     return apply_weakness_suggestion(db, suggestion)
 
 
@@ -770,19 +861,27 @@ def post_dismiss_weakness_suggestion(suggestion_id: int, db: Session = Depends(g
     suggestion = db.query(WeaknessSuggestion).filter(WeaknessSuggestion.id == suggestion_id).first()
     if not suggestion:
         raise HTTPException(status_code=404, detail="Weakness suggestion not found")
+    campaign = get_campaign_or_404(db, get_player_or_404(db))
+    if suggestion.campaign_id != campaign.id:
+        raise HTTPException(status_code=404, detail="Weakness suggestion not found")
     return dismiss_weakness_suggestion(db, suggestion)
 
 
 @app.post("/api/dev/reset")
 def reset_database(db: Session = Depends(get_db)):
+    db.query(Player).update({Player.active_campaign_id: None})
+    db.flush()
     for model in [
+        BadgeUnlock,
+        CampaignSkillState,
+        WeaknessSuggestion,
+        SkillRankHistory,
+        SkillRankSuggestion,
+        CheckIn,
         Quest,
         WeeklyMissionItem,
         WeeklyMission,
         BossBattle,
-        SkillRankHistory,
-        SkillRankSuggestion,
-        WeaknessSuggestion,
         ErrorLog,
         WritingEntry,
         SpeakingEntry,
@@ -798,7 +897,6 @@ def reset_database(db: Session = Depends(get_db)):
         Skill,
         Campaign,
         Player,
-        CheckIn,
     ]:
         db.query(model).delete()
     db.commit()

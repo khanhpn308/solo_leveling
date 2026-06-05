@@ -211,6 +211,401 @@ manual source scan: no Vietnamese copy matches remained in frontend/src for the 
 - [ ] I checked validation results.
 - [ ] I approved this task.
 
+## [2026-06-05 23:57] Clean TASKS.md status after Wave D
+
+**Agent:** coder-gpt54  
+**Status:** Done  
+**Related task:** Clean stale status markers in `TASKS.md`
+
+### 1. Summary
+
+Cleaned the task tracker so the open work matches the actual project state after Wave D. Removed stale “implementation has started” lines for earlier waves, marked the remaining Wave A validation item as done because later live API smoke already covered it, and updated the next-step note to point at Wave E hardening as the main backend migration work left.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `TASKS.md` | Modified | `In Progress`, `Wave A.6`, `Next Candidate Tasks` | Removed stale Wave A/Wave B started markers, narrowed in-progress backend follow-up to the two real Wave D leftovers, marked the Wave A API-break check done, and pointed the next migration step at Wave E. |
+| `changelogs.md` | Modified | tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Tracker now reflects the real remaining backend migration work more cleanly.
+
+### 4. Bugs fixed
+
+- [x] Removed stale Wave A/Wave B “started” state from `In Progress`.
+- [x] Removed the outdated implication that Wave D broad implementation work was still the main open backend step.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content -Encoding UTF8 TASKS.md
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+Documentation-only tracker cleanup.
+TASKS.md now shows the real remaining open items instead of stale earlier-wave progress markers.
+```
+
+### 8. Remaining issues
+
+- [ ] Browser verification is still pending.
+- [ ] Schema semantics note is still pending.
+- [ ] Wave E hardening is still pending.
+
+### 9. Suggested next step
+
+- Start Wave E hardening or write the schema-semantics note, depending on whether backend migration closure or documentation has higher priority.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 23:38] Wave D backend cutover for campaign-scoped skills, badges, and typed quest completion
+
+**Agent:** coder-gpt54  
+**Status:** Done  
+**Related task:** `TASKS.md` Wave D application cutover
+
+### 1. Summary
+
+Implemented the Wave D backend cutover without adding schema. The FastAPI backend now reads live skill state from `campaign_skill_states`, reads badge unlock state from `badge_unlocks`, scopes check-ins/rank suggestions/weakness suggestions to the active campaign, and makes quest completion dual-write typed tracker FKs plus legacy tracker fields. Manual live smoke tests also confirmed backward compatibility for no-body quest completion and proved the API now trusts campaign-scoped state over the legacy global `skills` / `badges` fields.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `backend/app/schemas.py` | Modified | `QuestCompletionIn` around `L73` | Added an optional quest-completion request body for typed tracker IDs, raw score, and completion note while keeping the existing response contracts unchanged. |
+| `backend/app/services.py` | Modified | `ensure_campaign_skill_states()` `L64`, `resolve_tracker_payload()` `L107`, `recompute_badges()` `L328`, `recompute_player_progress()` `L367`, `recompute_skill_progress()` `L444`, `refresh_progress_state()` `L469`, `create_rank_suggestions_for_test()` `L644`, `apply_rank_suggestion()` `L693`, `ensure_weakness_suggestions()` `L754`, `apply_weakness_suggestion()` `L875` | Cut read/write logic over to campaign-scoped skill state and badge unlocks, added typed tracker resolution/dual-write, made rank/weakness logic campaign-aware, and fixed weakness-suggestion persistence plus single-commit refresh behavior. |
+| `backend/app/main.py` | Modified | `serialize_skill_state()` `L147`, `get_campaign_badge_outputs()` `L170`, `/api/skills` `L343`, `/api/quests/{id}/complete` `L504`, `/api/checkins` `L618`, `/api/badges` `L664`, `/api/rank-suggestions` `L707`, `/api/weakness-suggestions` `L834` | Switched public reads to campaign-scoped skill/badge helpers, added backward-compatible quest-completion body handling, tightened active-campaign filtering, and made check-in upsert safe until Wave E removes the legacy same-date uniqueness limit. |
+| `TASKS.md` | Modified | `Wave D` section around `L360` and `Next Candidate Tasks` | Replaced the old one-line Wave D tracker with a detailed checklist and marked the validated Wave D cutover items as done. |
+| `changelogs.md` | Modified | tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Campaign-scoped `SkillOut` serialization powered by `campaign_skill_states`.
+- [x] Campaign-scoped `BadgeOut` serialization powered by `badge_unlocks`.
+- [x] Backward-compatible `QuestCompletionIn` request body for typed tracker metadata.
+- [x] Dual-write quest completion flow that fills typed tracker FK columns and legacy tracker fields together.
+- [x] Active-campaign filtering for check-ins, rank suggestions, and weakness suggestions.
+
+### 4. Bugs fixed
+
+- [x] Weakness suggestions created during GET generation now persist instead of being lost on session close.
+- [x] `refresh_progress_state()` no longer commits early through `sync_quest_statuses()`.
+- [x] Badge and skill API reads no longer depend on stale global `badges` / `skills` state.
+- [x] Quest completion now rejects multiple typed tracker references with a clear `400` instead of ambiguous state writes.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content -Encoding UTF8 backend\app\services.py
+Get-Content -Encoding UTF8 backend\app\main.py
+Get-Content -Encoding UTF8 backend\app\schemas.py
+Get-Content -Encoding UTF8 backend\app\database.py
+Get-Content -Encoding UTF8 backend\app\models.py
+python -m py_compile backend\app\main.py backend\app\services.py backend\app\schemas.py
+curl.exe -s http://localhost:8000/api/health
+@'
+# live API smoke for /skills, /badges, /summary, /rank-suggestions,
+# /weakness-suggestions, /checkins, /test-records, /quests/today,
+# plus complete/uncomplete with and without typed tracker payload
+'@ | python -
+@'
+# temporary DB/API mismatch proof:
+# - force `skills.user_weakness_note != campaign_skill_states.user_weakness_note`
+# - force `badges.unlocked = false` while inserting a temporary `badge_unlocks` row
+# - call /api/skills, /api/summary, /api/badges
+# - restore original DB values
+'@ | python -
+@'
+# invalid quest completion smoke:
+# send multiple typed tracker IDs and verify HTTP 400
+'@ | python -
+rg -n "class QuestCompletionIn|def serialize_skill_state|def get_campaign_badge_outputs|def get_skills|def complete_quest\\(|def upsert_checkin|def get_badges|def get_rank_suggestions|def get_weakness_suggestions|def ensure_campaign_skill_states|def resolve_tracker_payload|def recompute_badges|def recompute_player_progress|def recompute_skill_progress|def refresh_progress_state|def create_rank_suggestions_for_test|def apply_rank_suggestion|def ensure_weakness_suggestions|def apply_weakness_suggestion" backend\app\schemas.py backend\app\main.py backend\app\services.py TASKS.md
+git status --short backend/app/main.py backend/app/services.py backend/app/schemas.py TASKS.md changelogs.md
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+python -m py_compile: passed
+/api/health: 200
+/api/skills: 200
+/api/badges: 200
+/api/summary: 200
+/api/rank-suggestions: 200
+/api/weakness-suggestions: 200
+/api/checkins: 200
+/api/test-records: 200
+/api/quests/today: 200
+POST /api/quests/{id}/complete with no body: 200
+POST /api/quests/{id}/complete with typed `error_log_id`: 200
+typed quest completion response confirmed:
+- tracker_type = "error_log"
+- tracker_entry_id populated
+- error_log_id populated
+POST /api/quests/{id}/uncomplete after typed completion: 200 and both legacy/typed tracker fields cleared
+POST /api/quests/{id}/complete with multiple typed tracker IDs: 400
+Temporary mismatch proof confirmed:
+- /api/skills and /api/summary.skills returned `CampaignSkillState` note/rank, not global `skills` values
+- /api/badges returned unlocked state from `badge_unlocks`, not global `badges.unlocked`
+```
+
+### 8. Remaining issues
+
+- [ ] Wave D validation is manual smoke coverage only; no automated backend tests were added in this slice.
+- [ ] `Wave E` hard constraints are still pending, so same-date multi-campaign check-ins still rely on the temporary `409` safety behavior.
+- [ ] Legacy global columns on `skills` and `badges` still exist and are intentionally deferred cleanup.
+
+### 9. Suggested next step
+
+- Start `Wave E` hardening: make campaign scope mandatory with `NOT NULL` / unique constraints after deciding whether to add automated regression coverage first.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 22:55] Wave C backfill migration
+
+**Agent:** coder-gpt54  
+**Status:** Done  
+**Related task:** Wave C data backfill for campaign scope and additive state tables
+
+### 1. Summary
+
+Added a data-only Wave C Alembic revision that backfills existing campaign-scoped fields, fills daily quest slot codes, seeds `campaign_skill_states`, and safely seeds `badge_unlocks` when qualifying source rows exist. Then upgraded the local MySQL database to `20260605_07` and verified the current seeded dataset now carries campaign scope and daily-slot values correctly.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `backend/alembic/versions/20260605_07_wave_c_backfill_existing_state.py` | Added | whole file | Added the Wave C data-only migration with idempotent backfill SQL for quest typed links, weakness typed sources, campaign scope, `campaign_skill_states`, and `badge_unlocks`. |
+| `TASKS.md` | Modified | Wave C section around `Wave C - Backfill existing data` | Replaced the old high-level Wave C bullets with the implemented detailed checklist and marked the completed items `Done`. |
+| `changelogs.md` | Modified | new tail entry | Added this Wave C implementation record. |
+
+### 3. Features added
+
+- [x] Data-only backfill migration for existing campaign-scoped fields.
+- [x] Daily quest `daily_slot_code` normalization for reset-generated seed data.
+- [x] Initial seeding of `campaign_skill_states` from the current active campaign and global `skills` state.
+
+### 4. Bugs fixed
+
+- [x] Fixed the state where reset-generated daily quests still had `daily_slot_code = null`.
+- [x] Fixed the state where legacy `test_records` and linked `skill_rank_suggestions` still had `campaign_id = null`.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content -Encoding UTF8 C:\Users\Admin\.agents\skills\mysql\SKILL.md
+Get-Content -Encoding UTF8 C:\Users\Admin\.agents\skills\backend-development\SKILL.md
+Get-Content -Encoding UTF8 TASKS.md
+Get-Content -Encoding UTF8 backend\alembic\versions\20260605_05_wave_a_scope_links.py
+Get-Content -Encoding UTF8 backend\alembic\versions\20260605_06_wave_b_state_tables.py
+Get-Content -Encoding UTF8 backend\app\models.py
+Get-Content -Encoding UTF8 backend\app\services.py
+python -m py_compile backend\alembic\versions\20260605_07_wave_c_backfill_existing_state.py
+@'
+from alembic.config import Config
+from alembic import command
+cfg = Config(r'alembic.ini')
+cfg.set_main_option('sqlalchemy.url', 'mysql+pymysql://ielts_user:ielts_password@localhost:3307/ielts_quest')
+command.upgrade(cfg, 'head')
+'@ | py -3.13 -
+@'
+from sqlalchemy import create_engine, text
+... post-upgrade verification queries for alembic version, null counts, daily_slot_code, campaign_skill_states, badge_unlocks ...
+'@ | py -3.13 -
+curl.exe -s http://localhost:8000/api/test-records
+curl.exe -s http://localhost:8000/api/rank-suggestions
+curl.exe -s http://localhost:8000/api/quests/today
+curl.exe -s http://localhost:8000/api/weekly-mission/current
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+python -m py_compile backend/alembic/versions/20260605_07_wave_c_backfill_existing_state.py: passed
+Wave C Alembic upgrade to 20260605_07: passed
+test_records.campaign_id null rows after upgrade: 0
+skill_rank_suggestions.campaign_id null rows after upgrade: 0
+skill_rank_history.campaign_id null rows after upgrade: 0
+weakness_suggestions.campaign_id null rows after upgrade: 0
+daily quest daily_slot_code null rows after upgrade: 0
+campaign_skill_states row count after upgrade: 7
+badge_unlocks row count after upgrade: 0
+/api/test-records: 200
+/api/rank-suggestions: 200
+/api/quests/today: 200
+/api/weekly-mission/current: 200
+```
+
+### 8. Remaining issues
+
+- [ ] `badge_unlocks` currently stays empty on the local seeded DB because there are no cleared boss battles or unlocked legacy badges yet; this is expected but still means that path only has zero-row validation in the current dataset.
+- [ ] Typed quest tracker FK and typed weakness source FK backfills have no positive-row verification on the current seeded DB because there are no qualifying legacy rows after reset.
+
+### 9. Suggested next step
+
+- Start Wave D cutover: move active-campaign skill progress reads/writes to `campaign_skill_states`, then migrate badge wall reads to `badge_unlocks + badges`.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 22:23] Wave B material translation and reset smoke
+
+**Agent:** coder-gpt54  
+**Status:** Done  
+**Related task:** Wave B backend English cleanup and safe reset smoke
+
+### 1. Summary
+
+Translated `material.md` to English for backend seed-fed roadmap/session content, fixed a real `/api/dev/reset` failure caused by the `players.active_campaign_id` foreign key, restarted the backend, and verified key seed-backed endpoints now return English content after reset.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `material.md` | Modified | whole file, major table sections from `00_Overview` through `Months_13-18` | Translated the roadmap/material/error-log/session source tables from Vietnamese to English so seed-fed backend content no longer depends on Vietnamese source text. |
+| `backend/app/main.py` | Modified | `reset_database()` around `L790-L818` | Fixed reset sequencing by nulling `Player.active_campaign_id` before the delete loop, preventing the campaign delete FK failure. |
+| `TASKS.md` | Modified | Wave B.4 / Wave B.5 checklist area around `L250-L275` | Marked backend English cleanup, reset validation, and API-shape verification items as done. |
+| `AGENT_NOTES.md` | Modified | new 2026-06-05 note near file tail | Recorded translation/reset work and the FK root cause. |
+| `TEST_REPORT.md` | Modified | new `Wave B Reset + English Seed Smoke` section near file tail | Recorded commands, failure root cause, fix, and endpoint smoke results. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] English backend seed source for roadmap/session planning via translated `material.md`.
+- [x] Safe reset path that survives the `players.active_campaign_id -> campaigns.id` foreign key.
+
+### 4. Bugs fixed
+
+- [x] Fixed `/api/dev/reset` HTTP 500 caused by deleting `Campaign` rows while `Player.active_campaign_id` still referenced them.
+- [x] Removed remaining Vietnamese backend seed content returned after reset for skills, badges, materials, roadmap phases, and weekly mission endpoints.
+
+### 5. Code removed
+
+- [x] Removed Vietnamese source content from `material.md`.
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content -Encoding UTF8 material.md -TotalCount 70
+rg -n "^\#\# " material.md
+python -m pip install deep-translator
+@'
+... translation pass for material.md ...
+'@ | py -3.13 -
+rg -n "[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđĐ]" material.md
+docker restart ielts_quest_backend
+curl.exe -s http://localhost:8000/api/health
+curl.exe -i -s -X POST http://localhost:8000/api/dev/reset
+@'
+... SQLAlchemy delete-order repro script ...
+'@ | py -3.13 -
+python -m py_compile backend\app\main.py
+curl.exe -s http://localhost:8000/api/skills
+curl.exe -s http://localhost:8000/api/badges
+curl.exe -s http://localhost:8000/api/materials
+curl.exe -s http://localhost:8000/api/roadmap/phases
+curl.exe -s http://localhost:8000/api/weekly-mission/current
+git diff --unified=0 -- backend/app/main.py material.md
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+material.md translation: completed
+accent-character scan on material.md: clean
+backend restart: passed
+/api/health after restart: 200
+first /api/dev/reset: failed with HTTP 500
+root cause: players.active_campaign_id blocked campaign deletion
+reset fix applied in reset_database(): passed
+python -m py_compile backend/app/main.py: passed
+/api/dev/reset after fix: 200
+/api/skills: 200, shape unchanged, English text returned
+/api/badges: 200, shape unchanged, English text returned
+/api/materials: 200, English text returned
+/api/roadmap/phases: 200, English text returned
+/api/weekly-mission/current: 200, English text returned
+```
+
+### 8. Remaining issues
+
+- [ ] Some `material.md` machine-translated phrases are understandable but not fully polished editorial English.
+- [ ] Empty-DB migration validation is still not isolated from the normal local seeded database flow.
+
+### 9. Suggested next step
+
+- Manually polish the roughest `material.md` English phrasing, then move on to Wave C backfill work.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
 ## [2026-06-05 10:20] Task tracker refresh for remaining documentation work
 
 **Agent:** coder-gpt54
@@ -2687,6 +3082,628 @@ Manual browser smoke check: not run in this environment
 ### 9. Suggested next step
 
 - Run a live browser smoke check that confirms the burger-dot indicator, quest action states, weekly claim gating, and XP/rank updates only after claim.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+## [2026-06-05 20:21] Track database migration plan in TASKS
+
+**Agent:** coder-gpt54  
+**Status:** Done  
+**Related task:** Save the approved/planned database migration sequence into the repo task tracker with completion status markers
+
+### 1. Summary
+
+Recorded the database migration hardening plan in `TASKS.md` as a progress tracker. The new section breaks the work into Waves A-E, marks the already-finished planning decisions as done, and marks the implementation work as not done so progress can be tracked after approval.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `TASKS.md` | Modified | top tracker sections around `In Progress`, `Next Candidate Tasks`, and new `Database Migration Plan Tracker` block | Added a dedicated migration-plan tracking section with status markers for chosen direction, migration waves, deferred items, and the next implementation candidate. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Repository task tracker now includes the database migration plan with explicit `Done` / `Not done` progress markers.
+
+### 4. Bugs fixed
+
+- [x] Removed ambiguity about where the migration plan should be tracked and which parts are planning-complete versus not yet implemented.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-ChildItem -Name
+if (Test-Path TASKS.md) { Get-Content TASKS.md }
+if (Test-Path changelogs.md) { Get-Content changelogs.md }
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+Documentation-only update.
+Confirmed the migration tracker is now stored in TASKS.md with explicit completion markers.
+```
+
+### 8. Remaining issues
+
+- [ ] The migration plan is still pending approval and implementation.
+- [ ] No schema/code changes were executed in this task.
+
+### 9. Suggested next step
+
+- Review the new `Database Migration Plan Tracker` section in `TASKS.md`, then choose whether to implement Wave A first.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+## [2026-06-05 20:44] Expand Wave A into detailed implementation checklist
+
+**Agent:** coder-gpt54  
+**Status:** Done  
+**Related task:** Break Wave A of the database migration plan into an implementation-ready checklist before coding starts
+
+### 1. Summary
+
+Expanded Wave A in `TASKS.md` from a high-level bullet list into a detailed implementation checklist. The new structure now separates preparation, schema additions, indexes, low-risk backfill, ORM/schema touchpoints, and validation so the first migration wave can be implemented without ad hoc decisions.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `TASKS.md` | Modified | `Database Migration Plan Tracker` -> `Wave A` section | Replaced the short Wave A bullets with a step-by-step checklist covering migration prep, nullable scope columns, typed tracker/source link columns, Wave-A-safe backfill rules, ORM/schema follow-up, and validation tasks. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Wave A is now implementation-ready as a detailed tracked checklist.
+
+### 4. Bugs fixed
+
+- [x] Removed ambiguity inside Wave A about what belongs in the first migration and what should stay deferred to later waves.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content TASKS.md
+Get-Content changelogs.md -Tail 120
+Get-Date -Format "yyyy-MM-dd HH:mm"
+git diff --unified=0 -- TASKS.md changelogs.md
+git status --short TASKS.md changelogs.md
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+Documentation-only update.
+Confirmed Wave A in TASKS.md is now broken down into implementation-safe substeps.
+```
+
+### 8. Remaining issues
+
+- [ ] Wave A is still not implemented.
+- [ ] Later waves remain high-level compared with the new detailed Wave A checklist.
+
+### 9. Suggested next step
+
+- Use the new Wave A sub-checklist as the direct implementation brief when schema work begins.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+## [2026-06-05 21:12] Wave A backend scope and typed-link migration start
+
+**Agent:** coder-gpt54  
+**Status:** Partially done  
+**Related task:** Start coding Wave A of the database migration plan and update tracking docs
+
+### 1. Summary
+
+Started the backend implementation for Wave A. Added the new additive Alembic revision for campaign-scope and typed-link columns, updated FastAPI backend models/schemas to surface the new nullable fields, started writing `campaign_id` on new check-ins and test records, propagated `campaign_id` into new rank/weakness suggestion rows, and fixed the dev reset deletion order to stay compatible with the new foreign keys.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `backend/alembic/versions/20260605_05_wave_a_scope_links.py` | Added | Full file | Added Wave A migration for nullable campaign-scope columns, typed tracker/source FK columns, indexes, and low-risk deterministic backfill. |
+| `backend/app/models.py` | Modified | `Quest`, `CheckIn`, `TestRecord`, `SkillRankSuggestion`, `SkillRankHistory`, `WeaknessSuggestion` models | Added new nullable ORM fields for Wave A scope and typed-link columns. |
+| `backend/app/schemas.py` | Modified | `QuestOut`, `CheckInOut`, `TestRecordOut`, `SkillRankSuggestionOut`, `WeaknessSuggestionOut` | Exposed the new nullable fields without removing legacy response fields. |
+| `backend/app/main.py` | Modified | `serialize_quest()`, `upsert_checkin()`, `create_test_record()`, `/api/dev/reset` | Serialized the new quest fields, started writing `campaign_id` for new check-ins and test records, and reordered reset deletes for FK safety. |
+| `backend/app/services.py` | Modified | `create_rank_suggestions_for_test()`, `apply_rank_suggestion()`, `ensure_weakness_suggestions()` | Propagated `campaign_id` into new rank history / suggestion rows and new weakness suggestions. |
+| `TASKS.md` | Modified | `In Progress` + `Wave A` checklist | Marked the implemented Wave A substeps as done and left runtime verification items open. |
+| `AGENT_NOTES.md` | Modified | new dated note block | Logged the Wave A implementation start and current validation state. |
+| `TEST_REPORT.md` | Modified | new backend validation snapshot | Recorded syntax validation success and the current Alembic CLI environment gap. |
+| `changelogs.md` | Modified | new entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Wave A additive migration for nullable campaign-scope columns.
+- [x] Wave A additive migration for typed tracker/source link columns.
+- [x] Backend response schemas now expose the new nullable fields for compatibility-safe rollout.
+
+### 4. Bugs fixed
+
+- [x] `/api/dev/reset` deletion order is now safe for the new foreign-key graph introduced by Wave A.
+- [x] New check-ins and test records now start carrying `campaign_id`, preventing the new columns from remaining unused on fresh data.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+python -m py_compile backend\app\main.py backend\app\models.py backend\app\schemas.py backend\app\services.py backend\alembic\versions\20260605_05_wave_a_scope_links.py
+python -m alembic upgrade head
+alembic upgrade head
+Get-Content AGENT_NOTES.md -Tail 80
+Get-Content TEST_REPORT.md -Tail 120
+Get-Content changelogs.md -Tail 120
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [ ] Passed
+- [x] Failed
+- [ ] Not run
+
+Details:
+
+```text
+python -m py_compile on touched backend files + new migration: passed
+python -m alembic upgrade head: failed because alembic.__main__ is unavailable in the current Python environment
+alembic upgrade head: failed because the alembic executable is not on PATH in the current shell
+No API/runtime smoke check has been run yet after the schema changes
+```
+
+### 8. Remaining issues
+
+- [ ] The new Wave A migration has not yet been executed on the local DB in this shell environment.
+- [ ] API/runtime verification after migration is still pending.
+- [ ] Wave A is only partially complete until migration execution and post-migration checks pass.
+
+### 9. Suggested next step
+
+- Fix or locate the Alembic runtime entrypoint in the local environment, run the migration on the project DB, then perform a targeted backend smoke check.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+## [2026-06-05 21:24] Install backend requirements and apply Wave A migration
+
+**Agent:** coder-gpt54  
+**Status:** Done  
+**Related task:** Install Alembic/backend dependencies and run `upgrade head` for Wave A on the local MySQL database
+
+### 1. Summary
+
+Installed the backend Python requirements into the active host Python environment, then applied the new Wave A migration against the local MySQL database by running Alembic through the Python API with a host-side URL override to `localhost:3307`. Verified that the database revision advanced to `20260605_05` and that representative new Wave A columns now exist in MySQL.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `TASKS.md` | Modified | `Wave A.6` validation checklist | Marked the migration execution and SQL spot-check steps as done, leaving API/runtime smoke checks open. |
+| `AGENT_NOTES.md` | Modified | `2026-06-05 - Wave A backend implementation started` note | Added the dependency install, successful Alembic upgrade, and DB verification results. |
+| `TEST_REPORT.md` | Modified | `Wave A Backend Validation Snapshot` | Added the successful requirements install, successful migration command, and successful DB-level verification details. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Host Python environment can now run the backend migration tooling.
+- [x] Wave A migration is now applied to the local MySQL schema.
+
+### 4. Bugs fixed
+
+- [x] Resolved the missing Alembic/SQLAlchemy host environment issue by installing backend requirements locally.
+- [x] Resolved the host/container DB hostname mismatch for migration execution by overriding the connection URL to `localhost:3307`.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+python -m pip show alembic
+python -m pip show SQLAlchemy
+python -m pip install -r backend\requirements.txt
+alembic upgrade head
+Get-Content docker-compose.yml
+python -c "from alembic.config import Config; from alembic import command; cfg=Config(r'alembic.ini'); cfg.set_main_option('sqlalchemy.url', 'mysql+pymysql://ielts_user:ielts_password@localhost:3307/ielts_quest'); command.upgrade(cfg, 'head')"
+@'
+from sqlalchemy import create_engine, text
+engine = create_engine('mysql+pymysql://ielts_user:ielts_password@localhost:3307/ielts_quest')
+checks = {
+    'revision': 'SELECT version_num FROM alembic_version',
+    'checkins_campaign': "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='ielts_quest' AND TABLE_NAME='checkins' AND COLUMN_NAME='campaign_id'",
+    'quests_daily_slot': "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='ielts_quest' AND TABLE_NAME='quests' AND COLUMN_NAME='daily_slot_code'",
+    'weakness_source_test': "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='ielts_quest' AND TABLE_NAME='weakness_suggestions' AND COLUMN_NAME='source_test_record_id'",
+}
+with engine.connect() as conn:
+    for label, sql in checks.items():
+        print(label, conn.execute(text(sql)).fetchall())
+'@ | python -
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+python -m pip install -r backend\requirements.txt: passed
+Wave A Alembic upgrade with host-side URL override: passed
+alembic_version: 20260605_05
+checkins.campaign_id exists
+quests.daily_slot_code exists
+weakness_suggestions.source_test_record_id exists
+```
+
+### 8. Remaining issues
+
+- [ ] No post-migration FastAPI smoke test has been run yet.
+- [ ] No endpoint-level verification has been run yet for new writes into the new nullable columns.
+
+### 9. Suggested next step
+
+- Run a focused backend smoke check for `/api/checkins`, `/api/test-records`, and `/api/weakness-suggestions` after the applied migration.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+## [2026-06-05 21:29] Sync TASKS status with current Wave A progress
+
+**Agent:** coder-gpt54  
+**Status:** Done  
+**Related task:** Update `TASKS.md` so it reflects the real current backend migration status
+
+### 1. Summary
+
+Corrected the task tracker so it matches the actual project state after Wave A approval and migration execution. The tracker now marks approval as done and updates the next-step note to reflect that the migration has already been applied locally.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `TASKS.md` | Modified | `Chosen migration direction` and `Next Candidate Tasks` | Marked final user approval as done and updated the next backend step note from migration execution to endpoint-level smoke testing. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Task tracker now reflects the real backend migration status.
+
+### 4. Bugs fixed
+
+- [x] Removed stale `Not done` state for migration-plan approval after implementation had already started.
+- [x] Removed the stale next-step note that still treated Alembic execution as pending.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content TASKS.md
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+Documentation-only tracker sync.
+TASKS.md now matches the current Wave A approval and migration state.
+```
+
+### 8. Remaining issues
+
+- [ ] Wave A endpoint-level smoke testing is still pending.
+- [ ] Later backend waves remain unfinished.
+
+### 9. Suggested next step
+
+- Run backend endpoint smoke tests for the Wave A write/read paths, then update the remaining `Not done` item in Wave A.6 if they pass.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 22:01] Wave B additive state tables and backend English seed sync
+
+**Agent:** coder-gpt54  
+**Status:** Partially done  
+**Related task:** `TASKS.md` Wave B additive state tables + backend English text cleanup
+
+### 1. Summary
+
+Implemented Wave B schema scaffolding by adding `campaign_skill_states` and `badge_unlocks`, wired the new ORM relationships, and updated `/api/dev/reset` child-table deletion order. Also translated seeded backend user-facing text in `backend/app/seed.py` to English and added sync logic so startup seeding updates existing system-seeded rows instead of only inserting missing ones. Legacy weekly-mission string matching in `services.py` now accepts both old Vietnamese rows and new English rows.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `backend/alembic/versions/20260605_06_wave_b_state_tables.py` | Added | full file | Added Wave B migration for `campaign_skill_states` and `badge_unlocks`, named unique constraints/indexes, and real downgrade. |
+| `backend/app/models.py` | Modified | `Player`, `Campaign`, `Skill`, `Badge`, `BossBattle`, new `CampaignSkillState`, new `BadgeUnlock` | Added Wave B ORM models and relationships. |
+| `backend/app/main.py` | Modified | import block, `/api/dev/reset` | Imported new models and deleted Wave B child tables before parent tables in dev reset flow. |
+| `backend/app/seed.py` | Modified | seed constants, `ensure_*` helpers, weekly mission sync, boss sync, quest sync | Translated seeded backend text to English and added in-place sync for existing system-seeded rows on repeated startup seeding. |
+| `backend/app/services.py` | Modified | `recompute_weekly_missions` description matching | Accepted both old Vietnamese mission-item strings and new English strings. |
+| `TASKS.md` | Modified | `In Progress`, `Wave B.*` | Added translation task for this wave and marked completed Wave B implementation items. |
+| `AGENT_NOTES.md` | Modified | new `2026-06-05 - Wave B additive state tables and backend English text sync` section | Added implementation note and remaining gaps. |
+| `TEST_REPORT.md` | Modified | `Wave B Backend Validation Snapshot` | Added Wave B validation commands/results. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] New additive DB tables for future campaign-scoped skill state and badge ownership.
+- [x] ORM support for `CampaignSkillState` and `BadgeUnlock`.
+- [x] Startup seed synchronization for existing system-generated rows.
+- [x] English seed text for backend-defined roadmap, quest, mission, badge, and material metadata in Python seed sources.
+
+### 4. Bugs fixed
+
+- [x] Fixed future `/api/dev/reset` FK risk by deleting `badge_unlocks` and `campaign_skill_states` before parent tables.
+- [x] Fixed weekly mission progress matching so old seeded Vietnamese rows still work after new English seed text is introduced.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content -Encoding UTF8 TASKS.md
+Get-Content -Encoding UTF8 backend\app\main.py
+Get-Content -Encoding UTF8 backend\app\models.py
+Get-Content -Encoding UTF8 backend\app\seed.py
+Get-Content -Encoding UTF8 backend\app\services.py
+Get-Content -Encoding UTF8 backend\alembic\versions\20260605_05_wave_a_scope_links.py
+python -m py_compile backend\app\main.py backend\app\models.py backend\app\services.py backend\app\seed.py backend\alembic\versions\20260605_06_wave_b_state_tables.py
+python -c "from alembic.config import Config; from alembic import command; cfg=Config(r'alembic.ini'); cfg.set_main_option('sqlalchemy.url', 'mysql+pymysql://ielts_user:ielts_password@localhost:3307/ielts_quest'); command.upgrade(cfg, 'head')"
+curl.exe -s http://localhost:8000/api/skills
+curl.exe -s http://localhost:8000/api/badges
+@'
+from sqlalchemy import create_engine, text
+engine = create_engine('mysql+pymysql://ielts_user:ielts_password@localhost:3307/ielts_quest')
+with engine.connect() as conn:
+    print('revision', conn.execute(text("SELECT version_num FROM alembic_version")).fetchall())
+    print('campaign_skill_states_table', conn.execute(text("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='ielts_quest' AND TABLE_NAME='campaign_skill_states'")).fetchall())
+    print('badge_unlocks_table', conn.execute(text("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='ielts_quest' AND TABLE_NAME='badge_unlocks'")).fetchall())
+    print('campaign_skill_states_count', conn.execute(text("SELECT COUNT(*) FROM campaign_skill_states")).scalar())
+    print('badge_unlocks_count', conn.execute(text("SELECT COUNT(*) FROM badge_unlocks")).scalar())
+'@ | python -
+@'
+from sqlalchemy import create_engine, text
+engine = create_engine('mysql+pymysql://ielts_user:ielts_password@localhost:3307/ielts_quest')
+queries = {
+    'campaign_skill_states_indexes': "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='ielts_quest' AND TABLE_NAME='campaign_skill_states' ORDER BY INDEX_NAME",
+    'badge_unlocks_indexes': "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='ielts_quest' AND TABLE_NAME='badge_unlocks' ORDER BY INDEX_NAME",
+}
+with engine.connect() as conn:
+    for name, sql in queries.items():
+        print(name, conn.execute(text(sql)).fetchall())
+'@ | python -
+git diff --unified=0 -- TASKS.md backend\app\main.py backend\app\models.py backend\app\seed.py backend\app\services.py backend\alembic\versions\20260605_06_wave_b_state_tables.py
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+python -m py_compile: passed
+Wave B Alembic upgrade to 20260605_06: passed
+campaign_skill_states exists: yes
+badge_unlocks exists: yes
+campaign_skill_states row count: 0
+badge_unlocks row count: 0
+named indexes/unique constraints: present
+/api/skills and /api/badges reachable, but current running environment still returned old Vietnamese seeded row text
+```
+
+### 8. Remaining issues
+
+- [ ] `material.md` still contains Vietnamese study-plan source text and was not translated in this slice.
+- [ ] No `/api/dev/reset` validation has been run yet for the new child-table delete order.
+- [ ] No reliable live API smoke check has been run yet against a restarted backend process that has loaded the new seed-sync logic.
+- [ ] Empty/resettable DB migration validation for Wave B is still pending.
+
+### 9. Suggested next step
+
+- Restart backend or run a safe local reseed path, then verify `/api/skills`, `/api/badges`, roadmap, quest, and mission text. After that, translate `material.md` to finish the remaining backend English cleanup.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-06 00:23] Wave E constraint hardening
+
+**Agent:** coder-gpt54  
+**Status:** Done  
+**Related task:** `TASKS.md` Wave E hardening
+
+### 1. Summary
+
+Implemented Wave E backend/database hardening after the Wave D cutover. Hardened write paths so new rows always satisfy the target constraints, then added a fail-fast Alembic migration that converts key `campaign_id` columns to `NOT NULL`, swaps the old check-in uniqueness rule, and adds daily-slot uniqueness protection for campaign-scoped daily quests.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `backend/app/models.py` | Modified | `Quest`, `CheckIn`, `TestRecord`, `SkillRankSuggestion`, `SkillRankHistory`, `WeaknessSuggestion` around `L147-L186`, `L317-L357`, `L553` | Changed Wave E target `campaign_id` ORM fields to non-nullable and tightened `Quest.campaign` to required relationship. |
+| `backend/app/main.py` | Modified | `upsert_checkin()` around `L618-L644` | Removed the old global same-date fallback and made check-in upsert strictly `(campaign_id, checkin_date)` scoped. |
+| `backend/app/seed.py` | Modified | `ensure_quest_instances()` around `L1124-L1145`, `ensure_test_records()` around `L1381-L1405`, `seed_database()` around `L1433` | Daily quest seed/update paths now always write `daily_slot_code`; seeded test records now always write `campaign_id`; seed call updated to pass the active campaign. |
+| `backend/alembic/versions/20260606_08_wave_e_constraint_hardening.py` | Added | full file | Added Wave E fail-fast migration, nullability enforcement, unique-constraint swap, daily-slot uniqueness, and real downgrade. |
+| `TASKS.md` | Modified | `Wave E.*` sections | Marked completed Wave E subtasks immediately as implementation/validation finished. |
+| `AGENT_NOTES.md` | Modified | new Wave E section | Recorded implementation summary and remaining gap. |
+| `TEST_REPORT.md` | Modified | new Wave E validation section | Recorded commands, SQL audit, and HTTP smoke results. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Fail-fast Wave E migration with explicit null/duplicate preflight checks.
+- [x] Composite unique check-in key on `(campaign_id, checkin_date)`.
+- [x] Composite unique daily-slot protection on `(campaign_id, quest_date, daily_slot_code)`.
+- [x] Seed/write-path hardening so daily quests and seeded test records satisfy the new constraints.
+
+### 4. Bugs fixed
+
+- [x] Removed the obsolete `/api/checkins` fallback that depended on the pre-Wave-E global same-date uniqueness rule.
+- [x] Fixed daily quest seed creation so new/reset-generated daily quests no longer rely on later backfill to populate `daily_slot_code`.
+- [x] Fixed seeded `TestRecord` creation so reset/startup no longer creates rows that would violate `campaign_id NOT NULL`.
+
+### 5. Code removed
+
+- [x] Removed old global-date fallback logic in `/api/checkins`.
+- [ ] None
+
+### 6. Commands run
+
+```bash
+python -m py_compile backend\app\main.py backend\app\models.py backend\app\seed.py backend\alembic\versions\20260606_08_wave_e_constraint_hardening.py
+@'
+import os
+os.environ['DATABASE_URL'] = 'mysql+pymysql://ielts_user:ielts_password@localhost:3307/ielts_quest'
+from app.database import SessionLocal
+from app.main import reset_database
+from app.models import Quest, TestRecord
+...
+'@ | python -
+@'
+from alembic.config import Config
+from alembic import command
+cfg = Config(r'alembic.ini')
+cfg.set_main_option('sqlalchemy.url', 'mysql+pymysql://ielts_user:ielts_password@localhost:3307/ielts_quest')
+command.upgrade(cfg, 'head')
+print('upgrade_ok')
+'@ | python -
+@'
+import pymysql
+...
+'@ | python -
+$env:DATABASE_URL='mysql+pymysql://ielts_user:ielts_password@localhost:3307/ielts_quest'
+$proc = Start-Process python -ArgumentList '-m','uvicorn','app.main:app','--host','127.0.0.1','--port','8010' -WorkingDirectory 'D:\better_english\ielts-quest-dashboard\backend' -WindowStyle Hidden -PassThru
+...
+Invoke-WebRequest http://127.0.0.1:8010/api/health
+Invoke-WebRequest http://127.0.0.1:8010/api/checkins
+Invoke-WebRequest -Method POST http://127.0.0.1:8010/api/checkins
+Invoke-WebRequest http://127.0.0.1:8010/api/summary
+Invoke-WebRequest http://127.0.0.1:8010/api/weekly-mission/current
+Invoke-WebRequest http://127.0.0.1:8010/api/quests/today
+Invoke-WebRequest -Method POST http://127.0.0.1:8010/api/dev/reset
+git diff --unified=0 -- backend/app/models.py backend/app/main.py backend/app/seed.py backend/alembic/versions/20260606_08_wave_e_constraint_hardening.py TASKS.md
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+python -m py_compile: passed
+Pre-migration reset logic using current backend code: passed
+Pre-migration seed safety:
+- daily quest rows with NULL daily_slot_code: 0
+- seeded test_records with NULL campaign_id: 0
+Alembic upgrade to 20260606_08: passed
+Post-migration SQL audit:
+- all target campaign_id NULL counts = 0
+- daily quest daily_slot_code NULL count = 0
+- duplicate future unique keys = 0
+SHOW CREATE TABLE confirmed:
+- checkins.campaign_id NOT NULL
+- quests.campaign_id NOT NULL
+- uq_checkins_campaign_date exists
+- uq_quests_campaign_date_daily_slot exists
+Live HTTP smoke on port 8010:
+- /api/health 200
+- /api/checkins GET 200
+- /api/checkins POST create 200
+- /api/checkins POST update 200
+- /api/summary 200
+- /api/weekly-mission/current 200
+- /api/quests/today 200
+- /api/dev/reset 200
+```
+
+### 8. Remaining issues
+
+- [ ] Automated backend tests for Wave D/Wave E behavior still do not exist.
+- [ ] Worktree still contains unrelated pre-existing changes outside this task.
+
+### 9. Suggested next step
+
+- Add automated backend tests for Wave D/Wave E behavior, then move to the deferred legacy-field cleanup only after test coverage exists.
 
 ### 10. User review checklist
 

@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from .models import (
     Badge,
+    BadgeUnlock,
     BossBattle,
     Campaign,
+    CampaignSkillState,
     CheckIn,
     ErrorLog,
     MockTest,
@@ -37,12 +39,106 @@ RANK_THRESHOLDS = [
     (0, "F", 1),
 ]
 
+TRACKER_TYPE_TO_FIELD = {
+    "error_log": "error_log_id",
+    "writing_entry": "writing_entry_id",
+    "speaking_entry": "speaking_entry_id",
+    "mock_test": "mock_test_id",
+}
+
+FIELD_TO_TRACKER_TYPE = {
+    "error_log_id": "error_log",
+    "writing_entry_id": "writing_entry",
+    "speaking_entry_id": "speaking_entry",
+    "mock_test_id": "mock_test",
+}
+
 
 def get_rank_level(xp: int) -> tuple[str, int]:
     for threshold, rank, level in RANK_THRESHOLDS:
         if xp >= threshold:
             return rank, level
     return "F", 1
+
+
+def ensure_campaign_skill_states(db: Session, campaign: Campaign) -> list[CampaignSkillState]:
+    states = (
+        db.query(CampaignSkillState)
+        .options(joinedload(CampaignSkillState.skill))
+        .filter(CampaignSkillState.campaign_id == campaign.id)
+        .all()
+    )
+    by_skill_id = {state.skill_id: state for state in states}
+    for skill in db.query(Skill).order_by(Skill.id).all():
+        if skill.id in by_skill_id:
+            continue
+        state = CampaignSkillState(
+            campaign_id=campaign.id,
+            skill_id=skill.id,
+            xp=skill.xp,
+            rank=skill.rank,
+            confirmed_rank=skill.confirmed_rank,
+            level=skill.level,
+            streak=skill.streak,
+            last_practiced=skill.last_practiced,
+            weak_point=skill.weak_point,
+            user_weakness_note=skill.user_weakness_note,
+            last_system_suggestion_at=skill.last_system_suggestion_at,
+        )
+        db.add(state)
+        states.append(state)
+        by_skill_id[skill.id] = state
+    if db.new:
+        db.flush()
+        states = (
+            db.query(CampaignSkillState)
+            .options(joinedload(CampaignSkillState.skill))
+            .filter(CampaignSkillState.campaign_id == campaign.id)
+            .order_by(CampaignSkillState.skill_id)
+            .all()
+        )
+    return states
+
+
+def get_campaign_skill_state_map(db: Session, campaign: Campaign) -> dict[int, CampaignSkillState]:
+    return {state.skill_id: state for state in ensure_campaign_skill_states(db, campaign)}
+
+
+def resolve_tracker_payload(
+    db: Session,
+    tracker_type: str = "",
+    tracker_entry_id: int | None = None,
+    error_log_id: int | None = None,
+    writing_entry_id: int | None = None,
+    speaking_entry_id: int | None = None,
+    mock_test_id: int | None = None,
+) -> tuple[str, int | None, dict[str, int | None]]:
+    typed_values = {
+        "error_log_id": error_log_id,
+        "writing_entry_id": writing_entry_id,
+        "speaking_entry_id": speaking_entry_id,
+        "mock_test_id": mock_test_id,
+    }
+    provided_typed = [(field_name, value) for field_name, value in typed_values.items() if value is not None]
+    if len(provided_typed) > 1:
+        raise ValueError("Only one typed tracker reference can be set per quest completion")
+
+    if provided_typed:
+        field_name, value = provided_typed[0]
+        return FIELD_TO_TRACKER_TYPE[field_name], value, typed_values
+
+    resolved = dict(typed_values)
+    if tracker_entry_id is not None and tracker_type in TRACKER_TYPE_TO_FIELD:
+        field_name = TRACKER_TYPE_TO_FIELD[tracker_type]
+        model = {
+            "error_log_id": ErrorLog,
+            "writing_entry_id": WritingEntry,
+            "speaking_entry_id": SpeakingEntry,
+            "mock_test_id": MockTest,
+        }[field_name]
+        if db.get(model, tracker_entry_id):
+            resolved[field_name] = tracker_entry_id
+    return tracker_type, tracker_entry_id, resolved
 
 
 def current_week_window(player: Player) -> tuple[date, date]:
@@ -109,7 +205,7 @@ def sync_quest_statuses(db: Session, campaign: Campaign) -> None:
                 quest.expired_at = None
                 dirty = True
     if dirty:
-        db.commit()
+        db.flush()
 
 
 def _set_weekly_item_state(item: WeeklyMissionItem, value: int) -> None:
@@ -134,7 +230,7 @@ def recompute_weekly_missions(db: Session, campaign: Campaign) -> None:
         .filter(Quest.campaign_id == campaign.id, Quest.completed == True)
         .all()
     )
-    checkins = db.query(CheckIn).all()
+    checkins = db.query(CheckIn).filter(CheckIn.campaign_id == campaign.id).all()
     error_logs = db.query(ErrorLog).filter(ErrorLog.campaign_id == campaign.id).all()
     writing_entries = db.query(WritingEntry).filter(WritingEntry.campaign_id == campaign.id).all()
     speaking_entries = db.query(SpeakingEntry).filter(SpeakingEntry.campaign_id == campaign.id).all()
@@ -188,17 +284,17 @@ def recompute_weekly_missions(db: Session, campaign: Campaign) -> None:
                 )
             elif "core quest" in description:
                 progress = len(completed_core)
-            elif "check-in hoac mini review day" in description:
+            elif "check-in or mini-review days" in description or "check-in hoac mini review day" in description:
                 progress = len(active_days)
             elif "check-in" in description and "note" in description:
                 progress = noted_checkins
             elif "check-in" in description:
                 progress = len(week_checkins)
-            elif "error log/writing/speaking tracker" in description:
+            elif "error log/writing/speaking trackers" in description or "error log/writing/speaking tracker" in description:
                 progress = tracker_notes
-            elif "diem yeu recurring" in description:
+            elif "recurring weak points" in description or "diem yeu recurring" in description:
                 progress = len(week_error_logs)
-            elif "mini review lien quan output skill" in description:
+            elif "mini review tied to an output skill" in description or "mini review lien quan output skill" in description:
                 progress = len(
                     [
                         quest
@@ -206,7 +302,7 @@ def recompute_weekly_missions(db: Session, campaign: Campaign) -> None:
                         if (quest.skill.name if quest.skill else "") in {"Writing", "Speaking", "Collocation"}
                     ]
                 ) or len(completed_mini)
-            elif "cau dai hoac paraphrase kho" in description:
+            elif "long sentences or difficult paraphrases" in description or "cau dai hoac paraphrase kho" in description:
                 progress = tracker_notes or len(
                     [
                         quest
@@ -229,9 +325,17 @@ def recompute_weekly_missions(db: Session, campaign: Campaign) -> None:
             mission.completed_at = None
 
 
-def recompute_badges(db: Session) -> None:
-    skill_xp = {skill.name: skill.xp for skill in db.query(Skill).all()}
-    completed_count = db.query(Quest).filter(Quest.completed == True).count()
+def recompute_badges(db: Session, player: Player, campaign: Campaign, state_map: dict[int, CampaignSkillState]) -> None:
+    skill_xp = {
+        state.skill.name: state.xp
+        for state in state_map.values()
+        if state.skill is not None
+    }
+    completed_count = (
+        db.query(Quest)
+        .filter(Quest.campaign_id == campaign.id, Quest.completed == True)
+        .count()
+    )
     badge_rules = {
         "Vocabulary Hunter": skill_xp.get("Vocabulary", 0) >= 300,
         "Grammar Fixer": skill_xp.get("Grammar", 0) >= 300,
@@ -243,11 +347,21 @@ def recompute_badges(db: Session) -> None:
         "Band 6 Challenger": completed_count >= 150,
         "Band 7 Candidate": completed_count >= 250,
     }
+    existing_unlocks = {
+        item.badge_id: item
+        for item in db.query(BadgeUnlock).filter(BadgeUnlock.campaign_id == campaign.id).all()
+    }
     for badge in db.query(Badge).all():
         should_unlock = badge_rules.get(badge.name, False)
-        if should_unlock and not badge.unlocked:
-            badge.unlocked = True
-            badge.unlocked_at = datetime.utcnow()
+        if should_unlock and badge.id not in existing_unlocks:
+            db.add(
+                BadgeUnlock(
+                    player_id=player.id,
+                    campaign_id=campaign.id,
+                    badge_id=badge.id,
+                    unlocked_at=datetime.utcnow(),
+                )
+            )
 
 
 def recompute_player_progress(db: Session, player: Player, campaign: Campaign) -> None:
@@ -288,7 +402,7 @@ def recompute_player_progress(db: Session, player: Player, campaign: Campaign) -
 
     checkin_dates = {
         item.checkin_date
-        for item in db.query(CheckIn.checkin_date).all()
+        for item in db.query(CheckIn.checkin_date).filter(CheckIn.campaign_id == campaign.id).all()
     }
 
     current_streak = 0
@@ -327,18 +441,27 @@ def recompute_player_progress(db: Session, player: Player, campaign: Campaign) -
     player.perfect_day_count = perfect_days
 
 
-def recompute_skill_progress(db: Session, skill: Skill) -> None:
+def recompute_skill_progress(db: Session, campaign: Campaign, state: CampaignSkillState) -> None:
     earned = (
         db.query(func.coalesce(func.sum(Quest.earned_xp), 0))
-        .filter(Quest.skill_id == skill.id, Quest.completed == True, Quest.reward_claimed == True)
+        .filter(
+            Quest.campaign_id == campaign.id,
+            Quest.skill_id == state.skill_id,
+            Quest.completed == True,
+            Quest.reward_claimed == True,
+        )
         .scalar()
         or 0
     )
-    skill.xp = int(earned)
-    skill.rank, skill.level = get_rank_level(skill.xp)
-    skill.last_practiced = (
+    state.xp = int(earned)
+    state.rank, state.level = get_rank_level(state.xp)
+    state.last_practiced = (
         db.query(func.max(Quest.quest_date))
-        .filter(Quest.skill_id == skill.id, Quest.completed == True)
+        .filter(
+            Quest.campaign_id == campaign.id,
+            Quest.skill_id == state.skill_id,
+            Quest.completed == True,
+        )
         .scalar()
     )
 
@@ -346,11 +469,12 @@ def recompute_skill_progress(db: Session, skill: Skill) -> None:
 def refresh_progress_state(db: Session) -> None:
     player = get_active_player(db)
     campaign = get_active_campaign(db, player)
+    state_map = get_campaign_skill_state_map(db, campaign)
     sync_quest_statuses(db, campaign)
     recompute_weekly_missions(db, campaign)
-    for skill in db.query(Skill).all():
-        recompute_skill_progress(db, skill)
-    recompute_badges(db)
+    for state in state_map.values():
+        recompute_skill_progress(db, campaign, state)
+    recompute_badges(db, player, campaign, state_map)
     recompute_player_progress(db, player, campaign)
     db.commit()
 
@@ -360,6 +484,10 @@ def complete_quest_instance(
     quest: Quest,
     tracker_type: str = "",
     tracker_entry_id: int | None = None,
+    error_log_id: int | None = None,
+    writing_entry_id: int | None = None,
+    speaking_entry_id: int | None = None,
+    mock_test_id: int | None = None,
     raw_score: str = "",
     completion_note: str = "",
 ) -> Quest:
@@ -369,12 +497,24 @@ def complete_quest_instance(
     if quest.status == "expired":
         raise ValueError("Expired quest cannot be completed")
     if not quest.completed:
+        tracker_type, tracker_entry_id, typed_values = resolve_tracker_payload(
+            db,
+            tracker_type=tracker_type,
+            tracker_entry_id=tracker_entry_id,
+            error_log_id=error_log_id,
+            writing_entry_id=writing_entry_id,
+            speaking_entry_id=speaking_entry_id,
+            mock_test_id=mock_test_id,
+        )
         quest.completed = True
         quest.completed_at = datetime.utcnow()
         quest.reward_claimed = False
         quest.reward_claimed_at = None
         quest.tracker_type = tracker_type or quest.tracker_type
         quest.tracker_entry_id = tracker_entry_id if tracker_entry_id is not None else quest.tracker_entry_id
+        for field_name, value in typed_values.items():
+            if value is not None:
+                setattr(quest, field_name, value)
         quest.raw_score = raw_score or quest.raw_score
         quest.completion_note = completion_note or quest.completion_note
         if quest.quest_date < today:
@@ -402,6 +542,10 @@ def uncomplete_quest_instance(db: Session, quest: Quest) -> Quest:
         quest.completed_mode = None
         quest.tracker_entry_id = None
         quest.tracker_type = ""
+        quest.error_log_id = None
+        quest.writing_entry_id = None
+        quest.speaking_entry_id = None
+        quest.mock_test_id = None
     refresh_progress_state(db)
     db.refresh(quest)
     return quest
@@ -499,7 +643,10 @@ def infer_rank_from_test_record(test_record: TestRecord, skill_name: str) -> str
 
 def create_rank_suggestions_for_test(db: Session, test_record: TestRecord) -> list[SkillRankSuggestion]:
     created: list[SkillRankSuggestion] = []
+    campaign = db.query(Campaign).filter(Campaign.id == test_record.campaign_id).first()
+    state_map = get_campaign_skill_state_map(db, campaign) if campaign else {}
     for skill in db.query(Skill).filter(Skill.name.in_(["Listening", "Reading", "Writing", "Speaking"])).all():
+        state = state_map.get(skill.id)
         suggested_rank = infer_rank_from_test_record(test_record, skill.name)
         if suggested_rank == "F" and not any(
             [
@@ -514,22 +661,28 @@ def create_rank_suggestions_for_test(db: Session, test_record: TestRecord) -> li
             continue
         suggestion = SkillRankSuggestion(
             skill_id=skill.id,
+            campaign_id=test_record.campaign_id,
             source_test_record_id=test_record.id,
-            current_rank=skill.confirmed_rank,
+            current_rank=state.confirmed_rank if state else skill.confirmed_rank,
             suggested_rank=suggested_rank,
-            direction=compare_ranks(skill.confirmed_rank, suggested_rank),
+            direction=compare_ranks(state.confirmed_rank if state else skill.confirmed_rank, suggested_rank),
             status="pending",
         )
         db.add(suggestion)
         created.append(suggestion)
     skill_map = {skill.name: skill for skill in db.query(Skill).all()}
     if "Vocabulary" in skill_map:
+        vocab_skill = skill_map["Vocabulary"]
+        vocab_state = state_map.get(vocab_skill.id)
+        current_rank = vocab_state.confirmed_rank if vocab_state else vocab_skill.confirmed_rank
+        suggested_rank = normalize_cefr_rank(test_record.cefr_level or "B1")
         suggestion = SkillRankSuggestion(
-            skill_id=skill_map["Vocabulary"].id,
+            skill_id=vocab_skill.id,
+            campaign_id=test_record.campaign_id,
             source_test_record_id=test_record.id,
-            current_rank=skill_map["Vocabulary"].confirmed_rank,
-            suggested_rank=normalize_cefr_rank(test_record.cefr_level or "B1"),
-            direction=compare_ranks(skill_map["Vocabulary"].confirmed_rank, normalize_cefr_rank(test_record.cefr_level or "B1")),
+            current_rank=current_rank,
+            suggested_rank=suggested_rank,
+            direction=compare_ranks(current_rank, suggested_rank),
             status="pending",
         )
         db.add(suggestion)
@@ -538,16 +691,22 @@ def create_rank_suggestions_for_test(db: Session, test_record: TestRecord) -> li
 
 
 def apply_rank_suggestion(db: Session, suggestion: SkillRankSuggestion) -> SkillRankSuggestion:
-    skill = suggestion.skill
-    old_rank = skill.confirmed_rank
-    skill.confirmed_rank = suggestion.suggested_rank
+    campaign = db.query(Campaign).filter(Campaign.id == suggestion.campaign_id).first()
+    if not campaign:
+        raise ValueError("Campaign not found for rank suggestion")
+    state = get_campaign_skill_state_map(db, campaign).get(suggestion.skill_id)
+    if not state:
+        raise ValueError("Campaign skill state not found")
+    old_rank = state.confirmed_rank
+    state.confirmed_rank = suggestion.suggested_rank
     suggestion.status = "applied"
     suggestion.resolved_at = datetime.utcnow()
     db.add(
         SkillRankHistory(
-            skill_id=skill.id,
+            skill_id=suggestion.skill_id,
+            campaign_id=suggestion.campaign_id,
             old_rank=old_rank,
-            new_rank=skill.confirmed_rank,
+            new_rank=state.confirmed_rank,
             source_test_record_id=suggestion.source_test_record_id,
             change_reason="Applied from pending suggestion",
         )
@@ -585,20 +744,34 @@ def estimate_band_from_mock(raw_score: str, test_type: str) -> str:
     return "4.5"
 
 
-def append_weakness_note(skill: Skill, detail: str) -> None:
-    parts = [part.strip() for part in skill.user_weakness_note.split("\n") if part.strip()]
+def append_weakness_note(state: CampaignSkillState, detail: str) -> None:
+    parts = [part.strip() for part in state.user_weakness_note.split("\n") if part.strip()]
     if detail.strip() not in parts:
         parts.append(detail.strip())
-        skill.user_weakness_note = "\n".join(parts)
+        state.user_weakness_note = "\n".join(parts)
 
 
 def ensure_weakness_suggestions(db: Session, campaign: Campaign) -> None:
     today = date.today()
     fourteen_days_ago = today - timedelta(days=14)
     thirty_days_ago = today - timedelta(days=30)
+    state_map = get_campaign_skill_state_map(db, campaign)
 
-    for skill in db.query(Skill).options(joinedload(Skill.weakness_suggestions)).all():
-        active_count = sum(1 for item in skill.weakness_suggestions if item.status == "pending")
+    dirty = False
+
+    for skill in db.query(Skill).all():
+        state = state_map.get(skill.id)
+        if not state:
+            continue
+        active_count = (
+            db.query(WeaknessSuggestion)
+            .filter(
+                WeaknessSuggestion.campaign_id == campaign.id,
+                WeaknessSuggestion.skill_id == skill.id,
+                WeaknessSuggestion.status == "pending",
+            )
+            .count()
+        )
         if active_count >= 2:
             continue
 
@@ -616,29 +789,45 @@ def ensure_weakness_suggestions(db: Session, campaign: Campaign) -> None:
             db.add(
                 WeaknessSuggestion(
                     skill_id=skill.id,
+                    campaign_id=campaign.id,
                     source_type="quest_pattern",
+                    source_quest_id=(
+                        db.query(Quest.id)
+                        .filter(
+                            Quest.campaign_id == campaign.id,
+                            Quest.skill_id == skill.id,
+                            Quest.quest_date >= fourteen_days_ago,
+                            Quest.status.in_(["overdue", "expired"]),
+                        )
+                        .order_by(Quest.quest_date.desc(), Quest.id.desc())
+                        .limit(1)
+                        .scalar()
+                    ),
                     title=f"{skill.name}: quest completion is slipping",
                     detail="Several recent quests were overdue or expired. Reduce task complexity and restore a lighter repetition loop.",
                     severity="high",
                 )
             )
-            skill.last_system_suggestion_at = datetime.utcnow()
+            state.last_system_suggestion_at = datetime.utcnow()
             active_count += 1
+            dirty = True
 
-        if skill.last_practiced:
+        if state.last_practiced:
             inactivity_limit = 7 if skill.name in CORE_SKILLS else 5
-            if (today - skill.last_practiced).days >= inactivity_limit and active_count < 2:
+            if (today - state.last_practiced).days >= inactivity_limit and active_count < 2:
                 db.add(
                     WeaknessSuggestion(
                         skill_id=skill.id,
+                        campaign_id=campaign.id,
                         source_type="last_practiced",
                         title=f"{skill.name}: refresh needed",
                         detail="This skill has not been practiced recently enough for the current roadmap cadence.",
                         severity="medium",
                     )
                 )
-                skill.last_system_suggestion_at = datetime.utcnow()
+                state.last_system_suggestion_at = datetime.utcnow()
                 active_count += 1
+                dirty = True
 
         repeated_errors = (
             db.query(ErrorLog.error_tag, func.count(ErrorLog.id).label("error_count"))
@@ -653,22 +842,44 @@ def ensure_weakness_suggestions(db: Session, campaign: Campaign) -> None:
         )
         if repeated_errors and active_count < 2:
             tag = repeated_errors[0][0] or "repeat-error"
+            sample_error_log_id = (
+                db.query(ErrorLog.id)
+                .filter(
+                    ErrorLog.campaign_id == campaign.id,
+                    ErrorLog.skill_id == skill.id,
+                    ErrorLog.error_tag == tag,
+                    ErrorLog.logged_date >= thirty_days_ago,
+                )
+                .order_by(ErrorLog.logged_date.desc(), ErrorLog.id.desc())
+                .limit(1)
+                .scalar()
+            )
             db.add(
                 WeaknessSuggestion(
                     skill_id=skill.id,
+                    campaign_id=campaign.id,
                     source_type="error_log",
+                    source_error_log_id=sample_error_log_id,
                     title=f"{skill.name}: repeated error pattern",
                     detail=f'The error tag "{tag}" has repeated at least 3 times in the last 30 days.',
                     severity="high",
                 )
             )
-            skill.last_system_suggestion_at = datetime.utcnow()
+            state.last_system_suggestion_at = datetime.utcnow()
+            dirty = True
 
-    db.commit()
+    if dirty:
+        db.commit()
 
 
 def apply_weakness_suggestion(db: Session, suggestion: WeaknessSuggestion) -> WeaknessSuggestion:
-    append_weakness_note(suggestion.skill, suggestion.detail)
+    campaign = db.query(Campaign).filter(Campaign.id == suggestion.campaign_id).first()
+    if not campaign:
+        raise ValueError("Campaign not found for weakness suggestion")
+    state = get_campaign_skill_state_map(db, campaign).get(suggestion.skill_id)
+    if not state:
+        raise ValueError("Campaign skill state not found")
+    append_weakness_note(state, suggestion.detail)
     suggestion.status = "applied"
     suggestion.resolved_at = datetime.utcnow()
     db.commit()

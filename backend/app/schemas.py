@@ -70,6 +70,17 @@ class SetupIn(BaseModel):
     daily_mini_study_minutes: int = Field(ge=5, le=120)
 
 
+class QuestCompletionIn(BaseModel):
+    tracker_type: str = ""
+    tracker_entry_id: int | None = None
+    error_log_id: int | None = None
+    writing_entry_id: int | None = None
+    speaking_entry_id: int | None = None
+    mock_test_id: int | None = None
+    raw_score: str = ""
+    completion_note: str = ""
+
+
 class QuestOut(BaseModel):
     id: int
     quest_date: date
@@ -104,6 +115,11 @@ class QuestOut(BaseModel):
     raw_score: str
     tracker_type: str
     tracker_entry_id: int | None
+    daily_slot_code: str | None
+    error_log_id: int | None
+    writing_entry_id: int | None
+    speaking_entry_id: int | None
+    mock_test_id: int | None
     expired_at: datetime | None
 
 
@@ -230,6 +246,7 @@ class CheckInIn(BaseModel):
 
 class CheckInOut(BaseModel):
     id: int
+    campaign_id: int | None
     checkin_date: date
     mood: int
     energy: int
@@ -319,6 +336,7 @@ class TestRecordIn(BaseModel):
 class TestRecordOut(TestRecordIn):
     id: int
     player_id: int
+    campaign_id: int | None
     created_at: datetime
 
     class Config:
@@ -328,6 +346,7 @@ class TestRecordOut(TestRecordIn):
 class SkillRankSuggestionOut(BaseModel):
     id: int
     skill_id: int
+    campaign_id: int | None
     source_test_record_id: int | None
     current_rank: str
     suggested_rank: str
@@ -418,8 +437,13 @@ class MockTestOut(MockTestIn):
 class WeaknessSuggestionOut(BaseModel):
     id: int
     skill_id: int
+    campaign_id: int | None
     source_type: str
     source_ref_id: int | None
+    source_test_record_id: int | None
+    source_mock_test_id: int | None
+    source_error_log_id: int | None
+    source_quest_id: int | None
     title: str
     detail: str
     severity: str

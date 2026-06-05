@@ -27,26 +27,26 @@ from .models import (
 from .services import create_rank_suggestions_for_test
 
 SKILLS = [
-    ("Listening", "🎧", "Diem manh hien tai; can nang Section 3-4, distractor va spelling."),
-    ("Reading", "📖", "Diem yeu chinh: thieu tu vung va chua quen phan tich cau dai."),
-    ("Writing", "✍️", "Can viet deu, sua loi theo 4 tieu chi IELTS."),
-    ("Speaking", "🗣️", "Can ghi am deu, tang fluency, pronunciation va Part 3 reasoning."),
-    ("Vocabulary", "🧠", "Hoc theo topic, paraphrase pairs va vi du ca nhan hoa."),
-    ("Collocation", "🔗", "Dung de noi va viet tu nhien hon, giam loi ket hop tu."),
-    ("Grammar", "⚙️", "Cung co thi, menh de quan he, bi dong, cau dieu kien va cau phuc."),
+    ("Listening", "🎧", "Current strength; still needs work on Sections 3-4, distractors, and spelling."),
+    ("Reading", "📖", "Main weakness: limited vocabulary and limited confidence with long-sentence analysis."),
+    ("Writing", "✍️", "Needs steady writing practice and review against the 4 IELTS criteria."),
+    ("Speaking", "🗣️", "Needs regular recording practice to improve fluency, pronunciation, and Part 3 reasoning."),
+    ("Vocabulary", "🧠", "Study by topic, paraphrase pairs, and personalized example sentences."),
+    ("Collocation", "🔗", "Used to make speaking and writing sound more natural and reduce word-combination errors."),
+    ("Grammar", "⚙️", "Strengthen tenses, relative clauses, passive voice, conditionals, and complex sentences."),
 ]
 
 BADGES = [
-    ("7-Day Streak", "🔥", "Hoc lien tuc 7 ngay."),
-    ("Vocabulary Hunter", "🧠", "Hoan thanh 300 XP Vocabulary."),
-    ("Grammar Fixer", "⚙️", "Hoan thanh 300 XP Grammar."),
-    ("Listening Warrior", "🎧", "Hoan thanh 500 XP Listening."),
-    ("Reading Decoder", "📖", "Hoan thanh 500 XP Reading."),
-    ("Writing Starter", "✍️", "Hoan thanh 300 XP Writing."),
-    ("Speaking Brave Mode", "🗣️", "Hoan thanh 300 XP Speaking."),
-    ("Error Killer", "⚔️", "Ghi va sua nhieu loi da hieu ro."),
-    ("Band 6 Challenger", "🥈", "Vuot qua checkpoint giua roadmap."),
-    ("Band 7 Candidate", "🏆", "Hoan thanh chuoi mock test cuoi roadmap."),
+    ("7-Day Streak", "🔥", "Study continuously for 7 days."),
+    ("Vocabulary Hunter", "🧠", "Reach 300 Vocabulary XP."),
+    ("Grammar Fixer", "⚙️", "Reach 300 Grammar XP."),
+    ("Listening Warrior", "🎧", "Reach 500 Listening XP."),
+    ("Reading Decoder", "📖", "Reach 500 Reading XP."),
+    ("Writing Starter", "✍️", "Reach 300 Writing XP."),
+    ("Speaking Brave Mode", "🗣️", "Reach 300 Speaking XP."),
+    ("Error Killer", "⚔️", "Log and fix many fully understood mistakes."),
+    ("Band 6 Challenger", "🥈", "Clear the mid-roadmap checkpoint."),
+    ("Band 7 Candidate", "🏆", "Finish the final mock-test sequence."),
 ]
 
 RANK_THRESHOLDS = [
@@ -63,56 +63,56 @@ ROADMAP_PHASES = [
     {
         "phase_order": 1,
         "code": "phase-1",
-        "title": "Thang 1-3",
+        "title": "Months 1-3",
         "month_start": 1,
         "month_end": 3,
         "week_start": 1,
         "week_end": 13,
-        "objective": "Tu B1 len nen IELTS 5.0-5.5; cung co grammar, vocabulary, cau dai, Listening/Reading nen.",
+        "objective": "Build from B1 toward IELTS 5.0-5.5; strengthen grammar, vocabulary, long sentences, and core Listening/Reading skills.",
         "focus_skills": "Reading,Vocabulary,Grammar,Listening",
     },
     {
         "phase_order": 2,
         "code": "phase-2",
-        "title": "Thang 4-6",
+        "title": "Months 4-6",
         "month_start": 4,
         "month_end": 6,
         "week_start": 14,
         "week_end": 26,
-        "objective": "On dinh IELTS 5.5; bat dau hoc chien thuat IELTS ro rang cho 4 ky nang.",
+        "objective": "Stabilize at IELTS 5.5 and begin clear IELTS strategies for all four skills.",
         "focus_skills": "Reading,Listening,Writing,Speaking",
     },
     {
         "phase_order": 3,
         "code": "phase-3",
-        "title": "Thang 7-9",
+        "title": "Months 7-9",
         "month_start": 7,
         "month_end": 9,
         "week_start": 27,
         "week_end": 39,
-        "objective": "Tang len IELTS 6.0-6.5; chuyen sang tai lieu 6.5-7.5 va luyen Writing/Speaking deu.",
+        "objective": "Move toward IELTS 6.0-6.5; switch to 6.5-7.5 materials and practice Writing/Speaking consistently.",
         "focus_skills": "Writing,Speaking,Reading,Vocabulary",
     },
     {
         "phase_order": 4,
         "code": "phase-4",
-        "title": "Thang 10-12",
+        "title": "Months 10-12",
         "month_start": 10,
         "month_end": 12,
         "week_start": 40,
         "week_end": 52,
-        "objective": "Cung co IELTS 6.5; bat dau dung Cambridge IELTS 17 tung phan va tang toc do.",
+        "objective": "Consolidate IELTS 6.5; start using Cambridge IELTS 17 by section and increase pace.",
         "focus_skills": "Reading,Listening,Writing,Collocation",
     },
     {
         "phase_order": 5,
         "code": "phase-5",
-        "title": "Thang 13-18",
+        "title": "Months 13-18",
         "month_start": 13,
         "month_end": 18,
         "week_start": 53,
         "week_end": 78,
-        "objective": "Luyen de, sua loi sau, toi uu ky thuat phong thi; muc tieu IELTS 7.0-7.5.",
+        "objective": "Run mock tests, perform deep error review, and sharpen exam tactics for IELTS 7.0-7.5.",
         "focus_skills": "Reading,Listening,Writing,Speaking,Grammar",
     },
 ]
@@ -125,7 +125,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Listening,Reading,Writing,Speaking",
         "recommended_phase_start": 1,
         "recommended_phase_end": 5,
-        "notes": "Dung nhu sach dinh huong va practice test, khong hoc don.",
+        "notes": "Use as an orientation guide and practice-test source, not as a standalone course.",
     },
     {
         "title": "Complete IELTS Band 5.0-6.5",
@@ -134,7 +134,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Listening,Reading,Writing,Speaking",
         "recommended_phase_start": 1,
         "recommended_phase_end": 2,
-        "notes": "Truc chinh giai doan nen.",
+        "notes": "Primary backbone for the foundation stage.",
     },
     {
         "title": "Complete IELTS Bands 6.5-7.5",
@@ -143,7 +143,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Listening,Reading,Writing,Speaking",
         "recommended_phase_start": 3,
         "recommended_phase_end": 4,
-        "notes": "Tang band va tang do kho topic.",
+        "notes": "Raise target band and topic difficulty.",
     },
     {
         "title": "English Grammar in Use",
@@ -152,7 +152,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Grammar,Writing,Speaking",
         "recommended_phase_start": 1,
         "recommended_phase_end": 2,
-        "notes": "Cung co grammar nen va loi co ban.",
+        "notes": "Strengthen core grammar and basic recurring errors.",
     },
     {
         "title": "Cambridge Grammar for IELTS",
@@ -161,7 +161,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Grammar,Writing,Speaking",
         "recommended_phase_start": 1,
         "recommended_phase_end": 5,
-        "notes": "Grammar gan voi bai thi IELTS va xu ly loi yeu.",
+        "notes": "IELTS-specific grammar with focus on weak recurring errors.",
     },
     {
         "title": "English Vocabulary in Use Upper-Intermediate",
@@ -170,7 +170,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Vocabulary,Reading,Writing",
         "recommended_phase_start": 1,
         "recommended_phase_end": 2,
-        "notes": "Tu vung nen B2.",
+        "notes": "Foundation vocabulary at B2 level.",
     },
     {
         "title": "IELTS Vocabulary for Bands 6.5 and above",
@@ -179,7 +179,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Vocabulary,Reading,Writing",
         "recommended_phase_start": 3,
         "recommended_phase_end": 5,
-        "notes": "Tu vung IELTS band cao.",
+        "notes": "Higher-band IELTS vocabulary.",
     },
     {
         "title": "Cambridge Academic Vocabulary in Use",
@@ -188,7 +188,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Vocabulary,Reading,Writing",
         "recommended_phase_start": 3,
         "recommended_phase_end": 5,
-        "notes": "Hoc thuat cho Reading/Writing.",
+        "notes": "Academic vocabulary for Reading and Writing.",
     },
     {
         "title": "English Collocations in Use Intermediate",
@@ -197,7 +197,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Collocation,Writing,Speaking",
         "recommended_phase_start": 1,
         "recommended_phase_end": 3,
-        "notes": "Noi/viet tu nhien hon.",
+        "notes": "Help speaking and writing sound more natural.",
     },
     {
         "title": "English Collocations in Use Advanced",
@@ -206,7 +206,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Collocation,Writing,Speaking",
         "recommended_phase_start": 4,
         "recommended_phase_end": 5,
-        "notes": "Nang chat luong output o phase sau.",
+        "notes": "Raise output quality in later phases.",
     },
     {
         "title": "IELTS Advantage Reading Skills",
@@ -215,7 +215,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Reading,Vocabulary",
         "recommended_phase_start": 2,
         "recommended_phase_end": 5,
-        "notes": "Chien thuat tung dang Reading.",
+        "notes": "Strategies for each Reading question type.",
     },
     {
         "title": "IELTS Advantage - Speaking and Listening Skills",
@@ -224,7 +224,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Listening,Speaking",
         "recommended_phase_start": 2,
         "recommended_phase_end": 5,
-        "notes": "Ket hop audio, transcript, recording.",
+        "notes": "Combine audio, transcript review, and recording practice.",
     },
     {
         "title": "IELTS Advantage Writing Skills",
@@ -233,7 +233,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Writing,Vocabulary,Grammar",
         "recommended_phase_start": 2,
         "recommended_phase_end": 5,
-        "notes": "Writing Task 1/2, nen gui sua bai neu co the.",
+        "notes": "Writing Task 1/2 practice; get external correction when possible.",
     },
     {
         "title": "Cambridge IELTS 17",
@@ -242,7 +242,7 @@ STUDY_MATERIALS = [
         "skill_tags": "Listening,Reading,Writing,Speaking",
         "recommended_phase_start": 4,
         "recommended_phase_end": 5,
-        "notes": "Luyen de sat thi that, khong dung qua som.",
+        "notes": "Realistic mock practice; do not use too early.",
     },
     {
         "title": "Any current notebook",
@@ -251,59 +251,59 @@ STUDY_MATERIALS = [
         "skill_tags": "Vocabulary,Grammar,Reading,Listening,Writing,Speaking",
         "recommended_phase_start": 1,
         "recommended_phase_end": 5,
-        "notes": "Mini review, flashcard, transcript note, error recall.",
+        "notes": "Mini review, flashcards, transcript notes, and error recall.",
     },
 ]
 
 PHASE_MATERIAL_PLAN = {
     1: [
-        ("The Official Cambridge Guide to IELTS", "orientation", "1-2 buoi/tuan khi can", "Dung de hieu format va ky thuat co ban."),
-        ("Complete IELTS Band 5.0-6.5", "core", "1 unit/1-2 tuan", "Truc chinh giai doan nen."),
-        ("English Grammar in Use", "support", "2-3 units/tuan", "Tap trung loi thuong gap."),
-        ("Cambridge Grammar for IELTS", "support", "1 unit/tuan", "Ung dung vao Writing/Speaking."),
-        ("English Vocabulary in Use Upper-Intermediate", "support", "2 units/tuan", "Ghi tu theo cum va dat cau."),
-        ("English Collocations in Use Intermediate", "support", "1-2 units/tuan", "Chon unit Study/Work/Academic truoc."),
+        ("The Official Cambridge Guide to IELTS", "orientation", "1-2 sessions/week when needed", "Use to understand format and basic tactics."),
+        ("Complete IELTS Band 5.0-6.5", "core", "1 unit every 1-2 weeks", "Primary foundation-stage backbone."),
+        ("English Grammar in Use", "support", "2-3 units/week", "Focus on common errors."),
+        ("Cambridge Grammar for IELTS", "support", "1 unit/week", "Apply grammar in Writing and Speaking."),
+        ("English Vocabulary in Use Upper-Intermediate", "support", "2 units/week", "Record vocabulary in chunks and write example sentences."),
+        ("English Collocations in Use Intermediate", "support", "1-2 units/week", "Start with Study, Work, and Academic units."),
     ],
     2: [
-        ("Complete IELTS Band 5.0-6.5", "core", "1 unit/1-2 tuan", "Tiep tuc on nen IELTS."),
-        ("The Official Cambridge Guide to IELTS", "orientation", "1-2 buoi/tuan khi can", "Dung de chot format cac dang bai."),
-        ("Cambridge Grammar for IELTS", "support", "1 unit/tuan", "Tiep tuc grammar IELTS."),
-        ("English Vocabulary in Use Upper-Intermediate", "support", "2 units/tuan", "Duy tri vocab nen."),
-        ("English Collocations in Use Intermediate", "support", "1-2 units/tuan", "Duy tri collocation output."),
-        ("IELTS Advantage Reading Skills", "skill_focus", "1 buoi/tuan", "Chua bai ky hon lam nhieu."),
-        ("IELTS Advantage Writing Skills", "skill_focus", "1 bai/tuan", "Bat dau task-focused writing."),
-        ("IELTS Advantage - Speaking and Listening Skills", "skill_focus", "1 buoi/tuan", "Ket hop speaking recording va transcript."),
+        ("Complete IELTS Band 5.0-6.5", "core", "1 unit every 1-2 weeks", "Continue strengthening IELTS foundations."),
+        ("The Official Cambridge Guide to IELTS", "orientation", "1-2 sessions/week when needed", "Use to lock in the format of each task type."),
+        ("Cambridge Grammar for IELTS", "support", "1 unit/week", "Continue IELTS grammar work."),
+        ("English Vocabulary in Use Upper-Intermediate", "support", "2 units/week", "Maintain foundation vocabulary."),
+        ("English Collocations in Use Intermediate", "support", "1-2 units/week", "Maintain collocation output."),
+        ("IELTS Advantage Reading Skills", "skill_focus", "1 session/week", "Review fewer tasks more deeply."),
+        ("IELTS Advantage Writing Skills", "skill_focus", "1 task/week", "Start task-focused writing."),
+        ("IELTS Advantage - Speaking and Listening Skills", "skill_focus", "1 session/week", "Combine speaking recordings with transcript review."),
     ],
     3: [
-        ("Complete IELTS Bands 6.5-7.5", "core", "1 unit/1-2 tuan", "Chuyen len topic kho hon."),
-        ("Cambridge Grammar for IELTS", "support", "on loi yeu", "Chi quay lai unit dang yeu."),
-        ("IELTS Vocabulary for Bands 6.5 and above", "support", "1-2 units/tuan", "Uu tien topic hay gap."),
-        ("Cambridge Academic Vocabulary in Use", "support", "1-2 units/tuan", "Tang chat hoc thuat."),
-        ("IELTS Advantage Reading Skills", "skill_focus", "1 buoi/tuan", "Reading strategy level cao hon."),
-        ("IELTS Advantage Writing Skills", "skill_focus", "1 bai/tuan", "Tang tam trong Task 2."),
-        ("IELTS Advantage - Speaking and Listening Skills", "skill_focus", "1 buoi/tuan", "Tang Part 2/3 va fluency."),
+        ("Complete IELTS Bands 6.5-7.5", "core", "1 unit every 1-2 weeks", "Move into harder topics."),
+        ("Cambridge Grammar for IELTS", "support", "review weak areas", "Only revisit currently weak units."),
+        ("IELTS Vocabulary for Bands 6.5 and above", "support", "1-2 units/week", "Prioritize common test topics."),
+        ("Cambridge Academic Vocabulary in Use", "support", "1-2 units/week", "Raise academic range."),
+        ("IELTS Advantage Reading Skills", "skill_focus", "1 session/week", "Higher-level Reading strategy work."),
+        ("IELTS Advantage Writing Skills", "skill_focus", "1 task/week", "Increase focus on Task 2."),
+        ("IELTS Advantage - Speaking and Listening Skills", "skill_focus", "1 session/week", "Push Part 2/3 and fluency."),
     ],
     4: [
-        ("Complete IELTS Bands 6.5-7.5", "core", "1 unit/1-2 tuan", "Cung co nen 6.5."),
-        ("The Official Cambridge Guide to IELTS", "orientation", "1 buoi/tuan khi can", "Review guideline va dang bai."),
-        ("Cambridge Grammar for IELTS", "support", "on loi yeu", "Chi sua loi recurring."),
-        ("Cambridge Academic Vocabulary in Use", "support", "1-2 units/tuan", "Essay va reading hoc thuat."),
-        ("English Collocations in Use Advanced", "support", "1 unit/tuan", "Nang chat luong output."),
-        ("Cambridge IELTS 17", "mock", "tung phan -> full test", "Dung can than de giu bo de."),
-        ("IELTS Advantage Reading Skills", "skill_focus", "1 buoi/tuan", "Chua ky cac dang reading."),
-        ("IELTS Advantage Writing Skills", "skill_focus", "1 bai/tuan", "Review task strategy."),
-        ("IELTS Advantage - Speaking and Listening Skills", "skill_focus", "1 buoi/tuan", "Speaking/listening review."),
+        ("Complete IELTS Bands 6.5-7.5", "core", "1 unit every 1-2 weeks", "Consolidate 6.5-level foundations."),
+        ("The Official Cambridge Guide to IELTS", "orientation", "1 session/week when needed", "Review guidance and task types."),
+        ("Cambridge Grammar for IELTS", "support", "review weak areas", "Only fix recurring errors."),
+        ("Cambridge Academic Vocabulary in Use", "support", "1-2 units/week", "Academic vocabulary for essays and reading."),
+        ("English Collocations in Use Advanced", "support", "1 unit/week", "Raise output quality."),
+        ("Cambridge IELTS 17", "mock", "sectional -> full test", "Use carefully to preserve mock material."),
+        ("IELTS Advantage Reading Skills", "skill_focus", "1 session/week", "Detailed review of Reading task types."),
+        ("IELTS Advantage Writing Skills", "skill_focus", "1 task/week", "Review task strategy."),
+        ("IELTS Advantage - Speaking and Listening Skills", "skill_focus", "1 session/week", "Speaking and Listening review."),
     ],
     5: [
-        ("Cambridge IELTS 17", "mock", "tang dan den full test", "Luyen de va review sau bai."),
-        ("The Official Cambridge Guide to IELTS", "orientation", "khi can", "Chot checklist thi that."),
-        ("Cambridge Grammar for IELTS", "support", "chi sua loi", "Khong hoc lan man nua."),
-        ("IELTS Vocabulary for Bands 6.5 and above", "support", "1-2 units/tuan", "Gap topic thi on muc tieu."),
-        ("Cambridge Academic Vocabulary in Use", "support", "1-2 units/tuan", "Essay va reading academic."),
-        ("English Collocations in Use Advanced", "support", "1 unit/tuan", "Lam output tu nhien hon."),
-        ("IELTS Advantage Writing Skills", "skill_focus", "1 bai/tuan", "Weekly writing correction."),
-        ("IELTS Advantage - Speaking and Listening Skills", "skill_focus", "1 buoi/tuan", "Speaking recording/review."),
-        ("IELTS Advantage Reading Skills", "skill_focus", "1 buoi/tuan", "Reading strategy va error review."),
+        ("Cambridge IELTS 17", "mock", "ramp toward full tests", "Run mocks and review after each one."),
+        ("The Official Cambridge Guide to IELTS", "orientation", "when needed", "Finalize real-exam checklist."),
+        ("Cambridge Grammar for IELTS", "support", "error-fix only", "No more broad study here."),
+        ("IELTS Vocabulary for Bands 6.5 and above", "support", "1-2 units/week", "Review target-topic vocabulary when needed."),
+        ("Cambridge Academic Vocabulary in Use", "support", "1-2 units/week", "Academic essay and reading vocabulary."),
+        ("English Collocations in Use Advanced", "support", "1 unit/week", "Make output sound more natural."),
+        ("IELTS Advantage Writing Skills", "skill_focus", "1 task/week", "Weekly writing correction."),
+        ("IELTS Advantage - Speaking and Listening Skills", "skill_focus", "1 session/week", "Speaking recording and review."),
+        ("IELTS Advantage Reading Skills", "skill_focus", "1 session/week", "Reading strategy and error review."),
     ],
 }
 
@@ -340,13 +340,13 @@ def get_rank_level(xp: int) -> tuple[str, int]:
 
 def phase_label(phase_index: int) -> str:
     mapping = {
-        1: "Thang 1-3",
-        2: "Thang 4-6",
-        3: "Thang 7-9",
-        4: "Thang 10-12",
-        5: "Thang 13-18",
+        1: "Months 1-3",
+        2: "Months 4-6",
+        3: "Months 7-9",
+        4: "Months 10-12",
+        5: "Months 13-18",
     }
-    return mapping.get(phase_index, "Thang 13-18")
+    return mapping.get(phase_index, "Months 13-18")
 
 
 def phase_for_week(week_no: int) -> int:
@@ -369,103 +369,103 @@ def quest_template_seed() -> list[dict]:
     return [
         {
             "title": "Reading Core Sweep",
-            "description": "Lam 1 reading passage, cham lai, va phan tich 3-5 cau dai.",
+            "description": "Complete 1 reading passage, mark it, and analyze 3-5 long sentences.",
             "skill": "Reading",
             "phase_code": "phase-2",
             "material_title": "IELTS Advantage Reading Skills",
             "base_xp": 25,
             "difficulty": "normal",
-            "difficulty_description": "Doc va phan tich chi tiet.",
+            "difficulty_description": "Detailed reading and analysis.",
             "quest_role": "core",
             "resource_name": "IELTS Advantage Reading Skills",
             "resource_category": "book",
-            "resource_note": "Tap trung paraphrase va long sentence parsing.",
+            "resource_note": "Focus on paraphrase recognition and long-sentence parsing.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
         {
             "title": "Listening Core Sweep",
-            "description": "Lam 1 listening task, review transcript, ghi distractor va spelling.",
+            "description": "Complete 1 listening task, review the transcript, and note distractors and spelling traps.",
             "skill": "Listening",
             "phase_code": "phase-2",
             "material_title": "IELTS Advantage - Speaking and Listening Skills",
             "base_xp": 20,
             "difficulty": "normal",
-            "difficulty_description": "Can do va transcript review.",
+            "difficulty_description": "Task completion plus transcript review.",
             "quest_role": "core",
             "resource_name": "IELTS Advantage Speaking and Listening Skills",
             "resource_category": "book",
-            "resource_note": "Tang chat luong Section 3-4.",
+            "resource_note": "Improve Section 3-4 quality.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
         {
             "title": "Writing Core Draft",
-            "description": "Viet 1 doan hoac 1 bai ngan va tu sua theo tieu chi IELTS.",
+            "description": "Write 1 paragraph or short response and self-review it against IELTS criteria.",
             "skill": "Writing",
             "phase_code": "phase-2",
             "material_title": "IELTS Advantage Writing Skills",
             "base_xp": 25,
             "difficulty": "normal",
-            "difficulty_description": "Can draft va self-review.",
+            "difficulty_description": "Drafting plus self-review.",
             "quest_role": "core",
             "resource_name": "IELTS Advantage Writing Skills",
             "resource_category": "book",
-            "resource_note": "Task 1/2 tuy phase.",
+            "resource_note": "Task 1 or Task 2 depending on phase.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
         {
             "title": "Speaking Core Record",
-            "description": "Record Speaking Part 1/2/3, nghe lai va ghi 3 diem can sua.",
+            "description": "Record Speaking Part 1/2/3, listen back, and note 3 points to improve.",
             "skill": "Speaking",
             "phase_code": "phase-2",
             "material_title": "IELTS Advantage - Speaking and Listening Skills",
             "base_xp": 25,
             "difficulty": "normal",
-            "difficulty_description": "Can ghi am va tu danh gia.",
+            "difficulty_description": "Recording plus self-evaluation.",
             "quest_role": "core",
             "resource_name": "IELTS Advantage Speaking and Listening Skills",
             "resource_category": "book",
-            "resource_note": "Tap trung fluency va reasoning.",
+            "resource_note": "Focus on fluency and reasoning.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
         {
             "title": "Vocabulary Support Pack",
-            "description": "Hoc 10 tu moi, 3 collocations va 2 paraphrase pairs.",
+            "description": "Learn 10 new words, 3 collocations, and 2 paraphrase pairs.",
             "skill": "Vocabulary",
             "phase_code": "phase-1",
             "material_title": "English Vocabulary in Use Upper-Intermediate",
             "base_xp": 10,
             "difficulty": "easy",
-            "difficulty_description": "Ngan, de duy tri nhip.",
+            "difficulty_description": "Short and easy to sustain.",
             "quest_role": "support",
             "resource_name": "English Vocabulary in Use Upper-Intermediate",
             "resource_category": "book",
-            "resource_note": "Dung cho phase 1-2 va review ve sau.",
+            "resource_note": "Use in phases 1-2, then revisit later.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
         {
             "title": "Grammar Support Forge",
-            "description": "Hoc 1 diem grammar, lam bai tap ngan va viet 3 cau ung dung.",
+            "description": "Study 1 grammar point, do a short exercise, and write 3 application sentences.",
             "skill": "Grammar",
             "phase_code": "phase-1",
             "material_title": "Cambridge Grammar for IELTS",
             "base_xp": 15,
             "difficulty": "easy",
-            "difficulty_description": "Review co huong dan.",
+            "difficulty_description": "Guided review.",
             "quest_role": "support",
             "resource_name": "Cambridge Grammar for IELTS",
             "resource_category": "book",
-            "resource_note": "Gap error thi quay lai unit lien quan.",
+            "resource_note": "Return to related units when errors appear.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
         {
             "title": "Collocation Support Pack",
-            "description": "Hoc 5 collocations va viet 3 cau co context ca nhan.",
+            "description": "Study 5 collocations and write 3 sentences with personal context.",
             "skill": "Collocation",
             "phase_code": "phase-1",
             "material_title": "English Collocations in Use Intermediate",
@@ -475,55 +475,55 @@ def quest_template_seed() -> list[dict]:
             "quest_role": "support",
             "resource_name": "English Collocations in Use Intermediate",
             "resource_category": "book",
-            "resource_note": "Phase sau chuyen len Advanced.",
+            "resource_note": "Switch to Advanced in later phases.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
         {
             "title": "Mini Review Burst",
-            "description": "Review nhanh 5-10 phut: flashcard, transcript note hoac error recall.",
+            "description": "Quick 5-10 minute review: flashcards, transcript notes, or error recall.",
             "skill": "Vocabulary",
             "phase_code": "phase-1",
             "material_title": "Any current notebook",
             "base_xp": 5,
             "difficulty": "easy",
-            "difficulty_description": "Rat nhe de giu streak.",
+            "difficulty_description": "Very light to protect the streak.",
             "quest_role": "mini",
             "resource_name": "Any current notebook",
             "resource_category": "review",
-            "resource_note": "Mini quest co the lien skill chinh hom do.",
+            "resource_note": "Mini quest can follow the day's main skill.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
         {
             "title": "Mock Reading Raid",
-            "description": "Lam reading timed set va tong hop loi sai, phu hop phase 4-5.",
+            "description": "Complete a timed Reading set and summarize mistakes; intended for phases 4-5.",
             "skill": "Reading",
             "phase_code": "phase-4",
             "material_title": "Cambridge IELTS 17",
             "base_xp": 40,
             "difficulty": "hard",
-            "difficulty_description": "Timed practice, phan tich sau bai.",
+            "difficulty_description": "Timed practice with post-task analysis.",
             "quest_role": "core",
             "resource_name": "Cambridge IELTS 17",
             "resource_category": "mock",
-            "resource_note": "Chi xuat hien phase 4-5.",
+            "resource_note": "Only appears in phases 4-5.",
             "allowed_phase_start": 4,
             "allowed_phase_end": 5,
         },
         {
             "title": "Mock Listening Raid",
-            "description": "Lam listening timed set va review transcript ky, phu hop phase 4-5.",
+            "description": "Complete a timed Listening set and review the transcript carefully; intended for phases 4-5.",
             "skill": "Listening",
             "phase_code": "phase-4",
             "material_title": "Cambridge IELTS 17",
             "base_xp": 40,
             "difficulty": "hard",
-            "difficulty_description": "Timed practice, transcript review sau bai.",
+            "difficulty_description": "Timed practice with transcript review after the set.",
             "quest_role": "core",
             "resource_name": "Cambridge IELTS 17",
             "resource_category": "mock",
-            "resource_note": "Chi xuat hien phase 4-5.",
+            "resource_note": "Only appears in phases 4-5.",
             "allowed_phase_start": 4,
             "allowed_phase_end": 5,
         },
@@ -668,34 +668,34 @@ def weekly_mission_patterns(phase_index: int) -> list[dict]:
         {
             "pattern_code": f"{phase_index}-balanced",
             "title": f"Weekly Mission - {phase_name} Balance",
-            "description": "Giu nhip hoc deu tren 4 ky nang chinh va support loop.",
+            "description": "Keep a steady rhythm across the 4 main skills and the support loop.",
             "reward_xp": 40,
             "items": [
-                ("Hoan thanh it nhat 3 core quest", 3),
-                ("Co it nhat 4 check-in hoac mini review day", 4),
-                ("Them it nhat 2 ghi chu vao Error Log/Writing/Speaking tracker", 2),
+                ("Complete at least 3 core quests", 3),
+                ("Have at least 4 check-in or mini-review days", 4),
+                ("Add at least 2 notes to Error Log/Writing/Speaking trackers", 2),
             ],
         },
         {
             "pattern_code": f"{phase_index}-reading-focus",
             "title": f"Weekly Mission - {phase_name} Reading Focus",
-            "description": "Tap trung nang reading va vocabulary trong tuan nay.",
+            "description": "Focus on raising Reading and Vocabulary this week.",
             "reward_xp": 45,
             "items": [
-                ("Hoan thanh 2 Reading core quest", 2),
-                ("Hoan thanh 3 Vocabulary/Collocation support quest", 3),
-                ("Phan tich 5 cau dai hoac paraphrase kho", 5),
+                ("Complete 2 Reading core quests", 2),
+                ("Complete 3 Vocabulary/Collocation support quests", 3),
+                ("Analyze 5 long sentences or difficult paraphrases", 5),
             ],
         },
         {
             "pattern_code": f"{phase_index}-output-focus",
             "title": f"Weekly Mission - {phase_name} Output Focus",
-            "description": "Tang writing va speaking output de giam tri hoan.",
+            "description": "Increase Writing and Speaking output to reduce avoidance.",
             "reward_xp": 45,
             "items": [
-                ("Co 2 Writing/Speaking core quest duoc hoan thanh", 2),
-                ("Tu review it nhat 2 diem yeu recurring", 2),
-                ("Hoan thanh 1 mini review lien quan output skill", 1),
+                ("Complete 2 Writing/Speaking core quests", 2),
+                ("Self-review at least 2 recurring weak points", 2),
+                ("Complete 1 mini review tied to an output skill", 1),
             ],
         },
     ]
@@ -782,6 +782,12 @@ def ensure_skills(db: Session) -> dict[str, Skill]:
             )
             db.add(skill)
             db.flush()
+        else:
+            previous_weak_point = skill.weak_point
+            skill.icon = icon
+            skill.weak_point = weak_point
+            if not (skill.user_weakness_note or "").strip() or skill.user_weakness_note == previous_weak_point:
+                skill.user_weakness_note = weak_point
         skill_by_name[name] = skill
     return skill_by_name
 
@@ -794,6 +800,9 @@ def ensure_badges(db: Session) -> list[Badge]:
             badge = Badge(name=name, icon=icon, description=description)
             db.add(badge)
             db.flush()
+        else:
+            badge.icon = icon
+            badge.description = description
         badges.append(badge)
     return badges
 
@@ -806,6 +815,13 @@ def ensure_materials(db: Session) -> dict[str, StudyMaterial]:
             material = StudyMaterial(**item)
             db.add(material)
             db.flush()
+        else:
+            material.category = item["category"]
+            material.format = item["format"]
+            material.skill_tags = item["skill_tags"]
+            material.recommended_phase_start = item["recommended_phase_start"]
+            material.recommended_phase_end = item["recommended_phase_end"]
+            material.notes = item["notes"]
         material_by_title[material.title] = material
     return material_by_title
 
@@ -838,6 +854,14 @@ def ensure_roadmap_phases(db: Session, campaign: Campaign) -> dict[str, RoadmapP
             )
             db.add(phase)
             db.flush()
+        else:
+            phase.title = item["title"]
+            phase.month_start = item["month_start"]
+            phase.month_end = item["month_end"]
+            phase.week_start = item["week_start"]
+            phase.week_end = item["week_end"]
+            phase.objective = item["objective"]
+            phase.focus_skills = item["focus_skills"]
         phase_by_code[phase.code] = phase
     return phase_by_code
 
@@ -860,6 +884,10 @@ def ensure_phase_materials(
                 .first()
             )
             if existing:
+                existing.usage_purpose = usage_purpose
+                existing.usage_frequency = usage_frequency
+                existing.notes = notes
+                existing.display_order = display_order
                 continue
             db.add(
                 PhaseMaterial(
@@ -974,8 +1002,20 @@ def ensure_templates(
             db.add(template)
             db.flush()
         else:
-            template.phase_id = template.phase_id or phase_by_code[item["phase_code"]].id
-            template.material_id = template.material_id or material_by_title[item["material_title"]].id
+            template.description = item["description"]
+            template.primary_skill_id = skill_by_name[item["skill"]].id
+            template.phase_id = phase_by_code[item["phase_code"]].id
+            template.material_id = material_by_title[item["material_title"]].id
+            template.base_xp = item["base_xp"]
+            template.difficulty = item["difficulty"]
+            template.difficulty_description = item["difficulty_description"]
+            template.quest_role = item["quest_role"]
+            template.resource_name = item["resource_name"]
+            template.resource_category = item["resource_category"]
+            template.resource_note = item["resource_note"]
+            template.allowed_phase_start = item["allowed_phase_start"]
+            template.allowed_phase_end = item["allowed_phase_end"]
+            template.is_active = True
         template_by_title[template.title] = template
     return template_by_title
 
@@ -1057,6 +1097,31 @@ def ensure_quest_instances(
                 template = template_by_title[template_title]
                 quest_date = week_start + timedelta(days=day_offset)
                 if (quest_date, template.quest_role) in existing_daily_keys:
+                    existing = (
+                        db.query(Quest)
+                        .filter(
+                            Quest.campaign_id == campaign.id,
+                            Quest.quest_date == quest_date,
+                            Quest.quest_role == template.quest_role,
+                            Quest.session_type == "Daily Quest",
+                        )
+                        .first()
+                    )
+                    if existing:
+                        skill = next(skill for skill in skill_by_name.values() if skill.id == template.primary_skill_id)
+                        phase = phase_by_code[f"phase-{phase_index}"]
+                        existing.stage = phase_name
+                        existing.title = template.title
+                        existing.skill_id = skill.id
+                        existing.source = template.resource_name
+                        existing.details = template.description
+                        existing.phase_id = phase.id
+                        existing.template_id = template.id
+                        existing.material_id = template.material_id
+                        existing.difficulty = template.difficulty
+                        existing.base_xp = template.base_xp
+                        existing.xp = template.base_xp
+                        existing.daily_slot_code = template.quest_role
                     continue
                 skill = next(skill for skill in skill_by_name.values() if skill.id == template.primary_skill_id)
                 phase = phase_by_code[f"phase-{phase_index}"]
@@ -1077,6 +1142,7 @@ def ensure_quest_instances(
                         material_id=template.material_id,
                         status="pending",
                         quest_role=template.quest_role,
+                        daily_slot_code=template.quest_role,
                         difficulty=template.difficulty,
                         base_xp=template.base_xp,
                         earned_xp=0,
@@ -1100,6 +1166,18 @@ def ensure_main_quest_instances(
             .first()
         )
         if existing:
+            session_week = week_by_no.get(session.week_no)
+            material_names = normalize_material_names(session.material_summary)
+            primary_material = material_by_title.get(material_names[0]) if material_names else None
+            existing.stage = session_week.phase.title if session_week else phase_label(phase_for_week(session.week_no))
+            existing.title = f"Main Quest W{session.week_no:02d} - {session.session_label}"
+            existing.source = session.material_summary
+            existing.details = session.task_detail
+            existing.phase_id = session.phase_id
+            existing.material_id = primary_material.id if primary_material else None
+            existing.base_xp = infer_main_quest_xp(session.session_no, session.skill_summary)
+            existing.xp = infer_main_quest_xp(session.session_no, session.skill_summary)
+            existing.completion_note = session.deliverable
             continue
         primary_skill_name = infer_primary_skill(session.skill_summary)
         primary_skill = skill_by_name[primary_skill_name]
@@ -1151,9 +1229,6 @@ def backfill_quest_phase_and_material(
 
 
 def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
-    if db.query(WeeklyMission).filter(WeeklyMission.campaign_id == campaign.id).count() > 0:
-        return
-
     current_start = onboarding_week_start(campaign.start_date)
     week_count = ((campaign.end_date - current_start).days // 7) + 1
     for index in range(week_count):
@@ -1164,23 +1239,95 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
         patterns = weekly_mission_patterns(phase_index)
         pattern = patterns[index % len(patterns)]
         if index == 0:
+            item_specs = [
+                ("Complete any 2 daily quests", 2),
+                ("Create 1 check-in and 1 weakness note", 2),
+            ]
+            mission = (
+                db.query(WeeklyMission)
+                .filter(WeeklyMission.campaign_id == campaign.id, WeeklyMission.week_start == week_start)
+                .first()
+            )
+            if not mission:
+                mission = WeeklyMission(
+                    campaign_id=campaign.id,
+                    week_start=week_start,
+                    week_end=week_end,
+                    phase=phase_label(phase_index),
+                    pattern_code="onboarding",
+                    title="Onboarding Week",
+                    description="Get used to the dashboard, check-ins, and a lighter quest loop.",
+                    reward_xp=25,
+                    status="active",
+                )
+                db.add(mission)
+                db.flush()
+            else:
+                mission.week_end = week_end
+                mission.phase = phase_label(phase_index)
+                mission.pattern_code = "onboarding"
+                mission.title = "Onboarding Week"
+                mission.description = "Get used to the dashboard, check-ins, and a lighter quest loop."
+                mission.reward_xp = 25
+            existing_items = (
+                db.query(WeeklyMissionItem)
+                .filter(WeeklyMissionItem.weekly_mission_id == mission.id)
+                .order_by(WeeklyMissionItem.id)
+                .all()
+            )
+            for position, (description, target_count) in enumerate(item_specs):
+                if position < len(existing_items):
+                    existing_items[position].description = description
+                    existing_items[position].target_count = target_count
+                else:
+                    db.add(
+                        WeeklyMissionItem(
+                            weekly_mission_id=mission.id,
+                            description=description,
+                            target_count=target_count,
+                            current_count=0,
+                            status="pending",
+                        )
+                    )
+            continue
+
+        mission = (
+            db.query(WeeklyMission)
+            .filter(WeeklyMission.campaign_id == campaign.id, WeeklyMission.week_start == week_start)
+            .first()
+        )
+        if not mission:
             mission = WeeklyMission(
                 campaign_id=campaign.id,
                 week_start=week_start,
                 week_end=week_end,
                 phase=phase_label(phase_index),
-                pattern_code="onboarding",
-                title="Onboarding Week",
-                description="Lam quen dashboard, check-in va quest loop nhe hon.",
-                reward_xp=25,
+                pattern_code=pattern["pattern_code"],
+                title=pattern["title"],
+                description=pattern["description"],
+                reward_xp=pattern["reward_xp"],
                 status="active",
             )
             db.add(mission)
             db.flush()
-            for description, target_count in [
-                ("Hoan thanh 2 daily quest bat ky", 2),
-                ("Tao 1 check-in va 1 note ve weakness", 2),
-            ]:
+        else:
+            mission.week_end = week_end
+            mission.phase = phase_label(phase_index)
+            mission.pattern_code = pattern["pattern_code"]
+            mission.title = pattern["title"]
+            mission.description = pattern["description"]
+            mission.reward_xp = pattern["reward_xp"]
+        existing_items = (
+            db.query(WeeklyMissionItem)
+            .filter(WeeklyMissionItem.weekly_mission_id == mission.id)
+            .order_by(WeeklyMissionItem.id)
+            .all()
+        )
+        for position, (description, target_count) in enumerate(pattern["items"]):
+            if position < len(existing_items):
+                existing_items[position].description = description
+                existing_items[position].target_count = target_count
+            else:
                 db.add(
                     WeeklyMissionItem(
                         weekly_mission_id=mission.id,
@@ -1190,44 +1337,21 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
                         status="pending",
                     )
                 )
-            continue
-
-        mission = WeeklyMission(
-            campaign_id=campaign.id,
-            week_start=week_start,
-            week_end=week_end,
-            phase=phase_label(phase_index),
-            pattern_code=pattern["pattern_code"],
-            title=pattern["title"],
-            description=pattern["description"],
-            reward_xp=pattern["reward_xp"],
-            status="active",
-        )
-        db.add(mission)
-        db.flush()
-        for description, target_count in pattern["items"]:
-            db.add(
-                WeeklyMissionItem(
-                    weekly_mission_id=mission.id,
-                    description=description,
-                    target_count=target_count,
-                    current_count=0,
-                    status="pending",
-                )
-            )
 
 
 def ensure_bosses(db: Session, campaign: Campaign, badges: list[Badge]) -> None:
-    if db.query(BossBattle).filter(BossBattle.campaign_id == campaign.id).count() > 0:
-        return
-
     badge_cycle = [badge.id for badge in badges[: min(len(badges), 10)]]
     for month_index in range(1, 19):
         battle_date = campaign.start_date + timedelta(days=(month_index * 30) - 1)
         relative_week = max(1, ((battle_date - campaign.start_date).days // 7) + 1)
         phase_name = phase_label(phase_for_week(relative_week))
-        db.add(
-            BossBattle(
+        boss = (
+            db.query(BossBattle)
+            .filter(BossBattle.campaign_id == campaign.id, BossBattle.month_index == month_index)
+            .first()
+        )
+        if not boss:
+            boss = BossBattle(
                 stage=phase_name,
                 battle_date=battle_date,
                 title=month_boss_title(month_index),
@@ -1242,16 +1366,26 @@ def ensure_bosses(db: Session, campaign: Campaign, badges: list[Badge]) -> None:
                 result_note="",
                 practice_suggestion="Review weakest skill before this checkpoint.",
             )
-        )
+            db.add(boss)
+        else:
+            boss.stage = phase_name
+            boss.battle_date = battle_date
+            boss.title = month_boss_title(month_index)
+            boss.source = "Dashboard roadmap"
+            boss.goal = "Complete checkpoint test, record score, and review errors before moving on."
+            boss.reward_xp = 100 if month_index in {6, 12, 18} else 60
+            boss.badge_id = badge_cycle[(month_index - 1) % len(badge_cycle)] if badge_cycle else None
+            boss.practice_suggestion = "Review weakest skill before this checkpoint."
 
 
-def ensure_test_records(db: Session, player: Player) -> None:
+def ensure_test_records(db: Session, player: Player, campaign: Campaign) -> None:
     if db.query(TestRecord).filter(TestRecord.player_id == player.id).count() > 0:
         return
 
     records = [
         TestRecord(
             player_id=player.id,
+            campaign_id=campaign.id,
             test_type="TOEIC",
             test_date=date(2026, 1, 15),
             listening_score="395",
@@ -1262,6 +1396,7 @@ def ensure_test_records(db: Session, player: Player) -> None:
         ),
         TestRecord(
             player_id=player.id,
+            campaign_id=campaign.id,
             test_type="Aptis",
             test_date=date(2026, 2, 20),
             overall_score="B1",
@@ -1295,5 +1430,5 @@ def seed_database(db: Session, start_date: date) -> None:
     backfill_quest_phase_and_material(db, campaign, phase_by_code)
     ensure_weekly_missions(db, campaign)
     ensure_bosses(db, campaign, badges)
-    ensure_test_records(db, player)
+    ensure_test_records(db, player, campaign)
     db.commit()

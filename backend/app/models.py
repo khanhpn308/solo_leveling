@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -46,6 +46,7 @@ class Player(Base):
         foreign_keys="Campaign.player_id",
     )
     test_records: Mapped[list["TestRecord"]] = relationship(back_populates="player")
+    badge_unlocks: Mapped[list["BadgeUnlock"]] = relationship(back_populates="player")
 
 
 class Campaign(Base):
@@ -74,6 +75,8 @@ class Campaign(Base):
     writing_entries: Mapped[list["WritingEntry"]] = relationship(back_populates="campaign")
     speaking_entries: Mapped[list["SpeakingEntry"]] = relationship(back_populates="campaign")
     mock_tests: Mapped[list["MockTest"]] = relationship(back_populates="campaign")
+    skill_states: Mapped[list["CampaignSkillState"]] = relationship(back_populates="campaign")
+    badge_unlocks: Mapped[list["BadgeUnlock"]] = relationship(back_populates="campaign")
 
 
 class Skill(Base):
@@ -97,6 +100,7 @@ class Skill(Base):
     rank_suggestions: Mapped[list["SkillRankSuggestion"]] = relationship(back_populates="skill")
     rank_history: Mapped[list["SkillRankHistory"]] = relationship(back_populates="skill")
     weakness_suggestions: Mapped[list["WeaknessSuggestion"]] = relationship(back_populates="skill")
+    campaign_states: Mapped[list["CampaignSkillState"]] = relationship(back_populates="skill")
 
 
 class QuestTemplate(Base):
@@ -140,7 +144,7 @@ class Quest(Base):
     completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     session_type: Mapped[str] = mapped_column(String(80), default="Daily Quest")
-    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True, index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False, index=True)
     phase_id: Mapped[int | None] = mapped_column(ForeignKey("roadmap_phases.id"), nullable=True, index=True)
     study_plan_week_id: Mapped[int | None] = mapped_column(ForeignKey("study_plan_weeks.id"), nullable=True, index=True)
     study_plan_session_id: Mapped[int | None] = mapped_column(ForeignKey("study_plan_sessions.id"), nullable=True, index=True)
@@ -158,10 +162,15 @@ class Quest(Base):
     raw_score: Mapped[str] = mapped_column(String(120), default="")
     tracker_type: Mapped[str] = mapped_column(String(40), default="")
     tracker_entry_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    daily_slot_code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    error_log_id: Mapped[int | None] = mapped_column(ForeignKey("error_logs.id"), nullable=True, index=True)
+    writing_entry_id: Mapped[int | None] = mapped_column(ForeignKey("writing_entries.id"), nullable=True, index=True)
+    speaking_entry_id: Mapped[int | None] = mapped_column(ForeignKey("speaking_entries.id"), nullable=True, index=True)
+    mock_test_id: Mapped[int | None] = mapped_column(ForeignKey("mock_tests.id"), nullable=True, index=True)
     expired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     skill: Mapped[Skill] = relationship(back_populates="quests")
-    campaign: Mapped[Campaign | None] = relationship(back_populates="quests")
+    campaign: Mapped[Campaign] = relationship(back_populates="quests")
     phase: Mapped["RoadmapPhase | None"] = relationship(back_populates="quests")
     study_plan_week: Mapped["StudyPlanWeek | None"] = relationship(back_populates="quests")
     study_plan_session: Mapped["StudyPlanSession | None"] = relationship(back_populates="quest")
@@ -174,6 +183,7 @@ class CheckIn(Base):
     __table_args__ = (UniqueConstraint("checkin_date", name="uq_checkin_date"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False, index=True)
     checkin_date: Mapped[date] = mapped_column(Date, index=True)
     mood: Mapped[int] = mapped_column(Integer, default=3)
     energy: Mapped[int] = mapped_column(Integer, default=3)
@@ -190,6 +200,56 @@ class Badge(Base):
     description: Mapped[str] = mapped_column(String(255))
     unlocked: Mapped[bool] = mapped_column(Boolean, default=False)
     unlocked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    unlocks: Mapped[list["BadgeUnlock"]] = relationship(back_populates="badge")
+
+
+class CampaignSkillState(Base):
+    __tablename__ = "campaign_skill_states"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "skill_id", name="uq_campaign_skill_states_campaign_skill"),
+        Index("ix_campaign_skill_states_campaign_confirmed_rank", "campaign_id", "confirmed_rank"),
+        Index("ix_campaign_skill_states_skill_id", "skill_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"))
+    skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id"))
+    xp: Mapped[int] = mapped_column(Integer, default=0)
+    rank: Mapped[str] = mapped_column(String(2), default="F")
+    confirmed_rank: Mapped[str] = mapped_column(String(2), default="F")
+    level: Mapped[int] = mapped_column(Integer, default=1)
+    streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_practiced: Mapped[date | None] = mapped_column(Date, nullable=True)
+    weak_point: Mapped[str] = mapped_column(String(255), default="")
+    user_weakness_note: Mapped[str] = mapped_column(Text, default="")
+    last_system_suggestion_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    campaign: Mapped[Campaign] = relationship(back_populates="skill_states")
+    skill: Mapped[Skill] = relationship(back_populates="campaign_states")
+
+
+class BadgeUnlock(Base):
+    __tablename__ = "badge_unlocks"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "badge_id", name="uq_badge_unlocks_campaign_badge"),
+        Index("ix_badge_unlocks_player_id", "player_id"),
+        Index("ix_badge_unlocks_badge_id", "badge_id"),
+        Index("ix_badge_unlocks_source_boss_battle_id", "source_boss_battle_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"))
+    badge_id: Mapped[int] = mapped_column(ForeignKey("badges.id"))
+    source_boss_battle_id: Mapped[int | None] = mapped_column(ForeignKey("boss_battles.id"), nullable=True)
+    unlocked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    player: Mapped[Player] = relationship(back_populates="badge_unlocks")
+    campaign: Mapped[Campaign] = relationship(back_populates="badge_unlocks")
+    badge: Mapped[Badge] = relationship(back_populates="unlocks")
+    source_boss_battle: Mapped["BossBattle | None"] = relationship(back_populates="badge_unlocks")
 
 
 class WeeklyMission(Base):
@@ -236,7 +296,7 @@ class BossBattle(Base):
     source: Mapped[str] = mapped_column(String(255))
     goal: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(50), default="Locked")
-    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True, index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False, index=True)
     month_index: Mapped[int] = mapped_column(Integer, default=1, index=True)
     reward_xp: Mapped[int] = mapped_column(Integer, default=0)
     badge_id: Mapped[int | None] = mapped_column(ForeignKey("badges.id"), nullable=True)
@@ -246,6 +306,7 @@ class BossBattle(Base):
     cleared_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     campaign: Mapped[Campaign | None] = relationship(back_populates="boss_battles")
+    badge_unlocks: Mapped[list["BadgeUnlock"]] = relationship(back_populates="source_boss_battle")
 
 
 class TestRecord(Base):
@@ -253,6 +314,7 @@ class TestRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False, index=True)
     test_type: Mapped[str] = mapped_column(String(20), index=True)
     test_date: Mapped[date] = mapped_column(Date, index=True)
     overall_score: Mapped[str] = mapped_column(String(50), default="")
@@ -274,6 +336,7 @@ class SkillRankSuggestion(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id"), index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False, index=True)
     source_test_record_id: Mapped[int | None] = mapped_column(ForeignKey("test_records.id"), nullable=True, index=True)
     current_rank: Mapped[str] = mapped_column(String(2), default="F")
     suggested_rank: Mapped[str] = mapped_column(String(2), default="F")
@@ -291,6 +354,7 @@ class SkillRankHistory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id"), index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False, index=True)
     old_rank: Mapped[str] = mapped_column(String(2), default="F")
     new_rank: Mapped[str] = mapped_column(String(2), default="F")
     source_test_record_id: Mapped[int | None] = mapped_column(ForeignKey("test_records.id"), nullable=True, index=True)
@@ -486,8 +550,13 @@ class WeaknessSuggestion(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id"), index=True)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True, index=True)
     source_type: Mapped[str] = mapped_column(String(40), default="", index=True)
     source_ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_test_record_id: Mapped[int | None] = mapped_column(ForeignKey("test_records.id"), nullable=True, index=True)
+    source_mock_test_id: Mapped[int | None] = mapped_column(ForeignKey("mock_tests.id"), nullable=True, index=True)
+    source_error_log_id: Mapped[int | None] = mapped_column(ForeignKey("error_logs.id"), nullable=True, index=True)
+    source_quest_id: Mapped[int | None] = mapped_column(ForeignKey("quests.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(200))
     detail: Mapped[str] = mapped_column(Text)
     severity: Mapped[str] = mapped_column(String(20), default="medium")
