@@ -1,8 +1,25 @@
 import { useEffect, useState } from 'react'
-import { formatDate } from '../dashboard-data'
+import { formatDate, getQuestActionMeta, getQuestRewardValue, getTodayISO } from '../dashboard-data'
 import PanelFrame from './PanelFrame'
 
-function MainQuestMapPanel({ map, loading, error }) {
+function MainQuestActionButton({ quest, pendingState, onQuestAction }) {
+  if (!quest) return null
+
+  const actionMeta = getQuestActionMeta(quest, pendingState, getTodayISO())
+
+  return (
+    <button
+      className={`system-button quest-action-button quest-action-button--${actionMeta.tone}`}
+      type="button"
+      disabled={actionMeta.disabled}
+      onClick={() => actionMeta.action && onQuestAction(quest, actionMeta.action)}
+    >
+      {actionMeta.label}
+    </button>
+  )
+}
+
+function MainQuestMapPanel({ map, loading, error, onQuestAction, questPendingById, successQuestId }) {
   const [expandedPhaseCodes, setExpandedPhaseCodes] = useState([])
   const [expandedWeekNos, setExpandedWeekNos] = useState([])
 
@@ -38,7 +55,7 @@ function MainQuestMapPanel({ map, loading, error }) {
   }
 
   return (
-    <PanelFrame title="Main Quest Map" tag={loading ? 'Syncing...' : `Read-only / ${map?.totalWeeks ?? 0} weeks`}>
+    <PanelFrame title="Main Quest Map" tag={loading ? 'Syncing...' : `Claim flow live / ${map?.totalWeeks ?? 0} weeks`}>
       {loading ? <div className="empty-state">Syncing Main Quest Map from the backend...</div> : null}
 
       {!loading && error ? (
@@ -161,66 +178,83 @@ function MainQuestMapPanel({ map, loading, error }) {
                                 </div>
 
                                 <div className="main-quest-session-list">
-                                  {week.sessions.map((session) => (
-                                    <article
-                                      key={session.id}
-                                      className={`main-quest-session main-quest-session--${session.statusTone} ${
-                                        session.isCurrentSession ? 'is-current' : ''
-                                      }`}
-                                    >
-                                      <div className="main-quest-session__head">
-                                        <div>
-                                          <p className="main-quest-session__meta">
-                                            {formatDate(session.study_date)} / {session.weekday_label} / {session.session_label}
-                                          </p>
-                                          <h5>
-                                            {session.skillText} {session.isCurrentSession ? '/ Today' : ''}
-                                          </h5>
-                                        </div>
-                                        <div className="main-quest-session__status">
-                                          <span className={`panel-chip panel-chip--${session.statusTone}`}>
-                                            {session.statusLabel}
-                                          </span>
-                                          <strong>
-                                            {session.xpMeta.value === '--' ? '--' : `+${session.xpMeta.value}`}
-                                          </strong>
-                                          <span>{session.xpMeta.label}</span>
-                                        </div>
-                                      </div>
+                                  {week.sessions.map((session) => {
+                                    const pendingState = session.quest ? questPendingById[session.quest.id] : null
 
-                                      {session.integrity ? (
-                                        <div className="main-quest-session__warning">
-                                          {session.integrity.detail}
+                                    return (
+                                      <article
+                                        key={session.id}
+                                        className={`main-quest-session main-quest-session--${session.statusTone} ${
+                                          session.isCurrentSession ? 'is-current' : ''
+                                        } ${successQuestId === session.quest?.id ? 'is-success-flash' : ''}`}
+                                      >
+                                        <div className="main-quest-session__head">
+                                          <div>
+                                            <p className="main-quest-session__meta">
+                                              {formatDate(session.study_date)} / {session.weekday_label} / {session.session_label}
+                                            </p>
+                                            <h5>
+                                              {session.skillText} {session.isCurrentSession ? '/ Today' : ''}
+                                            </h5>
+                                          </div>
+                                          <div className="main-quest-session__status">
+                                            <span className={`panel-chip panel-chip--${session.statusTone}`}>
+                                              {session.statusLabel}
+                                            </span>
+                                            <strong>
+                                              {session.xpMeta.value === '--' ? '--' : `+${session.xpMeta.value}`}
+                                            </strong>
+                                            <span>{session.xpMeta.label}</span>
+                                          </div>
                                         </div>
-                                      ) : null}
 
-                                      <div className="main-quest-session__grid">
-                                        <div>
-                                          <span className="main-quest-session__label">Task detail</span>
-                                          <p>{session.taskText}</p>
+                                        {session.integrity ? (
+                                          <div className="main-quest-session__warning">
+                                            {session.integrity.detail}
+                                          </div>
+                                        ) : null}
+
+                                        <div className="main-quest-session__grid">
+                                          <div>
+                                            <span className="main-quest-session__label">Task detail</span>
+                                            <p>{session.taskText}</p>
+                                          </div>
+                                          <div>
+                                            <span className="main-quest-session__label">Deliverable</span>
+                                            <p>{session.deliverableText}</p>
+                                          </div>
                                         </div>
-                                        <div>
-                                          <span className="main-quest-session__label">Deliverable</span>
-                                          <p>{session.deliverableText}</p>
+
+                                        <p className="main-quest-session__xp-detail">{session.xpMeta.detail}</p>
+
+                                        <div className="main-quest-session__materials">
+                                          <span className="main-quest-session__label">Materials</span>
+                                          {session.materialItems.length > 0 ? (
+                                            <ul className="main-quest-inline-list">
+                                              {session.materialItems.map((item) => (
+                                                <li key={`${session.id}-${item}`}>{item}</li>
+                                              ))}
+                                            </ul>
+                                          ) : (
+                                            <p>{session.sourceText || 'No materials listed for this session yet.'}</p>
+                                          )}
                                         </div>
-                                      </div>
 
-                                      <p className="main-quest-session__xp-detail">{session.xpMeta.detail}</p>
-
-                                      <div className="main-quest-session__materials">
-                                        <span className="main-quest-session__label">Materials</span>
-                                        {session.materialItems.length > 0 ? (
-                                          <ul className="main-quest-inline-list">
-                                            {session.materialItems.map((item) => (
-                                              <li key={`${session.id}-${item}`}>{item}</li>
-                                            ))}
-                                          </ul>
-                                        ) : (
-                                          <p>{session.sourceText || 'No materials listed for this session yet.'}</p>
-                                        )}
-                                      </div>
-                                    </article>
-                                  ))}
+                                        {session.quest ? (
+                                          <div className="main-quest-session__actions">
+                                            <span className="main-quest-session__claim">
+                                              Reward cache: +{getQuestRewardValue(session.quest)} XP
+                                            </span>
+                                            <MainQuestActionButton
+                                              quest={session.quest}
+                                              pendingState={pendingState}
+                                              onQuestAction={onQuestAction}
+                                            />
+                                          </div>
+                                        ) : null}
+                                      </article>
+                                    )
+                                  })}
                                 </div>
                               </div>
                             ) : null}

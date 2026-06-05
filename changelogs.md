@@ -211,6 +211,231 @@ manual source scan: no Vietnamese copy matches remained in frontend/src for the 
 - [ ] I checked validation results.
 - [ ] I approved this task.
 
+## [2026-06-05 10:20] Task tracker refresh for remaining documentation work
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Record the current unfinished task in the repository tracker
+
+### 1. Summary
+
+Refreshed `TASKS.md` so the current remaining work is explicit in the repo tracker. The in-progress section now calls out the pending browser verification and the follow-up schema-semantics note, and the next-candidate list now points at a companion doc for enum-like field meanings.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `TASKS.md` | Modified | top-state sections around `L1-L75` | Updated the session state, added the remaining documentation task to `In Progress`, and changed the next-candidate list to the schema semantics note. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Current unfinished task is now documented in the repo tracker.
+
+### 4. Bugs fixed
+
+- [x] Removed ambiguity about what remains open after the current schema/documentation pass.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content TASKS.md
+Get-Content AGENT_NOTES.md
+Get-Content TEST_REPORT.md
+Get-Content changelogs.md -Tail 120
+Get-Date -Format "yyyy-MM-dd HH:mm"
+git diff --unified=0 -- TASKS.md
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+This was a documentation-only update. No runtime validation was required.
+TASKS.md now includes the remaining open work explicitly.
+```
+
+### 8. Remaining issues
+
+- [ ] The browser verification task is still pending.
+- [ ] The schema-semantics companion note is still only a next candidate, not yet written.
+
+### 9. Suggested next step
+
+- If you want the tracker fully caught up, write the companion schema-semantics note next.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 10:09] Database schema inventory documentation
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Inspect the current MySQL database and document all tables and columns
+
+### 1. Summary
+
+Inspected the live local MySQL database schema from the running Docker container, cross-checked it against `backend/app/models.py`, and added a dedicated schema reference document. The new doc lists every current table in `ielts_quest`, its columns, types, nullability, key role, notable unique constraints, and the main foreign-key relationships.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `docs/DATABASE_SCHEMA.md` | Added | Full file `L1-L390` | Added a live schema snapshot for the `ielts_quest` database including table inventory, field lists, unique constraints, and relationship summary. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Dedicated database schema reference document for the project.
+- [x] Live table inventory pulled from the running MySQL instance.
+- [x] Column-by-column listing for all current database tables.
+
+### 4. Bugs fixed
+
+- [x] Removed ambiguity around which tables and fields currently exist in the local database.
+
+### 5. Code removed
+
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content C:\Users\Admin\.agents\skills\backend-development\SKILL.md -TotalCount 120
+Get-Content C:\Users\Admin\.agents\skills\agent-skills\skills\documentation-and-adrs\SKILL.md -TotalCount 120
+Get-ChildItem backend\app
+Get-ChildItem backend\alembic\versions
+rg -n "class .*\(Base\)|__tablename__|Column\(|mapped_column\(|ForeignKey\(|relationship\(" backend/app backend/alembic/versions
+docker compose ps
+Get-Content docker-compose.yml
+Get-Content backend/app/models.py -TotalCount 260
+Get-Content backend/app/models.py | Select-Object -Skip 260 -First 280
+docker compose exec -T mysql mysql -uielts_user -pielts_password -D ielts_quest -e "SHOW TABLES;"
+docker compose exec -T mysql mysql -uielts_user -pielts_password -D ielts_quest -e "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'ielts_quest' ORDER BY TABLE_NAME, ORDINAL_POSITION;"
+docker compose exec -T mysql mysql -uielts_user -pielts_password -D ielts_quest -e "SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = 'ielts_quest' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY TABLE_NAME, COLUMN_NAME;"
+docker compose exec -T mysql mysql -uielts_user -pielts_password -D ielts_quest -e "SELECT TABLE_NAME, INDEX_NAME, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columns, NON_UNIQUE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = 'ielts_quest' GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE ORDER BY TABLE_NAME, INDEX_NAME;"
+Get-ChildItem docs -Recurse
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+Verified against the live `ielts_quest_mysql` container and `information_schema`.
+Detected 24 current tables in schema `ielts_quest`.
+Cross-check against `backend/app/models.py` completed.
+No code/runtime validation was needed beyond schema inspection because this task only adds documentation.
+```
+
+### 8. Remaining issues
+
+- [ ] The new document is a point-in-time snapshot and should be refreshed after future migrations.
+- [ ] Business semantics for status fields are not yet documented separately.
+
+### 9. Suggested next step
+
+- Add a follow-up doc that explains status enums / field semantics and optionally generate a small ERD diagram.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 10:09] Daily quest claim button layout containment fix
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Fix daily quest `CLAIM` button overflow in the Quest Board daily tab
+
+### 1. Summary
+
+Adjusted the daily quest reward column so the `CLAIM` action stays fully inside the XP panel instead of overflowing past the right border. The fix widens the reward column to a stable minimum, makes the action button fill that column, and centers the XP text within the updated layout.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `frontend/src/styles.css` | Modified | `quest-node` and `quest-node__reward` layout block around `L1090-L1160` | Increased the daily quest reward-column width, added left padding inside the reward column, centered reward text, and made `.quest-action-button` stretch to the column width without forcing overflow. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Daily quest claim action now remains visually contained within the XP column.
+
+### 4. Bugs fixed
+
+- [x] Fixed the `CLAIM` button border overflowing outside the daily quest reward column.
+
+### 5. Code removed
+
+- [x] Removed the old narrow reward-column constraint that was smaller than the action button.
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content C:\Users\Admin\.agents\skills\frontend-design\SKILL.md -TotalCount 120
+Get-Content C:\Users\Admin\.agents\skills\vercel-react-best-practices\SKILL.md -TotalCount 120
+rg -n "backlog-item__actions|quest-action-button|daily-quest-card|xp" frontend/src/components/DailyQuestPanel.jsx frontend/src/styles.css
+Get-Content frontend/src/components/DailyQuestPanel.jsx
+Get-Content frontend/src/styles.css | Select-Object -Skip 1080 -First 160
+Get-Content frontend/src/styles.css | Select-Object -Skip 1150 -First 90
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+Static inspection confirms the reward column is now wider than the claim button minimum width and the button is constrained to 100% of that column.
+Frontend build re-run completed successfully after the CSS fix.
+Manual browser screenshot verification is still pending in this environment.
+```
+
+### 8. Remaining issues
+
+- [ ] Manual browser verification is still needed to confirm the refined spacing feels right on the live daily tab.
+
+### 9. Suggested next step
+
+- Open the daily quest overlay in the browser and verify `COMPLETE`, `CLAIM`, and `CLAIMED` states across both desktop and narrow laptop widths.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
 ## [2026-06-05 07:52] Quest surfaces English cleanup
 
 **Agent:** coder-gpt54
@@ -1882,8 +2107,8 @@ Live/browser verification: still not run
 
 ## [2026-06-04 10:xx] Final live verification va reviewer acceptance cho MQM-01
 
-**Agent:** coder-gpt54  
-**Status:** Done  
+**Agent:** coder-gpt54
+**Status:** Done
 **Related task:** MQM-01 final closeout
 
 ### 1. Summary
@@ -1960,8 +2185,8 @@ Browser automation unavailable; no screenshot/DOM walkthrough captured
 - [ ] I approved this task.
 ## [2026-06-04 14:42] Thêm kiểm tra tự động cho Main Quest Map và Daily Quest date logic
 
-**Agent:** coder-gpt54  
-**Status:** Done  
+**Agent:** coder-gpt54
+**Status:** Done
 **Related task:** add automated frontend/runtime checks for Main Quest Map and Daily Quest date logic
 
 ### 1. Tóm tắt
@@ -2150,3 +2375,323 @@ reviewer-gpt55 rerun: ACCEPT
 - [ ] Tôi đã kiểm tra tính năng mới hoặc đã chỉnh sửa.
 - [ ] Tôi đã kiểm tra kết quả xác thực.
 - [ ] Tôi đã phê duyệt tác vụ này.
+## [2026-06-05 08:48] Phase 1 UX smoothing - game system daily loop
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Phase 1 UX Smoothing - Game System Daily Loop
+
+### 1. Summary
+
+Implemented the first UX smoothing slice for the dashboard daily loop. The frontend now has a shared presence layer for overlay/drawer/inbox surfaces, lazy-loaded heavy overlays with visible fallback shells, per-item pending feedback for quests and suggestions, inline check-in save feedback, and a small toast rack plus reward pulse for daily progress actions.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `frontend/src/App.jsx` | Modified | `L1-L617`, especially import/state blocks, `load*` helpers, mutation handlers, and overlay render section | Reworked the app shell to lazy-load heavy overlays, keep transient mutation state in one place, use `startTransition` for non-urgent refreshes, add toast handling, and wire per-action feedback into quest/check-in/suggestion flows. |
+| `frontend/src/components/usePresenceLayer.jsx` | Added | `L1-L109` | Added the shared interaction helper for presence timing, focus restore, `Esc`, optional focus trap, outside-dismiss, and delayed unmount. |
+| `frontend/src/components/OverlayFrame.jsx` | Modified | full file / dialog shell behavior | Migrated overlays to the shared presence helper so exit animation can complete before unmount while keeping dialog semantics and focus control. |
+| `frontend/src/components/NavigationDrawer.jsx` | Modified | full file / drawer shell behavior | Migrated the navigation drawer to the shared presence helper for focus restore, outside-dismiss, and delayed unmount. |
+| `frontend/src/components/SuggestionInboxDropdown.jsx` | Modified | full file / inbox open-close behavior and action buttons | Added shared presence behavior for the inbox dropdown and per-row pending states for apply/dismiss actions. |
+| `frontend/src/components/DailyQuestPanel.jsx` | Modified | full file / quest button rendering and summary cards | Added pressed/pending/success feedback for daily and backlog quests plus reward pulse styling hooks on the daily quest progress summary. |
+| `frontend/src/components/QuestOverlay.jsx` | Modified | overlay wrapper and archive tab area | Routed quest feedback props through the overlay and added pending/success handling for archive actions. |
+| `frontend/src/components/StatusModal.jsx` | Modified | check-in editor section and overlay wrapper | Added inline save feedback, saving-state button lock, control disabling while saving, and presence-aware overlay mounting. |
+| `frontend/src/components/CertificateOverlay.jsx` | Modified | overlay wrapper | Switched the certificate surface to the shared overlay behavior so it participates in lazy mount and exit motion. |
+| `frontend/src/components/BossOverlay.jsx` | Modified | overlay wrapper and boss hero meta line | Switched the boss surface to the shared overlay behavior and cleaned the stage/date separator copy. |
+| `frontend/src/components/OverlayShellFallback.jsx` | Added | `L1-L24` | Added a fallback overlay shell so lazy-loaded heavy overlays never open into a blank pause. |
+| `frontend/src/components/ToastRack.jsx` | Added | `L1-L14` | Added the small toast rack used for quest, check-in, suggestion, and failure feedback. |
+| `frontend/src/styles.css` | Modified | motion token block, overlay/drawer/inbox animation sections, quest/support feedback sections, toast/fallback styles around `L33-L78`, `L804-L890`, `L1055-L1146`, `L1445-L1646`, `L1891-L1982`, `L2094-L2235` | Standardized motion tokens, added delayed-unmount motion states, pending/success visual feedback, inline feedback styling, toast/fallback shells, and reduced-motion coverage for the new interactions. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Shared presence layer for overlays, the navigation drawer, and the suggestion inbox dropdown.
+- [x] Lazy loading plus fallback shell for heavy overlays: Status, Quest, Certificate, and Boss.
+- [x] Per-item pending feedback for quest completion and suggestion actions.
+- [x] Inline check-in save acknowledgment plus non-blocking error feedback.
+- [x] Toast rack and reward pulse microfeedback for the daily loop.
+
+### 4. Bugs fixed
+
+- [x] Overlay and drawer close actions no longer hard-unmount before exit motion can play.
+- [x] Suggestion apply/dismiss no longer locks the entire inbox while one row is updating.
+- [x] Daily quest actions now guard against double-submit during the active mutation.
+- [x] Opening a lazy overlay no longer risks a blank pause with no visible shell.
+
+### 5. Code removed
+
+- [x] Removed duplicated focus-trap / escape-handling logic from `OverlayFrame` and `NavigationDrawer` by centralizing it in `usePresenceLayer`.
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-ChildItem -Force
+rg --files
+Get-Content AGENTS.md
+Get-Content TASKS.md
+Get-Content changelogs.md
+Get-Content frontend\package.json
+Get-Content frontend\src\App.jsx
+Get-Content frontend\src\styles.css
+Get-Content frontend\src\components\OverlayFrame.jsx
+Get-Content frontend\src\components\NavigationDrawer.jsx
+Get-Content frontend\src\components\SuggestionInboxDropdown.jsx
+Get-Content frontend\src\components\DailyQuestPanel.jsx
+Get-Content frontend\src\components\StatusModal.jsx
+Get-Content frontend\src\components\QuestOverlay.jsx
+Get-Content frontend\src\components\BossOverlay.jsx
+Get-Content frontend\src\components\CertificateOverlay.jsx
+Get-Content frontend\src\components\WeeklyMissionCard.jsx
+Get-Content frontend\src\components\CheckInPanel.jsx
+Get-Content frontend\src\dashboard-data.js
+rg -n "statusLabel|earnedXp|quest_date|backlogQuests|todayQuests|buildSuggestionInbox|key:" frontend/src/dashboard-data.js frontend/src/dashboard-data.test.js
+rg -n "quest-node|backlog-item|system-button|overlay-shell|drawer-shell|support-panel|empty-state|checkin-pill|suggestion-actions|inbox-cluster|overlay-frame__body|panel-frame__header|status-checkin-editor|subsection-divider" frontend/src/styles.css
+git status --short
+git diff --stat -- frontend/src/App.jsx frontend/src/styles.css frontend/src/components/OverlayFrame.jsx frontend/src/components/NavigationDrawer.jsx frontend/src/components/SuggestionInboxDropdown.jsx frontend/src/components/DailyQuestPanel.jsx frontend/src/components/StatusModal.jsx frontend/src/components/QuestOverlay.jsx frontend/src/components/CertificateOverlay.jsx frontend/src/components/BossOverlay.jsx frontend/src/components/usePresenceLayer.jsx frontend/src/components/OverlayShellFallback.jsx frontend/src/components/ToastRack.jsx changelogs.md
+git diff --unified=0 -- frontend/src/App.jsx frontend/src/styles.css frontend/src/components/OverlayFrame.jsx frontend/src/components/NavigationDrawer.jsx frontend/src/components/SuggestionInboxDropdown.jsx frontend/src/components/DailyQuestPanel.jsx frontend/src/components/StatusModal.jsx frontend/src/components/QuestOverlay.jsx frontend/src/components/CertificateOverlay.jsx frontend/src/components/BossOverlay.jsx frontend/src/components/usePresenceLayer.jsx frontend/src/components/OverlayShellFallback.jsx frontend/src/components/ToastRack.jsx
+npm.cmd run build
+npm.cmd run test:dashboard-data
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run build: passed
+npm.cmd run test:dashboard-data: passed
+dashboard-data suite: 5 tests, 0 failures
+Manual browser smoke check for overlay/daily-loop interactions: not run in this environment
+```
+
+### 8. Remaining issues
+
+- [ ] Manual interaction verification for overlay open/close motion, focus behavior, and daily loop feedback is still pending.
+- [ ] No browser automation or screenshot pass was captured for the new lazy fallback and toast states.
+
+### 9. Suggested next step
+
+- Run a manual laptop smoke check for nav/inbox/status/quest interactions and confirm that pending, toast, and success pulse states feel correct in the live browser.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 09:43] Weekly touchpoint polish for Phase 1 UX smoothing
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Finish the missing weekly touchpoint polish from Phase 1 UX smoothing
+
+### 1. Summary
+
+Finished the remaining weekly touchpoint slice in the frontend. The weekly mission support surface now acts like a real touchpoint that opens the Weekly quest tab, weekly mission data is normalized into a stable progress/state model with fallback behavior, and weekly mission progress now emits pulse/toast feedback when quest updates advance the mission.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `frontend/src/App.jsx` | Modified | weekly helpers + weekly mission state around `formatHostDateTime()`, `loadWeeklyMission()`, `weeklyTouchpoint` memo, and the support-panel render block | Added weekly mission normalization, weekly progress snapshot comparison, weekly pulse/toast feedback, and made the weekly support surface open the Weekly tab directly. |
+| `frontend/src/components/QuestOverlay.jsx` | Modified | weekly tab props / `WeeklyMissionCard` call site | Routed weekly loading, error, and pulse state into the Weekly tab card. |
+| `frontend/src/components/WeeklyMissionCard.jsx` | Modified | full component rewrite | Upgraded the weekly overlay card with live/fallback state labels, progress meter, helper copy, and normalized objective rows. |
+| `frontend/src/components/WeeklyMissionPanel.jsx` | Modified | full component rewrite | Brought the compact weekly panel in line with the new normalized weekly mission shape for future reuse. |
+| `frontend/src/dashboard-data.js` | Modified | `WEEKLY_MISSION_PATTERNS` titles around `L98-L122` | Replaced the remaining dot separators in weekly mission titles with ASCII-safe `/` separators. |
+| `frontend/src/styles.css` | Modified | weekly/support styles around `L811-L824`, `L1456-L1512`, `L2252-L2278` | Added interactive styling for the weekly support panel plus progress/state visuals for weekly mission cards and pulse styling for weekly updates. |
+| `TASKS.md` | Modified | current state / completed / in-progress / next candidate sections near the top of the file | Recorded that weekly touchpoint polish is done and noted the current frontend build regression plus remaining manual/browser follow-up. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Clickable weekly support touchpoint that opens the Weekly quest board.
+- [x] Normalized weekly mission model with progress percent, state label, fallback source label, and helper copy.
+- [x] Weekly progress pulse and toast feedback when quest completion advances the weekly mission.
+- [x] Weekly overlay card now shows a progress meter and per-objective progress labels.
+
+### 4. Bugs fixed
+
+- [x] Weekly mission titles no longer show the remaining non-ASCII separator glyph.
+- [x] Weekly mission fallback no longer collapses to a blank/minimal state when the live weekly payload is unavailable.
+- [x] Weekly progress changes were previously silent; they now produce visible weekly feedback in the loop.
+
+### 5. Code removed
+
+- [x] Removed the old flat weekly-card rendering path in favor of the normalized weekly touchpoint presentation.
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content C:\Users\Admin\.agents\skills\agent-skills\skills\incremental-implementation\SKILL.md
+Get-Content C:\Users\Admin\.agents\skills\agent-skills\skills\frontend-ui-engineering\SKILL.md
+Get-Content frontend\src\components\WeeklyMissionCard.jsx
+Get-Content frontend\src\components\WeeklyMissionPanel.jsx
+rg -n "WeeklyMission|weekly|mission" frontend/src/App.jsx frontend/src/components frontend/src/styles.css frontend/src/dashboard-data.js
+Get-Content frontend\src\App.jsx
+Get-Content frontend\src\dashboard-data.js
+Get-Content frontend\src\components\QuestOverlay.jsx
+Get-Content frontend\src\components\PanelFrame.jsx
+Get-Content frontend\src\components\HomeTopBar.jsx
+Get-Content frontend\src\styles.css | Select-Object -Skip 880 -First 180
+Get-Content frontend\src\styles.css | Select-Object -Skip 2140 -First 140
+rg -n "support-panel|weekly-highlight|mission-card|mission-item|mission-lines|weekly-progress" frontend/src/styles.css
+npm.cmd run build
+npm.cmd run test:dashboard-data
+git diff --check -- frontend/src/App.jsx frontend/src/dashboard-data.js frontend/src/components/QuestOverlay.jsx frontend/src/components/WeeklyMissionCard.jsx frontend/src/components/WeeklyMissionPanel.jsx frontend/src/styles.css TASKS.md changelogs.md
+git diff --unified=0 -- frontend/src/App.jsx frontend/src/dashboard-data.js frontend/src/components/QuestOverlay.jsx frontend/src/components/WeeklyMissionCard.jsx frontend/src/components/WeeklyMissionPanel.jsx frontend/src/styles.css TASKS.md changelogs.md
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [ ] Passed
+- [x] Failed
+- [ ] Not run
+
+Details:
+
+```text
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+npm.cmd run build: failed in Vite/Rolldown with [plugin vite:build-html] "fileName" / "name" must not be absolute; received "D:/better_english/ielts-quest-dashboard/frontend/index.html"
+Manual browser smoke check: not run in this environment
+git diff --check: passed except LF/CRLF normalization warnings only
+```
+
+### 8. Remaining issues
+
+- [ ] Frontend production build is currently blocked by the Vite/Rolldown HTML emit error above.
+- [ ] Manual interaction verification for the weekly touchpoint and the broader overlay/daily-loop motion is still pending.
+
+### 9. Suggested next step
+
+- Run one focused follow-up on the frontend build regression, then do a manual laptop smoke check of the Weekly touchpoint in the live browser.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.
+
+## [2026-06-05 10:01] Reward claim flow for main / daily / weekly missions
+
+**Agent:** coder-gpt54
+**Status:** Done
+**Related task:** Add burger-button reward dot and explicit CLAIM flow for main, daily, and weekly mission rewards
+
+### 1. Summary
+
+Implemented an explicit reward-claim loop across the dashboard. Quest completion no longer banks XP immediately; instead, completed main/daily quests and completed weekly missions surface `CLAIM` actions, the burger button shows a red notification dot while rewards are waiting, and backend progress now only counts claimed quest/weekly XP.
+
+### 2. Files changed
+
+| File | Change type | Changed lines / area | What changed |
+| --- | --- | --- | --- |
+| `backend/app/models.py` | Modified | `Quest` and `WeeklyMission` models around their reward/status fields | Added `reward_claimed` and `reward_claimed_at` fields for quest and weekly mission reward tracking. |
+| `backend/app/schemas.py` | Modified | `QuestOut`, `WeeklyMissionOut` | Exposed the new claim-state fields to the frontend. |
+| `backend/app/services.py` | Modified | `sync_quest_statuses()`, new `recompute_weekly_missions()`, `recompute_player_progress()`, `recompute_skill_progress()`, `complete_quest_instance()`, `uncomplete_quest_instance()` | Shifted XP accounting to claimed rewards only, recomputed weekly mission objective progress from live quest/check-in/tracker data, and blocked rollback after a claimed quest reward. |
+| `backend/app/main.py` | Modified | `serialize_quest()`, summary XP queries, new quest/weekly claim endpoints | Added `/api/quests/{id}/claim` and `/api/weekly-missions/{id}/claim`, plus summary XP queries that only count claimed rewards. |
+| `backend/alembic/versions/20260605_04_reward_claim_flow.py` | Added | full file | Added the additive migration for reward-claim columns and backfilled existing completed quest/weekly rewards as already claimed so current progress does not drop. |
+| `frontend/src/dashboard-data.js` | Modified | `getSessionXpMeta()`, new quest-action helpers, `buildDashboardView()` | Normalized reward-claimed state for quests and added shared UI helpers for `COMPLETE` / `CLAIM` / `CLAIMED` button states. |
+| `frontend/src/App.jsx` | Modified | quest/weekly action handlers, weekly touchpoint memo, top-shell support copy, overlay props | Replaced the old complete-only quest mutation flow with explicit claim actions, weekly-claim handling, pending reward count, and updated top-shell status text. |
+| `frontend/src/components/HomeTopBar.jsx` | Modified | burger button | Added the red notification dot for pending reward claims. |
+| `frontend/src/components/DailyQuestPanel.jsx` | Modified | full component rewrite | Replaced card-as-button behavior with explicit per-quest action buttons and reward-state messaging. |
+| `frontend/src/components/MainQuestMapPanel.jsx` | Modified | full component rewrite | Added `COMPLETE` / `CLAIM` controls to main-quest session cards and kept the roadmap expansion behavior intact. |
+| `frontend/src/components/QuestOverlay.jsx` | Modified | main/daily/archive/weekly action wiring | Routed claim actions through all quest tabs and connected weekly mission claim handling. |
+| `frontend/src/components/WeeklyMissionCard.jsx` | Modified | claim row below progress block | Added a gated weekly reward claim button and reward-cache copy. |
+| `frontend/src/styles.css` | Modified | topbar notify dot + quest/claim action styles around quest/main/weekly sections | Added the burger-dot indicator plus button states/layout support for claim actions. |
+| `frontend/src/dashboard-data.test.js` | Modified | completed main-quest fixture expectation | Updated the test fixture to reflect the new claimed reward wording. |
+| `TASKS.md` | Modified | top project state and next steps | Recorded the new reward-claim loop and refreshed validation/project-state notes. |
+| `changelogs.md` | Modified | new tail entry | Added this task record. |
+
+### 3. Features added
+
+- [x] Explicit `CLAIM` reward flow for completed daily quests.
+- [x] Explicit `CLAIM` reward flow for completed main quests.
+- [x] Explicit `CLAIM` reward flow for completed weekly missions.
+- [x] Burger-button red notification dot while reward claims are pending.
+- [x] Backend claim endpoints and additive schema support for quest/weekly claim state.
+
+### 4. Bugs fixed
+
+- [x] XP is no longer banked prematurely on quest completion before the player claims it.
+- [x] Weekly mission progress is now derived from live weekly quest/check-in/tracker activity instead of staying static.
+- [x] Main quest cards previously had no direct mission action path; they now expose complete/claim controls.
+
+### 5. Code removed
+
+- [x] Removed the old implicit "complete immediately grants XP" frontend assumption.
+- [ ] None
+
+### 6. Commands run
+
+```bash
+Get-Content C:\Users\Admin\.agents\skills\frontend-design\SKILL.md
+Get-Content C:\Users\Admin\.agents\skills\vercel-react-best-practices\SKILL.md
+rg -n "claim|reward|xp|complete|completed|weekly-mission|main-quests|quests/" backend frontend/src
+Get-Content frontend\src\components\DailyQuestPanel.jsx
+Get-Content backend\app\main.py
+Get-Content backend\app\services.py | Select-Object -Skip 150 -First 150
+Get-Content backend\app\models.py | Select-Object -Skip 120 -First 140
+Get-Content backend\app\schemas.py | Select-Object -Skip 70 -First 260
+Get-Content frontend\src\components\MainQuestMapPanel.jsx
+Get-Content frontend\src\components\NavigationDrawer.jsx
+Get-Content backend\app\database.py
+Get-ChildItem backend\alembic\versions | Select-Object -ExpandProperty Name
+Get-Content backend\alembic\versions\20260603_01_mvp_additive_schema.py | Select-Object -Skip 430 -First 80
+Get-Content frontend\src\dashboard-data.test.js
+Get-Content frontend\src\styles.css | Select-Object -Skip 1070 -First 320
+Get-Content frontend\src\components\QuestOverlay.jsx
+Get-Content frontend\src\components\HomeTopBar.jsx
+python -m py_compile backend\app\main.py backend\app\models.py backend\app\schemas.py backend\app\services.py backend\app\database.py backend\alembic\versions\20260605_04_reward_claim_flow.py
+npm.cmd run test:dashboard-data
+npm.cmd run build
+Remove-Item -Recurse -Force backend\app\__pycache__,backend\alembic\versions\__pycache__
+git status --short
+git diff --stat -- backend/app/main.py backend/app/models.py backend/app/schemas.py backend/app/services.py backend/alembic/versions/20260605_04_reward_claim_flow.py frontend/src/App.jsx frontend/src/components/HomeTopBar.jsx frontend/src/components/DailyQuestPanel.jsx frontend/src/components/MainQuestMapPanel.jsx frontend/src/components/QuestOverlay.jsx frontend/src/components/WeeklyMissionCard.jsx frontend/src/dashboard-data.js frontend/src/dashboard-data.test.js frontend/src/styles.css TASKS.md changelogs.md
+git diff --unified=0 -- backend/app/main.py backend/app/models.py backend/app/schemas.py backend/app/services.py backend/alembic/versions/20260605_04_reward_claim_flow.py frontend/src/App.jsx frontend/src/components/HomeTopBar.jsx frontend/src/components/DailyQuestPanel.jsx frontend/src/components/MainQuestMapPanel.jsx frontend/src/components/QuestOverlay.jsx frontend/src/components/WeeklyMissionCard.jsx frontend/src/dashboard-data.js frontend/src/dashboard-data.test.js frontend/src/styles.css TASKS.md changelogs.md
+Get-Date -Format "yyyy-MM-dd HH:mm"
+```
+
+### 7. Validation result
+
+- [x] Passed
+- [ ] Failed
+- [ ] Not run
+
+Details:
+
+```text
+python -m py_compile backend/app/*.py + migration: exited 0
+npm.cmd run test:dashboard-data: passed (5 tests, 0 failures)
+npm.cmd run build: passed
+Manual browser smoke check: not run in this environment
+```
+
+### 8. Remaining issues
+
+- [ ] Manual browser verification is still needed for the new `Complete -> Claim` loop across main/daily/weekly tabs.
+- [ ] The worktree still contains unrelated existing frontend edits and generated dist changes outside this focused task.
+
+### 9. Suggested next step
+
+- Run a live browser smoke check that confirms the burger-dot indicator, quest action states, weekly claim gating, and XP/rank updates only after claim.
+
+### 10. User review checklist
+
+- [ ] I reviewed the changed files.
+- [ ] I checked the changed line ranges.
+- [ ] I checked the new/modified feature.
+- [ ] I checked validation results.
+- [ ] I approved this task.

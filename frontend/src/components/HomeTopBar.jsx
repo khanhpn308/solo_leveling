@@ -8,9 +8,12 @@ function HomeTopBar({
   inboxItems,
   suggestionsLoading,
   suggestionsError,
+  suggestionPendingByKey,
   onToggleInbox,
+  onCloseInbox,
   onApplySuggestion,
   onDismissSuggestion,
+  hasPendingClaims,
   onOpenNav,
   onOpenStatus,
 }) {
@@ -18,6 +21,7 @@ function HomeTopBar({
     <header className="home-topbar">
       <button className="system-icon-button system-icon-button--menu" type="button" onClick={onOpenNav} aria-label="Open navigation">
         <i className="icon-menu" aria-hidden="true" />
+        {hasPendingClaims ? <span className="system-notify-dot" aria-hidden="true" /> : null}
       </button>
 
       <div className="home-topbar__brand">
@@ -41,7 +45,9 @@ function HomeTopBar({
           loading={suggestionsLoading}
           error={suggestionsError}
           pendingCount={pendingCount}
+          pendingByKey={suggestionPendingByKey}
           onToggle={onToggleInbox}
+          onClose={onCloseInbox}
           onApply={onApplySuggestion}
           onDismiss={onDismissSuggestion}
         />

@@ -13,9 +13,14 @@ function ConditionCard({ label, value, note }) {
   )
 }
 
-function MoodButton({ active, label, value, onSelect }) {
+function MoodButton({ active, disabled, label, value, onSelect }) {
   return (
-    <button className={`checkin-pill ${active ? 'is-active' : ''}`} type="button" onClick={() => onSelect(value)}>
+    <button
+      className={`checkin-pill ${active ? 'is-active' : ''}`}
+      type="button"
+      disabled={disabled}
+      onClick={() => onSelect(value)}
+    >
       {label}
     </button>
   )
@@ -44,6 +49,8 @@ function StatusModal({
   checkInDraft,
   onCheckInDraftChange,
   onSaveCheckIn,
+  checkInSaving,
+  checkInFeedback,
   skills,
   badges,
   recentCheckins,
@@ -62,10 +69,9 @@ function StatusModal({
     [activeCheckIn, checkInDraft],
   )
 
-  if (!open) return null
-
   return (
     <OverlayFrame
+      open={open}
       title="Status"
       onClose={onClose}
       className="overlay-frame--status overlay-frame--status-minimal"
@@ -139,6 +145,7 @@ function StatusModal({
                         <MoodButton
                           key={`mood-${value}`}
                           active={checkInDraft.mood === value}
+                          disabled={checkInSaving}
                           label={`${value}`}
                           value={value}
                           onSelect={(nextValue) => onCheckInDraftChange({ field: 'mood', value: nextValue })}
@@ -154,6 +161,7 @@ function StatusModal({
                       min="1"
                       max="5"
                       value={checkInDraft.energy}
+                      disabled={checkInSaving}
                       onChange={(event) => onCheckInDraftChange({ field: 'energy', value: Number(event.target.value) })}
                     />
                   </div>
@@ -165,6 +173,7 @@ function StatusModal({
                       min="1"
                       max="5"
                       value={checkInDraft.focus}
+                      disabled={checkInSaving}
                       onChange={(event) => onCheckInDraftChange({ field: 'focus', value: Number(event.target.value) })}
                     />
                   </div>
@@ -173,12 +182,17 @@ function StatusModal({
                 <textarea
                   className="system-textarea"
                   value={checkInDraft.note}
+                  disabled={checkInSaving}
                   onChange={(event) => onCheckInDraftChange({ field: 'note', value: event.target.value })}
                   placeholder="Add a short note about today's study condition..."
                 />
 
-                <button className="system-button" type="button" onClick={onSaveCheckIn}>
-                  Save check-in
+                {checkInFeedback ? (
+                  <div className={`inline-feedback inline-feedback--${checkInFeedback.tone}`}>{checkInFeedback.message}</div>
+                ) : null}
+
+                <button className="system-button" type="button" onClick={onSaveCheckIn} disabled={checkInSaving}>
+                  {checkInSaving ? 'Saving check-in...' : 'Save check-in'}
                 </button>
               </div>
             ) : null}

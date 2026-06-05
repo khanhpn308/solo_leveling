@@ -151,6 +151,8 @@ class Quest(Base):
     difficulty: Mapped[str] = mapped_column(String(20), default="easy", index=True)
     base_xp: Mapped[int] = mapped_column(Integer, default=10)
     earned_xp: Mapped[int] = mapped_column(Integer, default=0)
+    reward_claimed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    reward_claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     completion_note: Mapped[str] = mapped_column(String(255), default="")
     raw_score: Mapped[str] = mapped_column(String(120), default="")
@@ -204,6 +206,8 @@ class WeeklyMission(Base):
     reward_xp: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reward_claimed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    reward_claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     campaign: Mapped[Campaign] = relationship(back_populates="weekly_missions")
     items: Mapped[list["WeeklyMissionItem"]] = relationship(back_populates="weekly_mission")

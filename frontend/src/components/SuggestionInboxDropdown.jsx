@@ -1,15 +1,25 @@
+import { usePresenceLayer } from './usePresenceLayer'
+
 function SuggestionInboxDropdown({
   open,
   suggestions,
   loading,
   error,
   pendingCount,
+  pendingByKey,
   onToggle,
+  onClose,
   onApply,
   onDismiss,
 }) {
+  const { isMounted, phase, rootRef } = usePresenceLayer({
+    open,
+    onClose,
+    closeOnInteractOutside: true,
+  })
+
   return (
-    <div className="inbox-cluster">
+    <div ref={rootRef} className="inbox-cluster">
       <button
         className={`system-icon-button system-icon-button--bell ${open ? 'is-active' : ''}`}
         type="button"
@@ -21,8 +31,12 @@ function SuggestionInboxDropdown({
         {pendingCount > 0 ? <span className="system-badge">{pendingCount}</span> : null}
       </button>
 
-      {open ? (
-        <section className="inbox-dropdown">
+      {isMounted ? (
+        <section
+          className={`inbox-dropdown ${phase === 'open' ? 'is-open' : phase === 'entering' ? 'is-entering' : 'is-closing'}`}
+          aria-label="Suggestion inbox"
+          data-presence={phase}
+        >
           <header className="inbox-dropdown__header">
             <div>
               <p>Suggestion Inbox</p>
@@ -46,11 +60,11 @@ function SuggestionInboxDropdown({
                       <span>{item.detail}</span>
                     </div>
                     <div className="suggestion-actions">
-                      <button type="button" onClick={() => onApply(item)}>
-                        Apply
+                      <button type="button" disabled={Boolean(pendingByKey[item.key])} onClick={() => onApply(item)}>
+                        {pendingByKey[item.key] === 'apply' ? 'Applying...' : 'Apply'}
                       </button>
-                      <button type="button" onClick={() => onDismiss(item)}>
-                        Dismiss
+                      <button type="button" disabled={Boolean(pendingByKey[item.key])} onClick={() => onDismiss(item)}>
+                        {pendingByKey[item.key] === 'dismiss' ? 'Dismissing...' : 'Dismiss'}
                       </button>
                     </div>
                   </article>

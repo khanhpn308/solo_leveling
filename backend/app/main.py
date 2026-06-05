@@ -124,6 +124,8 @@ def serialize_quest(quest: Quest) -> QuestOut:
         difficulty=quest.difficulty,
         base_xp=quest.base_xp,
         earned_xp=quest.earned_xp,
+        reward_claimed=quest.reward_claimed,
+        reward_claimed_at=quest.reward_claimed_at,
         completed_mode=quest.completed_mode,
         completion_note=quest.completion_note,
         raw_score=quest.raw_score,
@@ -174,7 +176,7 @@ def get_summary(db: Session = Depends(get_db)):
 
     today_xp = (
         db.query(func.coalesce(func.sum(Quest.earned_xp), 0))
-        .filter(Quest.completed == True, Quest.quest_date == today, Quest.campaign_id == campaign.id)
+        .filter(Quest.completed == True, Quest.reward_claimed == True, Quest.quest_date == today, Quest.campaign_id == campaign.id)
         .scalar()
         or 0
     )
@@ -182,6 +184,7 @@ def get_summary(db: Session = Depends(get_db)):
         db.query(func.coalesce(func.sum(Quest.earned_xp), 0))
         .filter(
             Quest.completed == True,
+            Quest.reward_claimed == True,
             Quest.quest_date >= week_start,
             Quest.quest_date <= week_end,
             Quest.campaign_id == campaign.id,
@@ -474,6 +477,28 @@ def uncomplete_quest(quest_id: int, db: Session = Depends(get_db)):
     return serialize_quest(uncomplete_quest_instance(db, quest))
 
 
+@app.post("/api/quests/{quest_id}/claim", response_model=QuestOut)
+def claim_quest_reward(quest_id: int, db: Session = Depends(get_db)):
+    quest = (
+        db.query(Quest)
+        .options(joinedload(Quest.skill), joinedload(Quest.phase), joinedload(Quest.material))
+        .filter(Quest.id == quest_id)
+        .first()
+    )
+    if not quest:
+        raise HTTPException(status_code=404, detail="Quest not found")
+    if not quest.completed:
+        raise HTTPException(status_code=400, detail="Quest must be completed before claiming reward")
+    if quest.reward_claimed:
+        raise HTTPException(status_code=400, detail="Quest reward has already been claimed")
+
+    quest.reward_claimed = True
+    quest.reward_claimed_at = quest.reward_claimed_at or quest.completed_at
+    refresh_progress_state(db)
+    db.refresh(quest)
+    return serialize_quest(quest)
+
+
 @app.get("/api/weekly-mission/current", response_model=WeeklyMissionOut)
 def get_current_weekly_mission(db: Session = Depends(get_db)):
     campaign = get_campaign_or_404(db, get_player_or_404(db))
@@ -498,6 +523,28 @@ def get_current_weekly_mission(db: Session = Depends(get_db)):
         )
     if not mission:
         raise HTTPException(status_code=404, detail="Weekly mission not found")
+    return mission
+
+
+@app.post("/api/weekly-missions/{mission_id}/claim", response_model=WeeklyMissionOut)
+def claim_weekly_mission_reward(mission_id: int, db: Session = Depends(get_db)):
+    mission = (
+        db.query(WeeklyMission)
+        .options(joinedload(WeeklyMission.items))
+        .filter(WeeklyMission.id == mission_id)
+        .first()
+    )
+    if not mission:
+        raise HTTPException(status_code=404, detail="Weekly mission not found")
+    if mission.status != "completed":
+        raise HTTPException(status_code=400, detail="Weekly mission must be completed before claiming reward")
+    if mission.reward_claimed:
+        raise HTTPException(status_code=400, detail="Weekly mission reward has already been claimed")
+
+    mission.reward_claimed = True
+    mission.reward_claimed_at = mission.reward_claimed_at or mission.completed_at
+    refresh_progress_state(db)
+    db.refresh(mission)
     return mission
 
 

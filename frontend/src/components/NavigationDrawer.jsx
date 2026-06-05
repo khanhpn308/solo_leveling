@@ -1,66 +1,23 @@
-import { useEffect, useId, useRef } from 'react'
-
-function getFocusableElements(container) {
-  if (!container) return []
-
-  return [...container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
-    .filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true')
-}
+import { useId, useRef } from 'react'
+import { usePresenceLayer } from './usePresenceLayer'
 
 function NavigationDrawer({ open, onClose, onOpenQuestTab, onOpenCertificates, onOpenBoss }) {
-  const drawerRef = useRef(null)
   const closeButtonRef = useRef(null)
-  const onCloseRef = useRef(onClose)
   const titleId = useId()
+  const { isMounted, phase, rootRef } = usePresenceLayer({
+    open,
+    onClose,
+    initialFocusRef: closeButtonRef,
+    trapFocus: true,
+    closeOnInteractOutside: true,
+  })
 
-  onCloseRef.current = onClose
-
-  useEffect(() => {
-    if (!open) return undefined
-
-    const previousActive = document.activeElement
-    closeButtonRef.current?.focus()
-
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onCloseRef.current()
-        return
-      }
-
-      if (event.key !== 'Tab') return
-
-      const focusable = getFocusableElements(drawerRef.current)
-      if (focusable.length === 0) return
-
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      if (previousActive instanceof HTMLElement) {
-        previousActive.focus()
-      }
-    }
-  }, [open])
-
-  if (!open) return null
+  if (!isMounted) return null
 
   return (
-    <div className="drawer-shell">
-      <button className="drawer-shell__scrim" type="button" onClick={onClose} aria-label="Close navigation" />
-      <aside ref={drawerRef} className="nav-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <div className={`drawer-shell ${phase === 'open' ? 'is-open' : phase === 'entering' ? 'is-entering' : 'is-closing'}`}>
+      <div className="drawer-shell__scrim" aria-hidden="true" />
+      <aside ref={rootRef} className="nav-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} data-presence={phase}>
         <header className="nav-drawer__header">
           <div>
             <p>System Access</p>

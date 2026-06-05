@@ -98,7 +98,7 @@ export const MAIN_QUEST_PHASES = [
 const WEEKLY_MISSION_PATTERNS = [
   {
     code: 'A',
-    title: 'Mission A · Reading Pressure',
+    title: 'Mission A / Reading Pressure',
     lines: [
       'Complete 4 core study sessions this week',
       'Finish at least 2 Reading quests on time',
@@ -107,7 +107,7 @@ const WEEKLY_MISSION_PATTERNS = [
   },
   {
     code: 'B',
-    title: 'Mission B · Grammar Relay',
+    title: 'Mission B / Grammar Relay',
     lines: [
       'Complete 4 core study sessions this week',
       'Submit 1 check-in with a clear study-status note',
@@ -116,7 +116,7 @@ const WEEKLY_MISSION_PATTERNS = [
   },
   {
     code: 'C',
-    title: 'Mission C · Mixed Discipline',
+    title: 'Mission C / Mixed Discipline',
     lines: [
       'Complete 4 core study sessions this week',
       'Finish at least 1 Writing or Speaking quest',
@@ -267,12 +267,19 @@ function getSessionXpMeta(quest, integrity) {
   }
 
   const rewardXp = quest.base_xp ?? quest.xp ?? null
+  const rewardClaimed = Boolean(quest.reward_claimed ?? quest.rewardClaimed ?? false)
 
   if (quest.completed) {
     return {
       value: quest.earned_xp ?? '--',
-      label: 'Earned',
-      detail: rewardXp != null ? `Reward ${rewardXp} XP` : 'No base reward returned by the API.',
+      label: rewardClaimed ? 'Earned' : 'Claim',
+      detail: rewardClaimed
+        ? rewardXp != null
+          ? `Reward ${rewardXp} XP secured.`
+          : 'Reward has been secured for this Main Quest.'
+        : rewardXp != null
+          ? `Reward ${quest.earned_xp ?? rewardXp} XP is ready to claim.`
+          : 'This Main Quest is complete and waiting for reward claim.',
     }
   }
 
@@ -419,6 +426,47 @@ export function getQuestEarnedXp(quest, todayIso = getTodayISO()) {
   const mode = getCompletionMode(quest, todayIso)
   if (mode === 'overdue') return Math.ceil(quest.xp * 0.5)
   return quest.xp
+}
+
+export function isQuestRewardClaimed(quest) {
+  return Boolean(quest?.rewardClaimed ?? quest?.reward_claimed ?? false)
+}
+
+export function getQuestRewardValue(quest) {
+  if (!quest) return 0
+  if (quest.completed) {
+    return quest.earnedXp ?? quest.earned_xp ?? quest.base_xp ?? quest.xp ?? 0
+  }
+  return quest.base_xp ?? quest.xp ?? 0
+}
+
+export function getQuestActionMeta(quest, pendingState, todayIso = getTodayISO()) {
+  if (pendingState === 'complete') {
+    return { label: 'Completing...', action: null, disabled: true, tone: 'pending' }
+  }
+  if (pendingState === 'claim') {
+    return { label: 'Claiming...', action: null, disabled: true, tone: 'pending' }
+  }
+  if (pendingState === 'uncomplete') {
+    return { label: 'Rolling back...', action: null, disabled: true, tone: 'pending' }
+  }
+
+  const rewardClaimed = isQuestRewardClaimed(quest)
+  const isFuture = quest.quest_date > todayIso
+
+  if (quest.completed) {
+    if (!rewardClaimed) {
+      return { label: 'CLAIM', action: 'claim', disabled: false, tone: 'claim' }
+    }
+
+    return { label: 'CLAIMED', action: null, disabled: true, tone: 'claimed' }
+  }
+
+  if (quest.status === 'expired' || isFuture) {
+    return { label: quest.status === 'expired' ? 'Expired' : 'Locked', action: null, disabled: true, tone: 'locked' }
+  }
+
+  return { label: 'COMPLETE', action: 'complete', disabled: false, tone: 'ready' }
 }
 
 export function getPlayerLevel(totalXp) {
@@ -568,18 +616,24 @@ export function buildDashboardView(summary, quests, checkins) {
       status: getQuestStatus(quest),
       completionMode: getCompletionMode(quest),
       earnedXp: getQuestEarnedXp(quest),
+      rewardClaimed: isQuestRewardClaimed(quest),
+      rewardClaimedAt: quest.reward_claimed_at ?? quest.rewardClaimedAt ?? null,
     })),
     todayQuests: todayQuests.map((quest) => ({
       ...quest,
       status: getQuestStatus(quest),
       completionMode: getCompletionMode(quest),
       earnedXp: getQuestEarnedXp(quest),
+      rewardClaimed: isQuestRewardClaimed(quest),
+      rewardClaimedAt: quest.reward_claimed_at ?? quest.rewardClaimedAt ?? null,
     })),
     backlogQuests: backlogQuests.map((quest) => ({
       ...quest,
       status: getQuestStatus(quest),
       completionMode: getCompletionMode(quest),
       earnedXp: getQuestEarnedXp(quest),
+      rewardClaimed: isQuestRewardClaimed(quest),
+      rewardClaimedAt: quest.reward_claimed_at ?? quest.rewardClaimedAt ?? null,
     })),
     weeklyMission: {
       ...weeklyPattern,

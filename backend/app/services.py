@@ -21,6 +21,7 @@ from .models import (
     TestRecord,
     WeaknessSuggestion,
     WeeklyMission,
+    WeeklyMissionItem,
     WritingEntry,
 )
 
@@ -111,6 +112,123 @@ def sync_quest_statuses(db: Session, campaign: Campaign) -> None:
         db.commit()
 
 
+def _set_weekly_item_state(item: WeeklyMissionItem, value: int) -> None:
+    item.current_count = max(0, min(value, item.target_count))
+    item.status = "completed" if item.current_count >= item.target_count else "active"
+
+
+def recompute_weekly_missions(db: Session, campaign: Campaign) -> None:
+    missions = (
+        db.query(WeeklyMission)
+        .options(joinedload(WeeklyMission.items))
+        .filter(WeeklyMission.campaign_id == campaign.id)
+        .order_by(WeeklyMission.week_start)
+        .all()
+    )
+    if not missions:
+        return
+
+    quests = (
+        db.query(Quest)
+        .options(joinedload(Quest.skill))
+        .filter(Quest.campaign_id == campaign.id, Quest.completed == True)
+        .all()
+    )
+    checkins = db.query(CheckIn).all()
+    error_logs = db.query(ErrorLog).filter(ErrorLog.campaign_id == campaign.id).all()
+    writing_entries = db.query(WritingEntry).filter(WritingEntry.campaign_id == campaign.id).all()
+    speaking_entries = db.query(SpeakingEntry).filter(SpeakingEntry.campaign_id == campaign.id).all()
+
+    for mission in missions:
+        week_quests = [quest for quest in quests if mission.week_start <= quest.quest_date <= mission.week_end]
+        week_checkins = [item for item in checkins if mission.week_start <= item.checkin_date <= mission.week_end]
+        week_error_logs = [item for item in error_logs if mission.week_start <= item.logged_date <= mission.week_end]
+        week_writing = [item for item in writing_entries if mission.week_start <= item.entry_date <= mission.week_end]
+        week_speaking = [item for item in speaking_entries if mission.week_start <= item.entry_date <= mission.week_end]
+
+        completed_core = [quest for quest in week_quests if quest.quest_role == "core"]
+        completed_support = [quest for quest in week_quests if quest.quest_role == "support"]
+        completed_mini = [quest for quest in week_quests if quest.quest_role == "mini"]
+        daily_quest_count = len([quest for quest in week_quests if quest.session_type == "Daily Quest"])
+        noted_checkins = len([item for item in week_checkins if (item.note or "").strip()])
+        tracker_notes = len(week_error_logs) + len(week_writing) + len(week_speaking)
+        active_days = {
+            *(item.checkin_date for item in week_checkins),
+            *(quest.quest_date for quest in completed_mini),
+        }
+        overdue_or_expired = len([quest for quest in week_quests if quest.completed_mode == "overdue" or quest.status in {"overdue", "expired"}])
+
+        for item in mission.items:
+            description = item.description.lower()
+            progress = min(item.target_count, daily_quest_count)
+
+            if "reading core quest" in description:
+                progress = len(
+                    [
+                        quest
+                        for quest in completed_core
+                        if (quest.skill.name if quest.skill else "") == "Reading"
+                    ]
+                )
+            elif "vocabulary/collocation support quest" in description:
+                progress = len(
+                    [
+                        quest
+                        for quest in completed_support
+                        if (quest.skill.name if quest.skill else "") in {"Vocabulary", "Collocation"}
+                    ]
+                )
+            elif "writing/speaking core quest" in description:
+                progress = len(
+                    [
+                        quest
+                        for quest in completed_core
+                        if (quest.skill.name if quest.skill else "") in {"Writing", "Speaking"}
+                    ]
+                )
+            elif "core quest" in description:
+                progress = len(completed_core)
+            elif "check-in hoac mini review day" in description:
+                progress = len(active_days)
+            elif "check-in" in description and "note" in description:
+                progress = noted_checkins
+            elif "check-in" in description:
+                progress = len(week_checkins)
+            elif "error log/writing/speaking tracker" in description:
+                progress = tracker_notes
+            elif "diem yeu recurring" in description:
+                progress = len(week_error_logs)
+            elif "mini review lien quan output skill" in description:
+                progress = len(
+                    [
+                        quest
+                        for quest in completed_mini
+                        if (quest.skill.name if quest.skill else "") in {"Writing", "Speaking", "Collocation"}
+                    ]
+                ) or len(completed_mini)
+            elif "cau dai hoac paraphrase kho" in description:
+                progress = tracker_notes or len(
+                    [
+                        quest
+                        for quest in week_quests
+                        if (quest.skill.name if quest.skill else "") in {"Reading", "Vocabulary", "Collocation"}
+                    ]
+                )
+            elif "daily quest" in description:
+                progress = daily_quest_count
+            elif "overdue quests under 2" in description:
+                progress = 1 if overdue_or_expired < 2 else 0
+
+            _set_weekly_item_state(item, progress)
+
+        if mission.items and all(item.status == "completed" for item in mission.items):
+            mission.status = "completed"
+            mission.completed_at = mission.completed_at or datetime.utcnow()
+        else:
+            mission.status = "active"
+            mission.completed_at = None
+
+
 def recompute_badges(db: Session) -> None:
     skill_xp = {skill.name: skill.xp for skill in db.query(Skill).all()}
     completed_count = db.query(Quest).filter(Quest.completed == True).count()
@@ -135,13 +253,17 @@ def recompute_badges(db: Session) -> None:
 def recompute_player_progress(db: Session, player: Player, campaign: Campaign) -> None:
     completed_quests = (
         db.query(Quest)
-        .filter(Quest.campaign_id == campaign.id, Quest.completed == True)
+        .filter(Quest.campaign_id == campaign.id, Quest.completed == True, Quest.reward_claimed == True)
         .all()
     )
     quest_xp = sum(quest.earned_xp or 0 for quest in completed_quests)
     mission_xp = (
         db.query(func.coalesce(func.sum(WeeklyMission.reward_xp), 0))
-        .filter(WeeklyMission.campaign_id == campaign.id, WeeklyMission.status == "completed")
+        .filter(
+            WeeklyMission.campaign_id == campaign.id,
+            WeeklyMission.status == "completed",
+            WeeklyMission.reward_claimed == True,
+        )
         .scalar()
         or 0
     )
@@ -208,7 +330,7 @@ def recompute_player_progress(db: Session, player: Player, campaign: Campaign) -
 def recompute_skill_progress(db: Session, skill: Skill) -> None:
     earned = (
         db.query(func.coalesce(func.sum(Quest.earned_xp), 0))
-        .filter(Quest.skill_id == skill.id, Quest.completed == True)
+        .filter(Quest.skill_id == skill.id, Quest.completed == True, Quest.reward_claimed == True)
         .scalar()
         or 0
     )
@@ -225,6 +347,7 @@ def refresh_progress_state(db: Session) -> None:
     player = get_active_player(db)
     campaign = get_active_campaign(db, player)
     sync_quest_statuses(db, campaign)
+    recompute_weekly_missions(db, campaign)
     for skill in db.query(Skill).all():
         recompute_skill_progress(db, skill)
     recompute_badges(db)
@@ -248,6 +371,8 @@ def complete_quest_instance(
     if not quest.completed:
         quest.completed = True
         quest.completed_at = datetime.utcnow()
+        quest.reward_claimed = False
+        quest.reward_claimed_at = None
         quest.tracker_type = tracker_type or quest.tracker_type
         quest.tracker_entry_id = tracker_entry_id if tracker_entry_id is not None else quest.tracker_entry_id
         quest.raw_score = raw_score or quest.raw_score
@@ -267,9 +392,13 @@ def complete_quest_instance(
 
 def uncomplete_quest_instance(db: Session, quest: Quest) -> Quest:
     if quest.completed:
+        if quest.reward_claimed:
+            raise ValueError("Claimed quest cannot be rolled back")
         quest.completed = False
         quest.completed_at = None
         quest.earned_xp = 0
+        quest.reward_claimed = False
+        quest.reward_claimed_at = None
         quest.completed_mode = None
         quest.tracker_entry_id = None
         quest.tracker_type = ""

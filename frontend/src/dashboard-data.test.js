@@ -94,6 +94,7 @@ test('buildMainQuestMap flags missing, duplicate, and orphan quest links while k
       completed: true,
       earned_xp: 20,
       base_xp: 20,
+      reward_claimed: true,
       source: 'Week 1 Pack; Audio Lab',
       details: 'Quest 101',
       skill_name: 'Listening',
@@ -203,7 +204,7 @@ test('buildMainQuestMap flags missing, duplicate, and orphan quest links while k
   assert.deepEqual(completedSession.xpMeta, {
     value: 20,
     label: 'Earned',
-    detail: 'Reward 20 XP',
+    detail: 'Reward 20 XP secured.',
   })
 })
 

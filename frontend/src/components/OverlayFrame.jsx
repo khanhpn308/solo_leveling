@@ -1,69 +1,31 @@
-import { useEffect, useId, useRef } from 'react'
+import { useId, useRef } from 'react'
+import { usePresenceLayer } from './usePresenceLayer'
 
-function getFocusableElements(container) {
-  if (!container) return []
-
-  return [...container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
-    .filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true')
-}
-
-function OverlayFrame({ title, subtitle, onClose, children, className = '', actions }) {
-  const dialogRef = useRef(null)
+function OverlayFrame({ open, title, subtitle, onClose, children, className = '', actions }) {
   const closeButtonRef = useRef(null)
-  const onCloseRef = useRef(onClose)
   const titleId = useId()
   const descriptionId = useId()
+  const { isMounted, phase, rootRef } = usePresenceLayer({
+    open,
+    onClose,
+    initialFocusRef: closeButtonRef,
+    trapFocus: true,
+    closeOnInteractOutside: true,
+  })
 
-  onCloseRef.current = onClose
-
-  useEffect(() => {
-    const previousActive = document.activeElement
-    closeButtonRef.current?.focus()
-
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onCloseRef.current()
-        return
-      }
-
-      if (event.key !== 'Tab') return
-
-      const focusable = getFocusableElements(dialogRef.current)
-      if (focusable.length === 0) return
-
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      if (previousActive instanceof HTMLElement) {
-        previousActive.focus()
-      }
-    }
-  }, [])
+  if (!isMounted) return null
 
   return (
-    <div className="overlay-shell">
-      <button className="overlay-shell__scrim" type="button" onClick={onClose} aria-label="Close overlay background" />
+    <div className={`overlay-shell ${phase === 'open' ? 'is-open' : phase === 'entering' ? 'is-entering' : 'is-closing'}`}>
+      <div className="overlay-shell__scrim" aria-hidden="true" />
       <section
-        ref={dialogRef}
+        ref={rootRef}
         className={`overlay-frame ${className}`.trim()}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={subtitle ? descriptionId : undefined}
+        data-presence={phase}
       >
         <header className="overlay-frame__header">
           <div>

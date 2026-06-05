@@ -19,8 +19,6 @@ function CertificateOverlay({ open, loading, error, records, onClose, onCreate }
   const [form, setForm] = useState(INITIAL_FORM)
   const [submitting, setSubmitting] = useState(false)
 
-  if (!open) return null
-
   async function handleSubmit(event) {
     event.preventDefault()
     try {
@@ -39,6 +37,7 @@ function CertificateOverlay({ open, loading, error, records, onClose, onCreate }
 
   return (
     <OverlayFrame
+      open={open}
       title="Certificate Records"
       subtitle="Existing test records filtered to exam certificates, with live create via the current API."
       onClose={onClose}

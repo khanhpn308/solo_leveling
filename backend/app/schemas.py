@@ -97,6 +97,8 @@ class QuestOut(BaseModel):
     difficulty: str
     base_xp: int
     earned_xp: int
+    reward_claimed: bool
+    reward_claimed_at: datetime | None
     completed_mode: str | None
     completion_note: str
     raw_score: str
@@ -273,6 +275,8 @@ class WeeklyMissionOut(BaseModel):
     reward_xp: int
     status: str
     completed_at: datetime | None
+    reward_claimed: bool
+    reward_claimed_at: datetime | None
     items: list[WeeklyMissionItemOut]
 
     class Config:
