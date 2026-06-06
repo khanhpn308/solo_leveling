@@ -1,168 +1,106 @@
 # IELTS Quest Dashboard
 
-Website chạy local để theo dõi lộ trình tự học IELTS Academic 18 tháng theo phong cách game hóa mạnh, lấy cảm hứng từ giao diện dark fantasy/status panel. Dự án dùng:
+Local IELTS Academic self-study dashboard with a game-style progression loop.
+
+## What This Project Is
+
+This repo tracks an 18-month IELTS study campaign starting on `2026-06-04`.
+The stack is:
 
 - Frontend: React + Vite
 - Backend: FastAPI
 - Database: MySQL
 - Runtime: Docker Compose
 
-> Lưu ý: giao diện chỉ lấy cảm hứng từ phong cách status/game UI, không dùng tài sản hình ảnh hoặc thương hiệu của bất kỳ tác phẩm cụ thể nào.
+The product direction is a game-inspired study dashboard with:
 
----
+- campaign roadmap phases
+- main / daily / weekly quests
+- reward-claim XP banking
+- skill ranks from `F` to `S`
+- badges and boss battles
+- check-ins, trackers, and study history
 
-## 1. Chạy dự án
+The current UI copy is English-first.
 
-Yêu cầu máy đã cài Docker Desktop.
+## Quick Start
+
+Run the full app:
 
 ```bash
-cd ielts-quest-dashboard
 docker compose up --build
 ```
 
-Mở trình duyệt:
+Local URLs:
 
-```text
-Frontend: http://localhost:5173
-Backend API docs: http://localhost:8000/docs
-MySQL: localhost:3307
-```
+- Frontend: `http://localhost:5173`
+- Backend docs: `http://localhost:8000/docs`
+- MySQL host: `localhost`
+- MySQL port: `3307`
 
-Tài khoản database mặc định trong `docker-compose.yml`:
+## Context Load Order
 
-```text
-Database: ielts_quest
-User: ielts_user
-Password: ielts_password
-Root password: root_password
-```
+For a new engineering session, read files in this order:
 
----
+1. [AGENTS.md](AGENTS.md)
+2. [README.md](README.md)
+3. [TASKS.md](TASKS.md)
+4. [DECISIONS.md](DECISIONS.md)
+5. [docs/current/CONTEXT_INDEX.md](docs/current/CONTEXT_INDEX.md)
 
-## 2. Cấu trúc dự án
+Then load only the specific canonical or history docs needed for the task.
 
-```text
-ielts-quest-dashboard/
-├── docker-compose.yml
-├── backend/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── app/
-│       ├── main.py
-│       ├── database.py
-│       ├── models.py
-│       ├── schemas.py
-│       └── seed.py
-└── frontend/
-    ├── Dockerfile
-    ├── package.json
-    ├── index.html
-    └── src/
-        ├── main.jsx
-        ├── App.jsx
-        └── styles.css
-```
+## Docs Map
 
----
+Root entrypoints:
 
-## 3. Logic game hóa
+- [AGENTS.md](AGENTS.md): agent rules and official context load order
+- [TASKS.md](TASKS.md): active tracker only
+- [DECISIONS.md](DECISIONS.md): short decision ledger
+- [README.md](README.md): project overview and startup info
 
-### Skill được theo dõi
+Canonical docs:
 
-- Listening
-- Reading
-- Writing
-- Speaking
-- Vocabulary
-- Collocation
-- Grammar
+- [docs/current/CONTEXT_INDEX.md](docs/current/CONTEXT_INDEX.md)
+- [docs/current/PROJECT_CONTEXT.md](docs/current/PROJECT_CONTEXT.md)
+- [docs/current/BUSINESS_RULES.md](docs/current/BUSINESS_RULES.md)
+- [docs/current/DATABASE_SCHEMA.md](docs/current/DATABASE_SCHEMA.md)
+- [docs/current/SCHEMA_SEMANTICS.md](docs/current/SCHEMA_SEMANTICS.md)
+- [docs/current/prompt-generic-en.md](docs/current/prompt-generic-en.md)
+- [docs/current/prompt-generic-vi.md](docs/current/prompt-generic-vi.md)
+- [docs/current/prompt-en.md](docs/current/prompt-en.md)
+- [docs/current/prompt-vi.md](docs/current/prompt-vi.md)
 
-### Rank F → S
+History and validation:
 
-| Rank |        XP |
-| ---- | --------: |
-| F    |     0–199 |
-| E    |   200–499 |
-| D    |   500–999 |
-| C    | 1000–1699 |
-| B    | 1700–2499 |
-| A    | 2500–3499 |
-| S    |     3500+ |
+- [docs/history/changelogs.md](docs/history/changelogs.md)
+- [docs/history/TEST_REPORT.md](docs/history/TEST_REPORT.md)
+- [docs/history/AGENT_NOTES.md](docs/history/AGENT_NOTES.md)
+- [docs/history/MIGRATION_HISTORY.md](docs/history/MIGRATION_HISTORY.md)
+- [docs/history/FRONTEND_PLAN.md](docs/history/FRONTEND_PLAN.md)
 
-### XP tính theo nhiệm vụ hoàn thành
+## Current Technical State
 
-Khi tick hoàn thành quest, backend tự cộng XP cho skill tương ứng, tính lại rank/level và mở badge nếu đủ điều kiện.
+- Frontend dashboard redesign is complete.
+- Reward-claim flow is implemented.
+- Database migration Waves `A` through `E` are complete.
+- Campaign-scoped skill state now lives in `campaign_skill_states`.
+- Campaign-scoped badge ownership now lives in `badge_unlocks`.
+- Constraint hardening is complete for the current migration plan.
 
----
+## Main Open Work
 
-## 4. Dữ liệu được seed sẵn
+- browser visual walkthrough and screenshots
+- automated backend tests for post-migration behavior
+- future cleanup of deferred legacy database fields
 
-Dashboard bắt đầu từ ngày `04/06/2026` và tự tạo 78 tuần học, chia theo giai đoạn:
+## Working With Codex
 
-- Tháng 1–3
-- Tháng 4–6
-- Tháng 7–9
-- Tháng 10–12
-- Tháng 13–18
+Use these guides for session workflow and prompt quality:
 
-Mỗi tuần có 7 quest:
+- [docs/current/prompt-generic-en.md](docs/current/prompt-generic-en.md): generic English playbook for Codex across repos
+- [docs/current/prompt-generic-vi.md](docs/current/prompt-generic-vi.md): generic Vietnamese playbook for Codex across repos
+- [docs/current/prompt-en.md](docs/current/prompt-en.md): canonical English Codex session playbook and prompt library
+- [docs/current/prompt-vi.md](docs/current/prompt-vi.md): Vietnamese operator version of the same workflow
 
-- Listening Gate / Full Listening Raid
-- Vocabulary Crystal / Vocabulary Recovery
-- Reading Dungeon / Full Reading Dungeon
-- Grammar Forge / Grammar Error Repair
-- Writing Scroll / Writing Boss Draft
-- Speaking Echo / Speaking Arena
-- Collocation Loot / Weekly Status Review
-
----
-
-## 5. API chính
-
-```text
-GET  /api/summary
-GET  /api/skills
-GET  /api/quests
-GET  /api/quests?stage=Tháng 1–3
-GET  /api/quests?week_no=1
-POST /api/quests/{quest_id}/complete
-POST /api/quests/{quest_id}/uncomplete
-POST /api/checkins
-GET  /api/checkins
-GET  /api/badges
-GET  /api/boss-battles
-POST /api/dev/reset
-```
-
----
-
-## 6. Cách reset dữ liệu
-
-Cách nhanh nhất:
-
-```bash
-curl -X POST http://localhost:8000/api/dev/reset
-```
-
-Hoặc vào API docs:
-
-```text
-http://localhost:8000/docs
-```
-
-rồi chạy endpoint `POST /api/dev/reset`.
-
----
-
-## 7. Gợi ý phát triển tiếp
-
-Các chức năng nên thêm sau:
-
-1. Login local bằng tài khoản cá nhân.
-2. Trang Writing Tracker riêng.
-3. Trang Speaking Tracker có upload link file ghi âm.
-4. Biểu đồ XP theo tuần.
-5. Calendar view theo tháng.
-6. Import/export CSV.
-7. Boss Battle score input cho Listening/Reading/Writing/Speaking.
-8. Streak thật theo ngày học liên tục.
+See [TASKS.md](TASKS.md) for the current tracker.

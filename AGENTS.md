@@ -1,516 +1,106 @@
-# Repository Guidelines
+# Repository Agent Guide
 
-## Project name
+## Purpose
 
-IELTS Quest Dashboard
+This file is the root agent entrypoint for `IELTS Quest Dashboard`.
 
-## Project purpose
+Use it to:
 
-This is a local gamified IELTS Academic self-study dashboard for an 18-month roadmap starting from 04/06/2026.
+- understand the project quickly
+- load context in the correct order
+- follow repository-specific workflow and documentation rules
 
-The user is a Vietnamese learner aiming for IELTS Academic 7.0-7.5 within 18 months. Current level is around B1, with Listening as the strongest skill and Reading weakness mainly caused by limited vocabulary and difficulty understanding long sentences.
+## Project Summary
 
-## Tech stack
+- Product: local gamified IELTS Academic dashboard
+- User goal: reach IELTS `7.0-7.5` over an 18-month campaign
+- Stack: React + Vite, FastAPI, MySQL, Docker Compose
+- Theme direction: game-style progression dashboard
 
-- Frontend: React + Vite
-- Backend: FastAPI
-- Database: MySQL
-- Deployment: Docker Compose
-- Runs locally only
+## Session Context Load Order
 
-## Core design direction
+Read these first, in order:
 
-The UI should feel like a game status dashboard inspired by Solo Leveling:
+1. [AGENTS.md](AGENTS.md)
+2. [README.md](README.md)
+3. [TASKS.md](TASKS.md)
+4. [DECISIONS.md](DECISIONS.md)
+5. [docs/current/CONTEXT_INDEX.md](docs/current/CONTEXT_INDEX.md)
 
-- Dark fantasy / system interface style
-- Neon blue or cyan highlights
-- Status panel
-- Skill rank from F to S
-- XP, levels, quests, badges, boss battles
-- Strong gamification to reduce boredom and help maintain study streaks
+After that, read only the task-specific canonical docs or history docs that matter.
 
-Do not copy copyrighted UI assets or exact protected designs. Use an original interface inspired by the general idea of game-like status screens.
+## Canonical vs History
 
-## Main skills to track
+Canonical docs live under `docs/current/`.
+They are the source of truth for current project understanding.
 
-1. Listening
-2. Reading
-3. Writing
-4. Speaking
-5. Vocabulary
-6. Collocation
-7. Grammar
+History docs live under `docs/history/`.
+They are for:
 
-Each skill must have:
+- implementation logs
+- validation snapshots
+- migration history
+- superseded planning notes
 
-- XP
-- Level
-- Rank: F, E, D, C, B, A, S
-- Progress bar
-- Last practiced date
-- Weakness note
+Do not treat history files as the primary source of current product truth unless the canonical docs point you there.
 
-## XP system
+## Root File Roles
 
-XP is calculated by completed tasks, not by study time.
+- [README.md](README.md): project overview, startup, docs map
+- [TASKS.md](TASKS.md): active tracker only
+- [DECISIONS.md](DECISIONS.md): concise decision ledger
+- [AGENTS.md](AGENTS.md): agent workflow and documentation rules
 
-Example XP values:
+## Current Canonical Docs
 
-- Learn 10 new words: +10 XP
-- Review old vocabulary: +5 XP
-- Complete one Listening task: +20 XP
-- Review transcript: +15 XP
-- Shadowing 5 sentences: +10 XP
-- Complete one Reading passage: +25 XP
-- Analyze 5 long sentences: +15 XP
-- Write one paragraph: +25 XP
-- Write one full Writing Task 2: +50 XP
-- Record Speaking Part 1: +15 XP
-- Record Speaking Part 2: +25 XP
-- Full Listening test: +60 XP
-- Full Reading test: +60 XP
-- Add corrected mistake to Error Log: +10 XP
+- [docs/current/CONTEXT_INDEX.md](docs/current/CONTEXT_INDEX.md)
+- [docs/current/PROJECT_CONTEXT.md](docs/current/PROJECT_CONTEXT.md)
+- [docs/current/BUSINESS_RULES.md](docs/current/BUSINESS_RULES.md)
+- [docs/current/DATABASE_SCHEMA.md](docs/current/DATABASE_SCHEMA.md)
+- [docs/current/SCHEMA_SEMANTICS.md](docs/current/SCHEMA_SEMANTICS.md)
+- [docs/current/prompt-generic-en.md](docs/current/prompt-generic-en.md)
+- [docs/current/prompt-generic-vi.md](docs/current/prompt-generic-vi.md)
+- [docs/current/prompt-en.md](docs/current/prompt-en.md)
+- [docs/current/prompt-vi.md](docs/current/prompt-vi.md)
+- [docs/current/decisions/ADR-001-documentation-layout-and-context-loading.md](docs/current/decisions/ADR-001-documentation-layout-and-context-loading.md)
 
-## Study roadmap phases
+## History Docs
 
-The roadmap starts on 04/06/2026 and is divided into:
+- [docs/history/changelogs.md](docs/history/changelogs.md)
+- [docs/history/TEST_REPORT.md](docs/history/TEST_REPORT.md)
+- [docs/history/AGENT_NOTES.md](docs/history/AGENT_NOTES.md)
+- [docs/history/MIGRATION_HISTORY.md](docs/history/MIGRATION_HISTORY.md)
+- [docs/history/FRONTEND_PLAN.md](docs/history/FRONTEND_PLAN.md)
 
-1. Month 1-3
-2. Month 4-6
-3. Month 7-9
-4. Month 10-12
-5. Month 13-18
+## Engineering Rules
 
-## Learning resources
+- Keep the app runnable with Docker Compose.
+- Do not remove existing features unless explicitly requested.
+- Prefer additive, low-risk changes for schema and API evolution.
+- Keep documentation in English.
+- Keep public API response shapes stable unless the user approves a contract change.
 
-The user already has:
+## Documentation Rules
 
-- IELTS Advantage - Speaking and Listening Skills (Ebook + Audio)
-- Cambridge Grammar for IELTS
-- English Grammar in Use
-- IELTS Advantage Reading Skills
-- Cambridge IELTS 17
-- Complete IELTS Bands 6.5-7.5
-- Complete IELTS Band 5.0-6.5
-- The Official Cambridge Guide to IELTS
-- English Collocations in Use Intermediate
-- English Vocabulary in Use Upper-Intermediate
-- IELTS Vocabulary for Bands 6.5 and above
-- Cambridge Academic Vocabulary in Use
-- English Collocations in Use Advanced
-- IELTS Advantage Writing Skills
+- Update [docs/history/changelogs.md](docs/history/changelogs.md) after each implementation task.
+- Changelog entries must be **newest first**.
+- Update [TASKS.md](TASKS.md) immediately when a tracked task changes status.
+- Update [docs/history/TEST_REPORT.md](docs/history/TEST_REPORT.md) after meaningful validation.
+- Update [docs/history/AGENT_NOTES.md](docs/history/AGENT_NOTES.md) with short factual notes only.
+- Record enduring architecture or workflow decisions in [DECISIONS.md](DECISIONS.md) and, when needed, an ADR under `docs/current/decisions/`.
 
-## Required main features
+## Validation Expectations
 
-1. Dashboard / Player Profile
-2. Skill Progress panel
-3. Quest Board
-4. Daily Quest
-5. Weekly Mission
-6. Boss Battle
-7. Badge Wall
-8. Mood / Energy Check-in
-9. Error Log
-10. Writing Tracker
-11. Speaking Tracker
-12. Mock Test Tracker
+When code changes are made:
 
-## Mood / Energy tracking
+- run syntax checks when possible
+- run focused smoke tests when possible
+- explain any skipped validation clearly
 
-Each day should allow the user to record:
+## Current Open Work Themes
 
-- Mood
-- Energy level
-- Focus level
-- Short note
+- browser visual verification
+- automated backend tests for post-migration behavior
+- deferred cleanup of legacy database fields
 
-This is used to help the user understand which days are productive or tiring.
-
-## Design requirements
-
-- Strong gamified feeling
-- Rank display must use F -> E -> D -> C -> B -> A -> S
-- Progress should be visual, not only numeric
-- Dashboard should feel rewarding and motivating
-- Avoid clutter
-- Vietnamese UI labels are preferred
-- English technical terms may appear, but should be understandable
-
-## Development expectations
-
-When modifying the project:
-
-1. Explain the change briefly.
-2. Keep the app runnable with Docker Compose.
-3. Do not remove existing features unless requested.
-4. Prefer clean, simple, maintainable code.
-5. Update seed data carefully.
-6. Test backend syntax when possible.
-7. Keep frontend responsive for laptop screens.
-
-## Useful commands
-
-Run the full project:
-
-```bash
-docker compose up --build
-```
-
-## Local development URLs
-
-When the project is running with Docker Compose:
-
-- Frontend: http://localhost:5173
-- Backend API docs: http://localhost:8000/docs
-- MySQL host: localhost
-- MySQL port: 3307
-
-Use these URLs to understand how the local app is accessed.
-
-## Multi-agent workflow
-
-This project uses a multi-agent Codex workflow.
-
-### Root orchestrator
-
-The root orchestrator should use GPT-5.5 with xhigh reasoning.
-
-Responsibilities:
-
-- Understand the full project context.
-- Read AGENTS.md, SPEC.md, TASKS.md, and relevant files before acting.
-- Make architecture-level decisions.
-- Break large work into small tasks.
-- Delegate implementation tasks to coder-gpt54.
-- Delegate review tasks to reviewer-gpt55.
-- Decide whether a task is complete or needs another fix cycle.
-- Keep the final decision in the root thread.
-
-The root orchestrator should not start coding immediately unless the user explicitly asks for a direct implementation.
-
-### coder-gpt54
-
-Use coder-gpt54 for implementation work.
-
-Responsibilities:
-
-- Write code.
-- Fix bugs.
-- Add or update tests.
-- Update seed data when needed.
-- Run relevant backend/frontend validation commands when possible.
-- Report changed files, commands run, and test results.
-
-Limitations:
-
-- Do not make architecture-level decisions.
-- Do not remove existing features unless explicitly instructed.
-- Do not modify unrelated files.
-- If requirements are unclear, stop and report the ambiguity.
-
-### reviewer-gpt55
-
-Use reviewer-gpt55 for important review tasks.
-
-Responsibilities:
-
-- Review code diffs.
-- Check architecture consistency.
-- Check bugs, regressions, security risks, and missing tests.
-- Provide findings by severity:
-  - P0: critical issue
-  - P1: important issue
-  - P2: improvement
-
-Limitations:
-
-- Do not edit files directly.
-- Do not rewrite code unless asked.
-- Give exact file paths and clear suggested fixes.
-
-### Shared communication files
-
-Use these files to communicate between agents:
-
-- SPEC.md: product requirements and feature details.
-- TASKS.md: current implementation plan.
-- DECISIONS.md: architecture and product decisions.
-- AGENT_NOTES.md: short reports from agents.
-- TEST_REPORT.md: validation and test results.
-
-### Required workflow
-
-For medium or large changes:
-
-1. Root orchestrator reads the project context.
-2. Root orchestrator creates or updates TASKS.md.
-3. User confirms the plan when needed.
-4. Root orchestrator delegates one bounded task to coder-gpt54.
-5. coder-gpt54 implements the task and reports results.
-6. Root orchestrator delegates review to reviewer-gpt55.
-7. If reviewer-gpt55 finds P0 or P1 issues, root orchestrator sends a focused fix task back to coder-gpt54.
-8. Repeat until the change is accepted.
-9. Root orchestrator summarizes final changes, files changed, tests run, and known limitations.
-
-### Completion standard
-
-A task is only complete when:
-
-- The requested feature or fix is implemented.
-- The app remains runnable with Docker Compose.
-- Existing features are not broken.
-- Important tests or syntax checks are run when possible.
-- Any skipped validation is explained clearly.
-
-## Mandatory changelog checklist
-
-All implementation agents must update `changelogs.md` after each coding task.
-
-The changelog must be written in a clear, visual, and review-friendly format so the user can quickly understand what changed.
-
-### Required changelog information
-
-Each changelog entry must include:
-
-1. Date and time
-2. Agent name
-3. Task name
-4. Task status
-5. Summary of the change
-6. Files changed
-7. Changed line ranges or diff hunks
-8. Features added
-9. Bugs fixed
-10. Code removed, if any
-11. Commands run
-12. Validation result
-13. Remaining issues
-14. Suggested next step
-15. Review checklist
-
-### Line change requirement
-
-When possible, the agent must use `git diff --unified=0` or an equivalent diff view to identify changed line ranges.
-
-If exact line numbers are difficult to determine because the file changed heavily, the agent must write:
-
-- the affected function/component/section name;
-- the approximate line range;
-- a short explanation of what changed there.
-
-Do not simply write “updated frontend” or “fixed backend”. The changelog must identify the concrete files and code areas.
-
-### Required changelog format
-
-Use this format for every task:
-
-````md
-## [YYYY-MM-DD HH:mm] Task name
-
-**Agent:** coder-gpt54  
-**Status:** Done / Partially done / Blocked  
-**Related task:** Task name or TASKS.md item
-
-### 1. Summary
-
-Short explanation of what changed and why.
-
-### 2. Files changed
-
-| File           | Change type                | Changed lines / area   | What changed      |
-| -------------- | -------------------------- | ---------------------- | ----------------- |
-| `path/to/file` | Added / Modified / Deleted | `L10-L35` or diff hunk | Clear explanation |
-
-### 3. Features added
-
-- [ ] Feature 1
-- [ ] Feature 2
-
-### 4. Bugs fixed
-
-- [ ] Bug 1
-- [ ] Bug 2
-
-### 5. Code removed
-
-- [ ] Removed unused code / cache / obsolete logic
-- [ ] None
-
-### 6. Commands run
-
-```bash
-command here
-```
-````
-
-### 7. Validation result
-
-- [ ] Passed
-- [ ] Failed
-- [ ] Not run
-
-Details:
-
-```text
-Write test/lint/build/runtime result here.
-```
-
-### 8. Remaining issues
-
-- [ ] None
-- [ ] Issue 1
-- [ ] Issue 2
-
-### 9. Suggested next step
-
-- Next recommended action.
-
-### 10. User review checklist
-
-- [ ] I reviewed the changed files.
-- [ ] I checked the changed line ranges.
-- [ ] I checked the new/modified feature.
-- [ ] I checked validation results.
-- [ ] I approved this task.
-
-```
-
-### Completion rule
-
-A coding task must not be marked as complete unless `changelogs.md` has been updated.
-
-The final response from the orchestrator must mention that `changelogs.md` was updated.
-```
-
-## Cost-aware multi-agent workflow
-
-This project uses a cost-aware multi-agent workflow.
-
-### Model usage policy
-
-Do not use GPT-5.5 xhigh for routine work.
-
-Use `web-architect-gpt55-xhigh` only for:
-
-- major frontend architecture decisions;
-- major UI/UX direction changes;
-- database schema changes;
-- API contract changes;
-- Docker Compose changes;
-- dependency additions;
-- authentication/security-related changes;
-- large refactors;
-- high-risk product decisions.
-
-Use lower-cost agents for routine work:
-
-- `web-dispatcher-gpt54` for daily coordination.
-- `web-docs-gpt54-mini` for TASKS.md, DECISIONS.md, changelogs.md, TEST_REPORT.md.
-- `coder-gpt54` for implementation.
-- `reviewer-gpt55` for review.
-
-### Dispatcher rule
-
-The main dispatcher must not read the entire repository unless necessary.
-
-Prefer:
-
-- reading AGENTS.md, TASKS.md, changelogs.md, TEST_REPORT.md first;
-- targeted file reads;
-- `git status --short`;
-- `git diff --stat`;
-- `git diff --unified=0`.
-
-### Documentation delegation rule
-
-The dispatcher should delegate documentation updates to `web-docs-gpt54-mini`.
-
-GPT-5.5 xhigh must not be used to write routine changelog, task list, decision log, or test report entries.
-
-### Architecture decision rule
-
-Call `web-architect-gpt55-xhigh` before:
-
-- changing database schema;
-- changing API contracts;
-- changing Docker Compose configuration;
-- adding dependencies;
-- large frontend refactors;
-- changing core XP/level/rank logic;
-- changing data model for quests, badges, mood tracking, mock tests, writing tracker, or speaking tracker.
-
-### Changelog rule
-
-Every implementation task must update `changelogs.md`.
-
-The changelog must include:
-
-- Date and time
-- Agent name
-- Task name
-- Task status
-- Files changed
-- Changed line ranges or changed areas
-- Features added
-- Bugs fixed
-- Code removed
-- Commands run
-- Frontend/backend/database/Docker validation result
-- Remaining issues
-- User review checklist
-
-Do not mark a task as complete unless `changelogs.md` is updated.
-
-
-<!-- headroom:rtk-instructions -->
-# RTK (Rust Token Killer) - Token-Optimized Commands
-
-When running shell commands, **always prefix with `rtk`**. This reduces context
-usage by 60-90% with zero behavior change. If rtk has no filter for a command,
-it passes through unchanged — so it is always safe to use.
-
-## Key Commands
-```bash
-# Git (59-80% savings)
-rtk git status          rtk git diff            rtk git log
-
-# Files & Search (60-75% savings)
-rtk ls <path>           rtk read <file>         rtk grep <pattern>
-rtk find <pattern>      rtk diff <file>
-
-# Test (90-99% savings) — shows failures only
-rtk pytest tests/       rtk cargo test          rtk test <cmd>
-
-# Build & Lint (80-90% savings) — shows errors only
-rtk tsc                 rtk lint                rtk cargo build
-rtk prettier --check    rtk mypy                rtk ruff check
-
-# Analysis (70-90% savings)
-rtk err <cmd>           rtk log <file>          rtk json <file>
-rtk summary <cmd>       rtk deps                rtk env
-
-# GitHub (26-87% savings)
-rtk gh pr view <n>      rtk gh run list         rtk gh issue list
-
-# Infrastructure (85% savings)
-rtk docker ps           rtk kubectl get         rtk docker logs <c>
-
-# Package managers (70-90% savings)
-rtk pip list            rtk pnpm install        rtk npm run <script>
-```
-
-## Rules
-- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
-- For debugging, use raw command without rtk prefix
-- `rtk proxy <cmd>` runs command without filtering but tracks usage
-<!-- /headroom:rtk-instructions -->
-
-## Windows encoding rule
-
-This project contains Vietnamese text. On Windows, always read text files using UTF-8.
-
-Use:
-- Get-Content -Encoding UTF8 <file>
-- or Python open(..., encoding="utf-8")
-
-Do not use plain Get-Content for Vietnamese .md/.txt files.
+See [TASKS.md](TASKS.md) for exact active items.
