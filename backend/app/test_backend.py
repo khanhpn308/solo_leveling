@@ -11,7 +11,7 @@ from app.models import (
     Account, AccountSession, AccountPreference, PlayerLearningProfile, AccountSecurityEvent,
     RankExamPool, RankExamVersion, RankExamQuestion, RankExamAttempt, SkillRankHistory,
     CollocationCollection, CollocationSection, CollocationTopic, CollocationItem,
-    CampaignCollocationLink, PlayerCollocationProgress,
+    CampaignCollocationLink, PlayerCollocationProgress, CollocationFlashcard,
 )
 from fastapi.testclient import TestClient
 from app.main import app, get_db, get_current_player, get_current_campaign
@@ -955,8 +955,8 @@ class TestCertificateAndSuggestionEndpoints(unittest.TestCase):
         suggestions = self.db.query(SkillRankSuggestion).filter(
             SkillRankSuggestion.source_certificate_record_id != None
         ).all()
-        # Should generate suggestions for: Listening, Reading, Writing, Speaking + Vocabulary, Grammar, Collocation
-        self.assertEqual(len(suggestions), 7)
+        # Should generate suggestions for the 5 matrix skills only (Grammar + Collocation removed from inferred)
+        self.assertEqual(len(suggestions), 5)
 
     def test_manual_certificate_creation_post_campaign(self):
         # 1. Activate campaign first
@@ -979,22 +979,22 @@ class TestCertificateAndSuggestionEndpoints(unittest.TestCase):
         suggestions = self.db.query(SkillRankSuggestion).filter(
             SkillRankSuggestion.source_certificate_record_id != None
         ).all()
-        self.assertEqual(len(suggestions), 7)
+        self.assertEqual(len(suggestions), 5)
 
-        # Verify mapping:
+        # Verify mapping (5 matrix skills only; Grammar + Collocation excluded):
         # Listening (6.5) -> A
         # Reading (6.0) -> B
         # Writing (5.5) -> C
         # Speaking (6.0) -> B
-        # Vocabulary, Grammar, Collocation (overall 6.0) -> B
+        # Vocabulary (overall 6.0) -> B
         mapped_ranks = {s.skill.name: s.suggested_rank for s in suggestions}
         self.assertEqual(mapped_ranks["Listening"], "A")
         self.assertEqual(mapped_ranks["Reading"], "B")
         self.assertEqual(mapped_ranks["Writing"], "C")
         self.assertEqual(mapped_ranks["Speaking"], "B")
         self.assertEqual(mapped_ranks["Vocabulary"], "B")
-        self.assertEqual(mapped_ranks["Grammar"], "B")
-        self.assertEqual(mapped_ranks["Collocation"], "B")
+        self.assertNotIn("Grammar", mapped_ranks)
+        self.assertNotIn("Collocation", mapped_ranks)
 
         # Get list of certificates
         get_response = self.client.get("/api/certificates", headers=self.headers)
@@ -1090,6 +1090,40 @@ class TestCertificateAndSuggestionEndpoints(unittest.TestCase):
         self.assertEqual(suggestion_after.status, "dismissed")
 
 
+    def test_patch_player_targets(self):
+        # Activate campaign first
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+
+        # PATCH all 5 target bands
+        payload = {
+            "target_overall_band": "7.0",
+            "target_listening_band": "7.5",
+            "target_reading_band": "6.5",
+            "target_writing_band": "6.0",
+            "target_speaking_band": "7.0",
+        }
+        response = self.client.patch("/api/player/targets", json=payload, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        profile = response.json()
+        self.assertEqual(profile["target_overall_band"], "7.0")
+        self.assertEqual(profile["target_listening_band"], "7.5")
+        self.assertEqual(profile["target_reading_band"], "6.5")
+        self.assertEqual(profile["target_writing_band"], "6.0")
+        self.assertEqual(profile["target_speaking_band"], "7.0")
+
+        # PATCH only one field — others must remain unchanged
+        response2 = self.client.patch("/api/player/targets", json={"target_overall_band": "8.0"}, headers=self.headers)
+        self.assertEqual(response2.status_code, 200)
+        profile2 = response2.json()
+        self.assertEqual(profile2["target_overall_band"], "8.0")
+        self.assertEqual(profile2["target_listening_band"], "7.5")
+
+        # PATCH must never create suggestions
+        from app.models import SkillRankSuggestion
+        suggestions = self.db.query(SkillRankSuggestion).all()
+        self.assertEqual(len(suggestions), 0)
+
+
 class TestDailyQuestQuotaGenerator(unittest.TestCase):
     def setUp(self):
         from sqlalchemy.pool import StaticPool
@@ -1154,20 +1188,20 @@ class TestDailyQuestQuotaGenerator(unittest.TestCase):
             Quest.session_type == "Daily Quest"
         ).all()
 
-        # Vocabulary (3) + Reading (1) + Listening (1) + Grammar (1) + Collocation (1) = 7 quests
-        self.assertEqual(len(daily_quests), 7)
+        # Vocabulary (2) + Reading (1) + Listening (1) + Grammar (2) + Collocation (1) + Writing (1) + Speaking (1) = 9 quests
+        self.assertEqual(len(daily_quests), 9)
 
         # Verify skill distribution
         skill_counts = {}
         for q in daily_quests:
             skill_counts[q.skill.name] = skill_counts.get(q.skill.name, 0) + 1
-        self.assertEqual(skill_counts.get("Vocabulary", 0), 3)
-        self.assertEqual(skill_counts.get("Reading", 0), 1)
-        self.assertEqual(skill_counts.get("Listening", 0), 1)
-        self.assertEqual(skill_counts.get("Grammar", 0), 1)
-        self.assertEqual(skill_counts.get("Collocation", 0), 1)
-        self.assertEqual(skill_counts.get("Writing", 0), 0)
-        self.assertEqual(skill_counts.get("Speaking", 0), 0)
+        self.assertEqual(skill_counts.get("Vocabulary", 0), 2)  # Flashcard Gate, Codex Entry
+        self.assertEqual(skill_counts.get("Reading", 0), 1)     # Reading Daily
+        self.assertEqual(skill_counts.get("Listening", 0), 1)    # Listening Daily
+        self.assertEqual(skill_counts.get("Grammar", 0), 2)      # Grammar Review, Grammar Exercise
+        self.assertEqual(skill_counts.get("Collocation", 0), 1)  # Collocation Forge
+        self.assertEqual(skill_counts.get("Writing", 0), 1)      # Writing Daily
+        self.assertEqual(skill_counts.get("Speaking", 0), 1)      # Speaking Daily
 
     def test_custom_quotas_generation(self):
         # 1. Activate campaign
@@ -1183,7 +1217,7 @@ class TestDailyQuestQuotaGenerator(unittest.TestCase):
         self.db.commit()
 
         # 3. Modify quotas
-        # Set Vocabulary to 4 (should generate vocab_flashcard, vocab_codex, vocab_collocation, vocab_error)
+        # Set Vocabulary to 4 (should generate vocab_flashcard, vocab_codex, vocab_collocation)
         vocab_skill = self.db.query(Skill).filter_by(name="Vocabulary").first()
         vocab_quota = self.db.query(CampaignSkillQuestQuota).filter_by(campaign_id=campaign.id, skill_id=vocab_skill.id).first()
         vocab_quota.daily_quota = 4
@@ -1223,13 +1257,14 @@ class TestDailyQuestQuotaGenerator(unittest.TestCase):
         for q in daily_quests:
             skill_counts[q.skill.name] = skill_counts.get(q.skill.name, 0) + 1
 
-        self.assertEqual(skill_counts.get("Vocabulary", 0), 4)
+        self.assertEqual(skill_counts.get("Vocabulary", 0), 2)  # Flashcard Gate, Codex Entry
+        self.assertEqual(skill_counts.get("Collocation", 0), 1) # Collocation Forge
         self.assertEqual(skill_counts.get("Writing", 0), 1)
         self.assertEqual(skill_counts.get("Listening", 0), 0)
 
-        # Verify vocab slot codes (should include vocab_error)
-        vocab_slots = {q.daily_slot_code for q in daily_quests if q.skill.name == "Vocabulary"}
-        self.assertEqual(vocab_slots, {"vocab_flashcard", "vocab_codex", "vocab_collocation", "vocab_error"})
+        # Verify vocab slot codes (should not include vocab_error)
+        vocab_slots = {q.daily_slot_code for q in daily_quests if q.daily_slot_code in {"vocab_flashcard", "vocab_codex", "vocab_collocation"}}
+        self.assertEqual(vocab_slots, {"vocab_flashcard", "vocab_codex", "vocab_collocation"})
 
     def test_preference_ordering_rotation(self):
         # 1. Activate campaign
@@ -1277,6 +1312,67 @@ class TestDailyQuestQuotaGenerator(unittest.TestCase):
         # Memory Gate (vocab_flashcard) should be second because "flashcard_review" was second
         slot_codes = [q.daily_slot_code for q in vocab_quests]
         self.assertEqual(slot_codes, ["vocab_codex", "vocab_flashcard"])
+
+    def test_nine_daily_slots_generation_and_routing(self):
+        # 1. Activate campaign
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+
+        from app.models import Quest, Campaign, CampaignSkillState, Skill
+        campaign = self.db.query(Campaign).first()
+
+        # 2. Retrieve generated quests
+        quests = self.db.query(Quest).filter_by(
+            campaign_id=campaign.id,
+            quest_date=campaign.start_date,
+            session_type="Daily Quest"
+        ).all()
+
+        # 3. Assert exactly 9 quests
+        self.assertEqual(len(quests), 9)
+
+        # 4. Check base_xp for each slot code
+        slot_xps = {q.daily_slot_code: q.base_xp for q in quests}
+        self.assertEqual(slot_xps.get("vocab_flashcard"), 4)
+        self.assertEqual(slot_xps.get("vocab_codex"), 5)
+        self.assertEqual(slot_xps.get("vocab_collocation"), 5)
+        self.assertEqual(slot_xps.get("listening"), 10)
+        self.assertEqual(slot_xps.get("reading"), 10)
+        self.assertEqual(slot_xps.get("writing"), 12)
+        self.assertEqual(slot_xps.get("speaking"), 12)
+        self.assertEqual(slot_xps.get("grammar_review"), 5)
+        self.assertEqual(slot_xps.get("grammar_exercise"), 7)
+
+        # 5. Complete and claim a Grammar Review quest
+        grammar_review_quest = next(q for q in quests if q.daily_slot_code == "grammar_review")
+        grammar_review_quest.completed = True
+        grammar_review_quest.status = "completed"
+        grammar_review_quest.earned_xp = grammar_review_quest.base_xp
+        self.db.commit()
+
+        resp = self.client.post(f"/api/quests/{grammar_review_quest.id}/claim", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+        # 6. Complete and claim a Collocation Forge quest
+        collocation_quest = next(q for q in quests if q.daily_slot_code == "vocab_collocation")
+        collocation_quest.completed = True
+        collocation_quest.status = "completed"
+        collocation_quest.earned_xp = collocation_quest.base_xp
+        self.db.commit()
+
+        resp = self.client.post(f"/api/quests/{collocation_quest.id}/claim", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+        # 7. Verify routing to parent matrix skills (Grammar -> Writing, Collocation -> Vocabulary)
+        self.db.expire_all()
+        writing_skill = self.db.query(Skill).filter_by(name="Writing").first()
+        writing_state = self.db.query(CampaignSkillState).filter_by(campaign_id=campaign.id, skill_id=writing_skill.id).first()
+        # Writing Daily was not completed, so Writing XP should come entirely from Grammar Review (+5 XP)
+        self.assertEqual(writing_state.xp, 5)
+
+        vocab_skill = self.db.query(Skill).filter_by(name="Vocabulary").first()
+        vocab_state = self.db.query(CampaignSkillState).filter_by(campaign_id=campaign.id, skill_id=vocab_skill.id).first()
+        # Collocation Forge is completed (+5 XP) and vocab_xp (based on empty vocabulary list) is 0
+        self.assertEqual(vocab_state.xp, 5)
 
 
 class TestRankExamPhase9(unittest.TestCase):
@@ -1753,6 +1849,10 @@ class TestCollocationMasterData(unittest.TestCase):
         Base.metadata.drop_all(bind=self.engine)
 
     def test_collocation_flow(self):
+        # Clear existing links to keep test isolated
+        self.db.query(CampaignCollocationLink).delete()
+        self.db.commit()
+
         # 1. Create a collection
         collection_payload = {
             "code": "eciu-inter",
@@ -1844,6 +1944,976 @@ class TestCollocationMasterData(unittest.TestCase):
         col_qs = [q for q in boss_4_exam["questions"] if q["question_type"] == "collocation"]
         self.assertTrue(len(col_qs) > 0)
         self.assertEqual(col_qs[0]["correct_answer"], "heavy")
+
+    def test_main_quest_xp_and_routing(self):
+        from app.seed import infer_main_quest_xp
+        from app.models import Quest, Skill, CampaignSkillState
+        from datetime import date
+        
+        # 1. Test infer_main_quest_xp values
+        self.assertEqual(infer_main_quest_xp(3, "Writing + Grammar"), 45)
+        self.assertEqual(infer_main_quest_xp(1, "Listening + Speaking"), 35)
+        self.assertEqual(infer_main_quest_xp(2, "Reading + Vocabulary"), 35)
+        self.assertEqual(infer_main_quest_xp(4, "Review + Mini test", "Review errors"), 25)
+        self.assertEqual(infer_main_quest_xp(4, "Review + Mini test", "Focus: Mini mock test"), 60)
+        self.assertEqual(infer_main_quest_xp(4, "Review + Mini test", "Speaking mock exam"), 60)
+        self.assertEqual(infer_main_quest_xp(4, "Review + Mini test", "Sectional test"), 60)
+
+        # Ensure skill states are initialized
+        from app.services import ensure_campaign_skill_states, get_campaign_skill_state_map
+        ensure_campaign_skill_states(self.db, self.campaign)
+
+        # Get skill entities
+        skills = self.db.query(Skill).all()
+        skill_by_name = {s.name: s for s in skills}
+        
+        # 2. Test S2 Main Quest claim (routes to Reading + Vocabulary)
+        s2_quest = Quest(
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Main Quest W01 - S2",
+            skill_id=skill_by_name["Reading"].id,
+            source="Test S2",
+            details="Test S2 Main Quest",
+            xp=35,
+            base_xp=35,
+            earned_xp=35,
+            completed=True,
+            reward_claimed=False,
+            session_type="Main Quest",
+            campaign_id=self.campaign.id,
+            status="completed",
+            quest_role="main",
+        )
+        self.db.add(s2_quest)
+        self.db.commit()
+
+        # Claim the S2 quest
+        resp = self.client.post(f"/api/quests/{s2_quest.id}/claim", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+        # Verify skill XP balances
+        state_map = {state.skill.name: state for state in ensure_campaign_skill_states(self.db, self.campaign)}
+        self.assertEqual(state_map["Reading"].xp, 35)
+        self.assertEqual(state_map["Vocabulary"].xp, 35)
+        # S2 shouldn't credit Listening, Speaking, or Writing
+        self.assertEqual(state_map["Listening"].xp, 0)
+        self.assertEqual(state_map["Speaking"].xp, 0)
+        self.assertEqual(state_map["Writing"].xp, 0)
+
+        # 3. Test S1 Main Quest claim (routes to Listening + Speaking)
+        s1_quest = Quest(
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Main Quest W01 - Session 1",
+            skill_id=skill_by_name["Listening"].id,
+            source="Test S1",
+            details="Test S1 Main Quest",
+            xp=35,
+            base_xp=35,
+            earned_xp=35,
+            completed=True,
+            reward_claimed=False,
+            session_type="Main Quest",
+            campaign_id=self.campaign.id,
+            status="completed",
+            quest_role="main",
+        )
+        self.db.add(s1_quest)
+        self.db.commit()
+
+        # Claim the S1 quest
+        resp2 = self.client.post(f"/api/quests/{s1_quest.id}/claim", headers=self.headers)
+        self.assertEqual(resp2.status_code, 200)
+
+        # Verify skill XP balances updated
+        self.db.expire_all()
+        state_map = {state.skill.name: state for state in ensure_campaign_skill_states(self.db, self.campaign)}
+        self.assertEqual(state_map["Listening"].xp, 35)
+        self.assertEqual(state_map["Speaking"].xp, 35)
+
+    def test_non_boss_gated_skills(self):
+        from app.models import Quest, Skill, CampaignSkillState
+        from app.services import ensure_campaign_skill_states, get_campaign_skill_state_map
+        from datetime import date
+
+        # Ensure skill states are initialized
+        ensure_campaign_skill_states(self.db, self.campaign)
+
+        # Get skill entities
+        skills = self.db.query(Skill).all()
+        skill_by_name = {s.name: s for s in skills}
+
+        # 1. Assert seeding was correct
+        self.assertFalse(skill_by_name["Writing"].boss_gated)
+        self.assertFalse(skill_by_name["Speaking"].boss_gated)
+        self.assertTrue(skill_by_name["Listening"].boss_gated)
+        self.assertTrue(skill_by_name["Reading"].boss_gated)
+        self.assertTrue(skill_by_name["Vocabulary"].boss_gated)
+
+        # 2. Complete and claim a Writing quest of 1000 XP
+        writing_quest = Quest(
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Writing Quest",
+            skill_id=skill_by_name["Writing"].id,
+            source="Test",
+            details="Test writing quest",
+            xp=1000,
+            base_xp=1000,
+            earned_xp=1000,
+            completed=True,
+            reward_claimed=False,
+            session_type="Daily Quest",
+            campaign_id=self.campaign.id,
+            status="completed",
+            quest_role="core",
+        )
+        self.db.add(writing_quest)
+        self.db.commit()
+
+        # Claim the quest
+        resp = self.client.post(f"/api/quests/{writing_quest.id}/claim", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+        # 3. Verify rank promotion
+        self.db.expire_all()
+        state_map = {state.skill.name: state for state in ensure_campaign_skill_states(self.db, self.campaign)}
+        writing_state = state_map["Writing"]
+        self.assertEqual(writing_state.xp, 1000)
+        self.assertEqual(writing_state.rank, "E")
+        # Direct confirmed_rank auto-promotion (since Writing is non-boss-gated)
+        self.assertEqual(writing_state.confirmed_rank, "E")
+        self.assertEqual(writing_state.promotion_status, "none")
+        self.assertIsNone(writing_state.pending_rank)
+
+        # 4. Attempt to unlock rank exam for Writing (should be blocked with 400)
+        unlock_resp = self.client.post(
+            "/api/rank-exams/unlock",
+            json={"skill_id": skill_by_name["Writing"].id},
+            headers=self.headers
+        )
+        self.assertEqual(unlock_resp.status_code, 400)
+        self.assertIn("does not require a boss exam", unlock_resp.json()["detail"])
+
+    def test_collocation_parser_and_seed(self):
+        from app.seed import collocations_file_path, parse_collocations_file, ensure_collocations
+        from app.models import CollocationCollection, CollocationSection, CollocationTopic, CollocationItem, CampaignCollocationLink, PlayerCollocationProgress
+        from app.services import compute_vocabulary_xp, ensure_campaign_skill_states, update_player_collocation_progress
+        
+        # 1. Test parser on the real file
+        try:
+            filepath = collocations_file_path()
+        except FileNotFoundError:
+            self.skipTest("Collocation campaign file not found in test environment.")
+            
+        data = parse_collocations_file(filepath)
+        self.assertEqual(data["code"], "intermediate-collocations")
+        self.assertEqual(data["title"], "English Collocations in Use Intermediate")
+        
+        # Verify section count is around 60 (or exact)
+        self.assertGreaterEqual(len(data["sections"]), 60)
+        
+        # Count all parsed items
+        total_items = 0
+        found_ancient_monument = False
+        for sec in data["sections"]:
+            for top in sec["topics"]:
+                for item in top["items"]:
+                    total_items += 1
+                    if item["collocation"] == "ancient monument":
+                        found_ancient_monument = True
+                        self.assertEqual(item["pronunciation_us"], "/ˈeɪn.ʃənt/ /ˈmɑːn.jə.mənt/")
+                        self.assertEqual(item["meaning_vi"], "di tích cổ")
+                        self.assertEqual(item["example_en"], "We visited an ancient monument in the city center.")
+                        self.assertEqual(item["example_vi"], "Chúng tôi đến thăm một di tích cổ ở trung tâm thành phố.")
+                        
+        self.assertGreaterEqual(total_items, 1400)
+        self.assertTrue(found_ancient_monument)
+        
+        # 2. Test seeding is idempotent
+        # Clear existing collocation models first (in SQLite memory DB)
+        self.db.query(PlayerCollocationProgress).delete()
+        self.db.query(CampaignCollocationLink).delete()
+        self.db.query(CollocationItem).delete()
+        self.db.query(CollocationTopic).delete()
+        self.db.query(CollocationSection).delete()
+        self.db.query(CollocationCollection).delete()
+        self.db.commit()
+        
+        # Run seeding first time
+        ensure_collocations(self.db, self.campaign)
+        self.db.commit()
+        
+        # Assert collection, campaign link, and items were created
+        col_count_first = self.db.query(CollocationItem).count()
+        self.assertGreaterEqual(col_count_first, 1400)
+        
+        link_exists = self.db.query(CampaignCollocationLink).filter_by(
+            campaign_id=self.campaign.id
+        ).first()
+        self.assertIsNotNone(link_exists)
+        
+        # Run seeding second time
+        ensure_collocations(self.db, self.campaign)
+        self.db.commit()
+        
+        # Assert count is exactly the same (idempotent)
+        col_count_second = self.db.query(CollocationItem).count()
+        self.assertEqual(col_count_first, col_count_second)
+
+        # 3. Verify that collocation progress increases Vocabulary XP
+        item = self.db.query(CollocationItem).first()
+        self.assertIsNotNone(item)
+        
+        # Get baseline Vocabulary XP (should be 0 or small depending on seeded test profile)
+        baseline_xp = compute_vocabulary_xp(self.db, self.player.id)
+        
+        # Advance collocation progress to "learning"
+        update_player_collocation_progress(
+            self.db,
+            player_id=self.player.id,
+            campaign_id=self.campaign.id,
+            collocation_item_id=item.id,
+            status="learning"
+        )
+        self.db.commit()
+        
+        new_xp = compute_vocabulary_xp(self.db, self.player.id)
+        self.assertEqual(new_xp, baseline_xp + 5)
+
+    def test_gap1_support_breakdown_excludes_main_quest_xp(self):
+        """GAP-1: support_breakdown query must filter session_type != 'Main Quest'.
+        Grammar Main Quest XP must NOT appear in Writing support_breakdown.
+        Only Grammar Daily Quest XP should be counted."""
+        from app.main import get_campaign_skill_outputs
+        from app.models import Quest, Skill
+
+        grammar_skill = self.db.query(Skill).filter(Skill.name == "Grammar").first()
+        self.assertIsNotNone(grammar_skill, "Grammar skill must exist")
+
+        # Insert a Grammar Main Quest (completed + claimed) — should be EXCLUDED
+        main_quest = Quest(
+            campaign_id=self.campaign.id,
+            skill_id=grammar_skill.id,
+            session_type="Main Quest",
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Grammar Main Quest",
+            source="test",
+            details="",
+            daily_slot_code="grammar_main_1",
+            status="completed",
+            completed=True,
+            reward_claimed=True,
+            earned_xp=100,
+        )
+        self.db.add(main_quest)
+
+        # Insert a Grammar Daily Quest (completed + claimed) — should be INCLUDED
+        daily_quest = Quest(
+            campaign_id=self.campaign.id,
+            skill_id=grammar_skill.id,
+            session_type="Daily Quest",
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Grammar Daily Quest",
+            source="test",
+            details="",
+            daily_slot_code="grammar_daily_1",
+            status="completed",
+            completed=True,
+            reward_claimed=True,
+            earned_xp=30,
+        )
+        self.db.add(daily_quest)
+        self.db.commit()
+
+        skill_outputs = get_campaign_skill_outputs(self.db, self.campaign)
+
+        # Find Writing skill output (Grammar routes into Writing)
+        writing_out = next((s for s in skill_outputs if s.name == "Writing"), None)
+        self.assertIsNotNone(writing_out, "Writing must appear in skill outputs")
+
+        grammar_breakdown = next(
+            (item for item in (writing_out.support_breakdown or []) if item.source == "Grammar"),
+            None,
+        )
+        self.assertIsNotNone(grammar_breakdown, "Grammar must appear in Writing support_breakdown")
+
+        # Must be 30 (Daily only), NOT 130 (Daily + Main)
+        self.assertEqual(
+            grammar_breakdown.xp,
+            30,
+            f"support_breakdown should count only Daily Quest XP (30), got {grammar_breakdown.xp}",
+        )
+
+    def test_gap2_collocation_seed_allows_duplicate_strings_different_order(self):
+        """GAP-2: ensure_collocations dedup key must be (item_order, collocation),
+        not just collocation string. Two items with same text at different positions
+        in the same topic must both be seeded."""
+        from app.seed import ensure_collocations
+        from app.models import (
+            CollocationCollection, CollocationSection,
+            CollocationTopic, CollocationItem, CampaignCollocationLink,
+        )
+        from unittest.mock import patch
+
+        # Build a minimal parsed-data fixture with 2 items that share the same
+        # collocation string but have different item_order values.
+        fixture = {
+            "code": "test-dup-col",
+            "title": "Test Dup Collection",
+            "description": "Test only",
+            "source_book": "Test Book",
+            "level": "Intermediate",
+            "sections": [
+                {
+                    "title": "Section A",
+                    "section_order": 1,
+                    "topics": [
+                        {
+                            "title": "Topic X",
+                            "topic_order": 1,
+                            "items": [
+                                {
+                                    "item_order": 1,
+                                    "collocation": "make progress",
+                                    "pronunciation_us": "/meɪk/",
+                                    "meaning_vi": "tiến bộ",
+                                    "example_en": "We make progress daily.",
+                                    "example_vi": "Chúng tôi tiến bộ hàng ngày.",
+                                },
+                                {
+                                    "item_order": 2,
+                                    "collocation": "make progress",  # same string, different order
+                                    "pronunciation_us": "/meɪk/",
+                                    "meaning_vi": "đạt tiến bộ",
+                                    "example_en": "Teams make progress together.",
+                                    "example_vi": "Các nhóm cùng tiến bộ.",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        # Clean slate for this collection
+        self.db.query(CampaignCollocationLink).delete()
+        self.db.query(CollocationItem).delete()
+        self.db.query(CollocationTopic).delete()
+        self.db.query(CollocationSection).delete()
+        self.db.query(CollocationCollection).delete()
+        self.db.commit()
+
+        # Patch both collocations_file_path (avoids FileNotFoundError early-return)
+        # and parse_collocations_file (returns our fixture instead of real file).
+        with patch("app.seed.collocations_file_path", return_value="/fake/path"), \
+             patch("app.seed.parse_collocations_file", return_value=fixture):
+            ensure_collocations(self.db, self.campaign)
+            self.db.commit()
+
+        seeded_count = self.db.query(CollocationItem).count()
+        self.assertEqual(
+            seeded_count,
+            2,
+            f"Both duplicate-string items must be seeded; got {seeded_count}",
+        )
+
+        # Idempotency: run again — count must stay at 2
+        with patch("app.seed.collocations_file_path", return_value="/fake/path"), \
+             patch("app.seed.parse_collocations_file", return_value=fixture):
+            ensure_collocations(self.db, self.campaign)
+            self.db.commit()
+
+        seeded_count_second = self.db.query(CollocationItem).count()
+        self.assertEqual(seeded_count_second, 2, "Idempotent run must not duplicate items")
+
+
+class TestPolicyTables(unittest.TestCase):
+    """Task 15: Verify 4 XP policy tables are seeded and quest XP reads from them."""
+
+    def setUp(self):
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        # Seed all 7 skills (matrix + support)
+        for name, icon in [
+            ("Vocabulary", "📔"), ("Listening", "🎧"), ("Reading", "📖"),
+            ("Writing", "✍️"), ("Speaking", "🗣️"),
+            ("Grammar", "📝"), ("Collocation", "🔗"),
+        ]:
+            self.db.add(Skill(name=name, icon=icon))
+        self.db.commit()
+
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+        resp = self.client.post("/api/auth/register", json={
+            "email": "policy@example.com",
+            "password": "password123",
+            "display_name": "Policy User",
+        })
+        self.access_token = resp.json()["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+        self.campaign = self.db.query(Campaign).first()
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_rank_xp_thresholds_seeded(self):
+        from app.models import RankXpThreshold
+        rows = self.db.query(RankXpThreshold).order_by(RankXpThreshold.min_xp).all()
+        rank_map = {r.rank_name: (r.min_xp, r.first_level) for r in rows}
+        # Spec §2.3 values
+        expected = {
+            "F": (0, 1), "E": (862, 11), "D": (2460, 21),
+            "C": (4604, 31), "B": (7212, 41), "A": (10234, 51), "S": (13279, 60),
+        }
+        for rank, (min_xp, first_level) in expected.items():
+            self.assertIn(rank, rank_map, f"Missing RankXpThreshold for {rank}")
+            self.assertEqual(rank_map[rank][0], min_xp, f"{rank} min_xp mismatch")
+            self.assertEqual(rank_map[rank][1], first_level, f"{rank} first_level mismatch")
+
+    def test_quest_xp_policies_seeded(self):
+        from app.models import QuestXpPolicy
+        rows = self.db.query(QuestXpPolicy).all()
+        pol = {r.activity_code: (r.skill_code, r.xp_reward) for r in rows}
+        # Spec §5.1 selected values
+        self.assertEqual(pol.get("listening"), ("Listening", 10))
+        self.assertEqual(pol.get("reading"), ("Reading", 10))
+        self.assertEqual(pol.get("writing"), ("Writing", 12))
+        self.assertEqual(pol.get("speaking"), ("Speaking", 12))
+        self.assertEqual(pol.get("grammar_exercise"), ("Writing", 7))   # Grammar → Writing
+        self.assertEqual(pol.get("grammar_review"), ("Writing", 5))
+        self.assertEqual(pol.get("vocab_flashcard"), ("Vocabulary", 4))
+        self.assertEqual(pol.get("vocab_codex"), ("Vocabulary", 5))
+        self.assertEqual(pol.get("vocab_collocation"), ("Vocabulary", 5))
+
+    def test_weekly_mission_xp_policies_seeded(self):
+        from app.models import WeeklyMissionXpPolicy
+        rows = self.db.query(WeeklyMissionXpPolicy).all()
+        pol = {r.mission_type: (r.reward_target_skill, r.xp_reward) for r in rows}
+        # Spec §7
+        self.assertEqual(pol.get("vocab_weekly"),    ("Vocabulary", 55))
+        self.assertEqual(pol.get("listening_weekly"), ("Listening", 40))
+        self.assertEqual(pol.get("reading_weekly"),  ("Reading", 40))
+        self.assertEqual(pol.get("writing_weekly"),  ("Writing", 45))
+        self.assertEqual(pol.get("speaking_weekly"), ("Speaking", 45))
+        self.assertEqual(pol.get("grammar_weekly"),  ("Writing", 45))   # Grammar → Writing
+
+    def test_main_quest_xp_policies_seeded(self):
+        from app.models import MainQuestXpPolicy
+        rows = self.db.query(MainQuestXpPolicy).all()
+        pol = {r.tier_code: r.xp_reward for r in rows}
+        # Spec §6
+        self.assertEqual(pol.get("light_intro"), 25)
+        self.assertEqual(pol.get("standard"), 35)
+        self.assertEqual(pol.get("heavy_output"), 45)
+        self.assertEqual(pol.get("review_error_logging"), 25)
+        self.assertEqual(pol.get("mock"), 60)
+
+    def test_policy_idempotent(self):
+        """Running ensure_policy_tables twice must not create duplicates."""
+        from app.models import RankXpThreshold, QuestXpPolicy, WeeklyMissionXpPolicy, MainQuestXpPolicy
+        from app.seed import ensure_policy_tables
+
+        count_before = (
+            self.db.query(RankXpThreshold).count()
+            + self.db.query(QuestXpPolicy).count()
+            + self.db.query(WeeklyMissionXpPolicy).count()
+            + self.db.query(MainQuestXpPolicy).count()
+        )
+        ensure_policy_tables(self.db)
+        self.db.commit()
+        count_after = (
+            self.db.query(RankXpThreshold).count()
+            + self.db.query(QuestXpPolicy).count()
+            + self.db.query(WeeklyMissionXpPolicy).count()
+            + self.db.query(MainQuestXpPolicy).count()
+        )
+        self.assertEqual(count_before, count_after, "Second ensure_policy_tables must not insert duplicates")
+
+    def test_daily_quest_xp_from_policy(self):
+        """Daily quests seeded via ensure_templates + ensure_quest_instances must carry
+        XP values sourced from QuestXpPolicy, not hard-coded defaults."""
+        from app.models import Quest, QuestXpPolicy
+
+        # Map activity_code → expected xp from policy
+        pol_rows = self.db.query(QuestXpPolicy).all()
+        xp_by_code = {r.activity_code: r.xp_reward for r in pol_rows}
+
+        # Slot-code ↔ activity_code are the same in this codebase
+        slot_to_xp = {code: xp for code, xp in xp_by_code.items()}
+
+        quests = self.db.query(Quest).filter(
+            Quest.campaign_id == self.campaign.id,
+            Quest.session_type == "Daily Quest",
+        ).limit(200).all()
+
+        self.assertGreater(len(quests), 0, "No daily quests seeded")
+
+        mismatches = []
+        for q in quests:
+            if q.daily_slot_code and q.daily_slot_code in slot_to_xp:
+                expected = slot_to_xp[q.daily_slot_code]
+                if q.base_xp != expected:
+                    mismatches.append(f"{q.daily_slot_code}: base_xp={q.base_xp} expected={expected}")
+
+        self.assertEqual(
+            mismatches, [],
+            "Quest base_xp mismatch with QuestXpPolicy:\n" + "\n".join(mismatches),
+        )
+
+
+class TestGap151MainQuestReadsPolicy(unittest.TestCase):
+    """GAP-15-1: infer_main_quest_xp must read MainQuestXpPolicy when db= is passed.
+    Proves policy is source of truth (mutating policy row changes quest XP)."""
+
+    def setUp(self):
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        # Seed all 7 skills
+        for name, icon in [
+            ("Vocabulary", "📔"), ("Listening", "🎧"), ("Reading", "📖"),
+            ("Writing", "✍️"), ("Speaking", "🗣️"),
+            ("Grammar", "📝"), ("Collocation", "🔗"),
+        ]:
+            self.db.add(Skill(name=name, icon=icon))
+        self.db.commit()
+
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+        resp = self.client.post("/api/auth/register", json={
+            "email": "gap151@example.com",
+            "password": "password123",
+            "display_name": "Gap151 User",
+        })
+        self.access_token = resp.json()["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_main_quest_xp_reads_policy_not_hardcode(self):
+        """infer_main_quest_xp with db= must read MainQuestXpPolicy, not hard-code.
+        Mutate 'standard' 35→40, call with db=, assert result=40."""
+        from app.models import MainQuestXpPolicy
+        from app.seed import infer_main_quest_xp
+
+        # Mutate the 'standard' policy row to 40
+        policy = self.db.query(MainQuestXpPolicy).filter_by(tier_code="standard").first()
+        self.assertIsNotNone(policy, "MainQuestXpPolicy 'standard' not seeded")
+        policy.xp_reward = 40
+        self.db.commit()
+
+        # infer_main_quest_xp with db= should read the policy table (standard = session_no=1 or 2)
+        xp_with_db = infer_main_quest_xp(1, "Reading and Vocabulary focus", db=self.db)
+        self.assertEqual(
+            xp_with_db, 40,
+            f"infer_main_quest_xp returned {xp_with_db} (expected 40 from policy). "
+            "Policy not being read — hard-code fallback used instead.",
+        )
+
+        # Without db= must still return hard-coded 35 (fallback path unchanged)
+        xp_no_db = infer_main_quest_xp(1, "Reading and Vocabulary focus")
+        self.assertEqual(xp_no_db, 35, "Hard-code fallback should return 35 when db=None")
+
+
+class TestGap153WeeklyPolicyAllRowsReachable(unittest.TestCase):
+    """GAP-15-3: All seeded WeeklyMissionXpPolicy rows must be reachable via
+    map_weekly_pattern_to_mission_type from at least one seeded weekly pattern."""
+
+    def setUp(self):
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        for name, icon in [
+            ("Vocabulary", "📔"), ("Listening", "🎧"), ("Reading", "📖"),
+            ("Writing", "✍️"), ("Speaking", "🗣️"),
+            ("Grammar", "📝"), ("Collocation", "🔗"),
+        ]:
+            self.db.add(Skill(name=name, icon=icon))
+        self.db.commit()
+
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+        resp = self.client.post("/api/auth/register", json={
+            "email": "gap153@example.com",
+            "password": "password123",
+            "display_name": "Gap153 User",
+        })
+        self.access_token = resp.json()["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_all_weekly_policy_mission_types_reachable(self):
+        """Every WeeklyMissionXpPolicy.mission_type for the 6 regular weekly types
+        (non-onboarding) is mapped by at least one pattern_code in weekly_mission_patterns
+        via map_weekly_pattern_to_mission_type.
+        Note: 'onboarding' is a special-case row used by ensure_weekly_mission_instances
+        directly (not through weekly_mission_patterns), so it is excluded here."""
+        from app.models import WeeklyMissionXpPolicy, WeeklyMission
+        from app.seed import map_weekly_pattern_to_mission_type, weekly_mission_patterns
+
+        # Collect all seeded policy mission types — exclude 'onboarding' (special-case)
+        SPECIAL_CASE_TYPES = {"onboarding"}
+        policy_types = {
+            r.mission_type
+            for r in self.db.query(WeeklyMissionXpPolicy).all()
+            if r.mission_type not in SPECIAL_CASE_TYPES
+        }
+        self.assertGreater(len(policy_types), 0, "No WeeklyMissionXpPolicy rows seeded")
+
+        # Collect all mapped mission types from all patterns across all phase indices
+        mapped_types = set()
+        for phase_idx in range(1, 7):  # phases 1-6
+            for pattern in weekly_mission_patterns(phase_idx):
+                mapped_type = map_weekly_pattern_to_mission_type(pattern["pattern_code"])
+                mapped_types.add(mapped_type)
+
+        dead_rows = policy_types - mapped_types
+        self.assertEqual(
+            dead_rows, set(),
+            f"WeeklyMissionXpPolicy rows with no reader in any pattern: {dead_rows}. "
+            "Add pattern_code entries or remove the dead policy rows.",
+        )
+
+    def test_speaking_weekly_missions_seeded(self):
+        """After activate-campaign, speaking-focus weekly missions must exist.
+        WeeklyMission stores pattern_code (e.g. '1-speaking-focus'), not mission_type."""
+        from app.models import WeeklyMission
+        from sqlalchemy import func
+        # pattern_code contains 'speaking' for speaking-focus missions
+        speaking_missions = self.db.query(WeeklyMission).filter(
+            func.lower(WeeklyMission.pattern_code).contains("speaking")
+        ).all()
+        self.assertGreater(
+            len(speaking_missions), 0,
+            "No speaking-focus weekly missions seeded (pattern_code contains 'speaking'). "
+            "Check weekly_mission_patterns adds speaking-focus patterns.",
+        )
+
+    def test_grammar_weekly_missions_seeded(self):
+        """After activate-campaign, grammar-focus weekly missions must exist.
+        WeeklyMission stores pattern_code (e.g. '1-grammar-focus'), not mission_type."""
+        from app.models import WeeklyMission
+        from sqlalchemy import func
+        # pattern_code contains 'grammar' for grammar-focus missions
+        grammar_missions = self.db.query(WeeklyMission).filter(
+            func.lower(WeeklyMission.pattern_code).contains("grammar")
+        ).all()
+        self.assertGreater(
+            len(grammar_missions), 0,
+            "No grammar-focus weekly missions seeded (pattern_code contains 'grammar'). "
+            "Check weekly_mission_patterns adds grammar-focus patterns.",
+        )
+
+
+class TestCollocationFlashcards(unittest.TestCase):
+    def setUp(self):
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        # Seed skills
+        self.skills = [
+            Skill(name="Vocabulary", icon="📔"),
+            Skill(name="Listening", icon="🎧"),
+            Skill(name="Reading", icon="📖"),
+            Skill(name="Writing", icon="✍️"),
+            Skill(name="Speaking", icon="🗣️"),
+            Skill(name="Grammar", icon="📝"),
+            Skill(name="Collocation", icon="🔗"),
+        ]
+        self.db.add_all(self.skills)
+        self.db.commit()
+
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+        # Register user and activate campaign
+        payload = {
+            "email": "colloc_fc@example.com",
+            "password": "password123",
+            "display_name": "Colloc FC User"
+        }
+        resp = self.client.post("/api/auth/register", json=payload)
+        self.access_token = resp.json()["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+
+        # Activate campaign
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+        
+        # Get player and campaign
+        self.player = self.db.query(Player).first()
+        self.campaign = self.db.query(Campaign).first()
+
+        # Create collocation setup
+        collection = CollocationCollection(
+            code="test-coll",
+            title="Test Collection",
+            description="",
+            source_book="",
+            level="Intermediate",
+            is_active=True
+        )
+        self.db.add(collection)
+        self.db.commit()
+
+        self.section = CollocationSection(collection_id=collection.id, title="Section 1", section_order=1)
+        self.db.add(self.section)
+        self.db.commit()
+
+        self.topic = CollocationTopic(section_id=self.section.id, title="Topic 1", topic_number=1, topic_order=1)
+        self.db.add(self.topic)
+        self.db.commit()
+
+        self.item = CollocationItem(
+            topic_id=self.topic.id,
+            collocation="heavy rain",
+            pronunciation_us="/ˈhɛvi reɪn/",
+            meaning_vi="mưa nặng hạt",
+            example_en="We got caught in heavy rain.",
+            example_vi="Chúng tôi bị kẹt trong cơn mưa lớn.",
+            collocation_type="adj + noun",
+            item_order=1
+        )
+        self.db.add(self.item)
+        self.db.commit()
+
+        # Link collection to campaign
+        self.client.post(f"/api/campaigns/current/collocation-collections/{collection.id}/link?display_order=1", headers=self.headers)
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_effective_familiarity_decay(self):
+        from app.services import effective_familiarity
+        now = datetime.utcnow()
+        # good -> good at 0d
+        self.assertEqual(effective_familiarity("good", now, now), "good")
+        # good -> hard at 8d
+        self.assertEqual(effective_familiarity("good", now - timedelta(days=8), now), "hard")
+        # good -> again at 15d
+        self.assertEqual(effective_familiarity("good", now - timedelta(days=15), now), "again")
+        # hard -> again at 8d
+        self.assertEqual(effective_familiarity("hard", now - timedelta(days=8), now), "again")
+        # again stays again
+        self.assertEqual(effective_familiarity("again", now - timedelta(days=8), now), "again")
+        # easy stays easy (graduated, never decays)
+        self.assertEqual(effective_familiarity("easy", now - timedelta(days=100), now), "easy")
+
+    def test_add_flashcard_idempotent(self):
+        resp = self.client.post(f"/api/collocations/{self.item.id}/flashcard", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["detail"], "flashcard added")
+
+        # Second POST
+        resp2 = self.client.post(f"/api/collocations/{self.item.id}/flashcard", headers=self.headers)
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(resp2.json()["detail"], "flashcard exists")
+
+    def test_add_graduated_resets_to_again(self):
+        self.client.post(f"/api/collocations/{self.item.id}/flashcard", headers=self.headers)
+        # Review to easy
+        review_resp = self.client.post(
+            f"/api/collocations/{self.item.id}/flashcard/review",
+            json={"result": "easy"},
+            headers=self.headers
+        )
+        self.assertEqual(review_resp.status_code, 200)
+        
+        # Verify it is easy
+        fc = self.db.query(CollocationFlashcard).filter(CollocationFlashcard.collocation_item_id == self.item.id).first()
+        self.assertEqual(fc.familiarity, "easy")
+
+        # Re-add flashcard
+        readd_resp = self.client.post(f"/api/collocations/{self.item.id}/flashcard", headers=self.headers)
+        self.assertEqual(readd_resp.status_code, 200)
+        self.assertEqual(readd_resp.json()["familiarity"], "again")
+        
+        # Verify in DB it has reset to again
+        self.db.refresh(fc)
+        self.assertEqual(fc.familiarity, "again")
+
+    def test_review_easy_graduates(self):
+        # Add flashcard
+        self.client.post(f"/api/collocations/{self.item.id}/flashcard", headers=self.headers)
+        
+        # Check it is in flashcard topics and items
+        resp_topics = self.client.get("/api/collocations/flashcard/topics", headers=self.headers)
+        self.assertEqual(len(resp_topics.json()), 1)
+        
+        resp_items = self.client.get(f"/api/collocations/flashcard/topics/{self.topic.id}", headers=self.headers)
+        self.assertEqual(len(resp_items.json()), 1)
+
+        # Review easy
+        self.client.post(
+            f"/api/collocations/{self.item.id}/flashcard/review",
+            json={"result": "easy"},
+            headers=self.headers
+        )
+
+        # Check it is excluded from flashcard topics and items
+        resp_topics = self.client.get("/api/collocations/flashcard/topics", headers=self.headers)
+        self.assertEqual(len(resp_topics.json()), 0)
+        
+        resp_items = self.client.get(f"/api/collocations/flashcard/topics/{self.topic.id}", headers=self.headers)
+        self.assertEqual(len(resp_items.json()), 0)
+
+        # Check it is still present (yellow) in browse read
+        resp_browse = self.client.get(f"/api/collocations/topics/{self.topic.id}/items", headers=self.headers)
+        self.assertEqual(len(resp_browse.json()), 1)
+        self.assertEqual(resp_browse.json()[0]["effective_familiarity"], "easy")
+
+    def test_autocomplete_collocation_forge_5_distinct(self):
+        colloc_skill = self.db.query(Skill).filter(Skill.name == "Collocation").first()
+        quest = Quest(
+            campaign_id=self.campaign.id,
+            skill_id=colloc_skill.id,
+            session_type="Daily Quest",
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Collocation Forge",
+            source="test",
+            details="",
+            daily_slot_code="vocab_collocation",
+            status="active",
+            completed=False,
+            reward_claimed=False,
+            base_xp=5,
+        )
+        self.db.add(quest)
+        self.db.commit()
+
+        items = []
+        for i in range(1, 6):
+            item = CollocationItem(
+                topic_id=self.topic.id,
+                collocation=f"heavy rain {i}",
+                collocation_type="adj + noun",
+                item_order=i
+            )
+            self.db.add(item)
+            items.append(item)
+        self.db.commit()
+
+        for item in items:
+            self.client.post(f"/api/collocations/{item.id}/flashcard", headers=self.headers)
+
+        for i in range(4):
+            resp = self.client.post(
+                f"/api/collocations/{items[i].id}/flashcard/review",
+                json={"result": "good"},
+                headers=self.headers
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertFalse(resp.json()["collocation_forge_autocompleted"])
+        
+        # Verify quest is still not completed
+        self.db.refresh(quest)
+        self.assertFalse(quest.completed)
+
+        # Review the 5th one
+        resp = self.client.post(
+            f"/api/collocations/{items[4].id}/flashcard/review",
+            json={"result": "good"},
+            headers=self.headers
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["collocation_forge_autocompleted"])
+
+        # Verify quest is now completed
+        self.db.refresh(quest)
+        self.assertTrue(quest.completed)
+        self.assertEqual(quest.status, "completed")
+
+    def test_autocomplete_collocation_forge_same_card_no_complete(self):
+        colloc_skill = self.db.query(Skill).filter(Skill.name == "Collocation").first()
+        quest = Quest(
+            campaign_id=self.campaign.id,
+            skill_id=colloc_skill.id,
+            session_type="Daily Quest",
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Collocation Forge",
+            source="test",
+            details="",
+            daily_slot_code="vocab_collocation",
+            status="active",
+            completed=False,
+            reward_claimed=False,
+            base_xp=5,
+        )
+        self.db.add(quest)
+        self.db.commit()
+
+        self.client.post(f"/api/collocations/{self.item.id}/flashcard", headers=self.headers)
+
+        # Review it 5 times today
+        for i in range(5):
+            resp = self.client.post(
+                f"/api/collocations/{self.item.id}/flashcard/review",
+                json={"result": "good"},
+                headers=self.headers
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertFalse(resp.json()["collocation_forge_autocompleted"])
+        
+        self.db.refresh(quest)
+        self.assertFalse(quest.completed)
 
 
 if __name__ == "__main__":

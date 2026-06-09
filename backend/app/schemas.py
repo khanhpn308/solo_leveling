@@ -45,6 +45,10 @@ class PlayerProfileOut(BaseModel):
     id: int
     display_name: str
     target_overall_band: str
+    target_listening_band: str | None = None
+    target_reading_band: str | None = None
+    target_writing_band: str | None = None
+    target_speaking_band: str | None = None
     current_estimated_level: str
     strongest_skill: str
     weakest_skill: str
@@ -908,6 +912,19 @@ class OnboardingActivateIn(BaseModel):
     campaign_template_code: str | None = None
     start_date: date | None = None
     target_band: str | None = None
+    target_overall_band: str | None = None
+    target_listening_band: str | None = None
+    target_reading_band: str | None = None
+    target_writing_band: str | None = None
+    target_speaking_band: str | None = None
+
+
+class PlayerTargetsIn(BaseModel):
+    target_overall_band: str | None = None
+    target_listening_band: str | None = None
+    target_reading_band: str | None = None
+    target_writing_band: str | None = None
+    target_speaking_band: str | None = None
 
 
 class AccountRegisterIn(BaseModel):
@@ -949,6 +966,10 @@ class PlayerMeOut(BaseModel):
     player_xp: int
     target: str | None = None
     target_overall_band: str | None = None
+    target_listening_band: str | None = None
+    target_reading_band: str | None = None
+    target_writing_band: str | None = None
+    target_speaking_band: str | None = None
 
     class Config:
         from_attributes = True
@@ -1066,6 +1087,75 @@ class RankExamStatusOut(BaseModel):
     daily_cap: int
     attempts_today: int
     attempts_remaining: int
+
+
+# ---------------------------------------------------------------------------
+# I4-2: Collocation flashcard browser + review schemas
+# ---------------------------------------------------------------------------
+
+class CollocationBrowseTopicOut(BaseModel):
+    """A topic with its section context, returned by GET /api/collocations/topics."""
+    id: int
+    title: str
+    topic_order: int
+    section_title: str
+    section_order: int
+    item_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class CollocationBrowseItemOut(BaseModel):
+    """An item enriched with flashcard state, returned by GET /api/collocations/topics/{id}/items."""
+    id: int
+    collocation: str
+    pronunciation_us: str | None = None
+    meaning_vi: str | None = None
+    example_en: str | None = None
+    example_vi: str | None = None
+    collocation_type: str | None = None
+    item_order: int = 0
+    # Flashcard state
+    effective_familiarity: str = "again"  # again/hard/good/easy
+    is_added: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class CollocationFlashcardTopicOut(BaseModel):
+    """A topic that has ≥1 non-graduated added flashcard, returned by GET /api/collocations/flashcard/topics."""
+    id: int
+    title: str
+    topic_order: int
+    section_title: str
+    card_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class CollocationFlashcardItemOut(BaseModel):
+    """A non-graduated flashcard for review, returned by GET /api/collocations/flashcard/topics/{id}."""
+    id: int
+    collocation: str
+    pronunciation_us: str | None = None
+    meaning_vi: str | None = None
+    example_en: str | None = None
+    example_vi: str | None = None
+    collocation_type: str | None = None
+    item_order: int = 0
+    effective_familiarity: str = "again"
+
+    class Config:
+        from_attributes = True
+
+
+class CollocationReviewIn(BaseModel):
+    """Body for POST /api/collocations/{item_id}/flashcard/review."""
+    result: str  # again | hard | good | easy
+
 
 
 

@@ -41,6 +41,11 @@ from .models import (
     CollocationItem,
     CampaignCollocationLink,
     PlayerCollocationProgress,
+    CollocationFlashcard,
+    RankXpThreshold,
+    QuestXpPolicy,
+    WeeklyMissionXpPolicy,
+    MainQuestXpPolicy,
 )
 from .schemas import (
 
@@ -645,14 +650,42 @@ def compute_vocabulary_xp(db: Session, player_id: int) -> int:
     return vocab_xp
 
 
+def resolve_main_quest_covered_skills(quest: Quest) -> set[str]:
+    session_no = None
+    if quest.study_plan_session:
+        session_no = quest.study_plan_session.session_no
+    else:
+        title_lower = quest.title.lower()
+        if "s1" in title_lower or "session 1" in title_lower:
+            session_no = 1
+        elif "s2" in title_lower or "session 2" in title_lower:
+            session_no = 2
+        elif "s3" in title_lower or "session 3" in title_lower:
+            session_no = 3
+        elif "s4" in title_lower or "session 4" in title_lower:
+            session_no = 4
+
+    primary_skill_name = quest.skill.name if quest.skill else "Reading"
+    if session_no == 1:
+        return {"Listening", "Speaking"}
+    if session_no == 2:
+        return {"Reading", "Vocabulary"}
+    if session_no == 3:
+        return {"Writing"}
+    if session_no == 4:
+        return {primary_skill_name}
+    return {primary_skill_name}
+
+
 def recompute_skill_progress(db: Session, campaign: Campaign, state: CampaignSkillState) -> None:
     skill_name = state.skill.name if state.skill else None
 
-    # Own quests XP (quests whose skill_id == this skill)
-    earned = (
+    # Own quests XP (quests whose skill_id == this skill, excluding Main Quests)
+    earned_non_main = (
         db.query(func.coalesce(func.sum(Quest.earned_xp), 0))
         .filter(
             Quest.campaign_id == campaign.id,
+            Quest.session_type != "Main Quest",
             Quest.skill_id == state.skill_id,
             Quest.completed == True,
             Quest.reward_claimed == True,
@@ -661,7 +694,27 @@ def recompute_skill_progress(db: Session, campaign: Campaign, state: CampaignSki
         or 0
     )
 
+    # Main quests: fetch all completed/claimed main quests in this campaign and resolve covered skills
+    main_quests = (
+        db.query(Quest)
+        .filter(
+            Quest.campaign_id == campaign.id,
+            Quest.session_type == "Main Quest",
+            Quest.completed == True,
+            Quest.reward_claimed == True,
+        )
+        .all()
+    )
+    earned_main = 0
+    for mq in main_quests:
+        covered = resolve_main_quest_covered_skills(mq)
+        if skill_name in covered:
+            earned_main += int(mq.earned_xp or mq.base_xp or 0)
+
+    earned = earned_non_main + earned_main
+
     # Support-source routing: add earned XP from quests of skills that route INTO this skill.
+    # (Exclude Main Quests because they are already resolved/routed in earned_main)
     # Grammar → Writing, Collocation → Vocabulary  (spec: ielts_xp_policy_rank_quest_spec.md §1.1, §4)
     routed_earned = 0
     if skill_name in MATRIX_SKILLS:
@@ -673,6 +726,7 @@ def recompute_skill_progress(db: Session, campaign: Campaign, state: CampaignSki
                         db.query(func.coalesce(func.sum(Quest.earned_xp), 0))
                         .filter(
                             Quest.campaign_id == campaign.id,
+                            Quest.session_type != "Main Quest",
                             Quest.skill_id == src_skill.id,
                             Quest.completed == True,
                             Quest.reward_claimed == True,
@@ -687,7 +741,16 @@ def recompute_skill_progress(db: Session, campaign: Campaign, state: CampaignSki
 
     state.xp = int(earned) + int(routed_earned) + vocab_xp
     # Ensure XP never drops below the confirmed_rank minimum (from certificate apply)
-    confirmed_min_xp = RANK_MIN_XP.get(state.confirmed_rank, 0)
+    confirmed_min_xp = 0
+    try:
+        policy = db.query(RankXpThreshold).filter_by(rank_name=state.confirmed_rank).first()
+        if policy:
+            confirmed_min_xp = policy.min_xp
+        else:
+            confirmed_min_xp = RANK_MIN_XP.get(state.confirmed_rank, 0)
+    except Exception:
+        confirmed_min_xp = RANK_MIN_XP.get(state.confirmed_rank, 0)
+
     if state.xp < confirmed_min_xp:
         state.xp = confirmed_min_xp
     state.rank, state.level = get_rank_level(state.xp)
@@ -696,6 +759,15 @@ def recompute_skill_progress(db: Session, campaign: Campaign, state: CampaignSki
         if RANK_ORDER.index(state.rank) < RANK_ORDER.index(state.confirmed_rank):
             state.rank = state.confirmed_rank
             state.level = _RANK_FIRST_LEVEL.get(state.confirmed_rank, 1)
+
+    # Sync confirmed_rank directly to rank and clear promotion states if not boss-gated
+    is_boss_gated = state.skill.boss_gated if state.skill else True
+    if not is_boss_gated:
+        state.confirmed_rank = state.rank
+        state.promotion_status = "none"
+        state.pending_rank = None
+        state.promotion_unlocked_at = None
+
     state.last_practiced = (
         db.query(func.max(Quest.quest_date))
         .filter(
@@ -785,6 +857,98 @@ def complete_quest_instance(
     refresh_progress_state(db)
     db.refresh(quest)
     return quest
+
+
+# ---------------------------------------------------------------------------
+# I4-2: Collocation flashcard service helpers
+# ---------------------------------------------------------------------------
+
+_FAMILIARITY_DECAY_ORDER = ["again", "hard", "good"]  # easy never decays
+
+
+def effective_familiarity(
+    stored: str,
+    familiarity_set_at: datetime | None,
+    now: datetime | None = None,
+) -> str:
+    """Compute effective familiarity after 7-day-per-tier lazy decay.
+
+    Rules (spec: TASKS.md Phase 4 owner decision):
+    - 'easy' never decays — always returned as-is (graduated).
+    - For again/hard/good: drop one tier per full 7-day window since
+      familiarity_set_at, floored at 'again'.
+    - If familiarity_set_at is None, treat as freshly set (no decay).
+    """
+    if stored == "easy":
+        return "easy"
+    if familiarity_set_at is None or stored not in _FAMILIARITY_DECAY_ORDER:
+        return stored if stored in _FAMILIARITY_DECAY_ORDER else "again"
+    if now is None:
+        now = datetime.utcnow()
+    elapsed_days = (now - familiarity_set_at).total_seconds() / 86400.0
+    tiers_dropped = int(elapsed_days // 7)
+    if tiers_dropped == 0:
+        return stored
+    current_index = _FAMILIARITY_DECAY_ORDER.index(stored)
+    decayed_index = max(0, current_index - tiers_dropped)
+    return _FAMILIARITY_DECAY_ORDER[decayed_index]
+
+
+def try_autocomplete_collocation_forge(
+    db: Session,
+    player_id: int,
+    campaign_id: int,
+    today: date,
+) -> bool:
+    """Auto-complete today's Collocation Forge daily quest if player reviewed
+    5+ DISTINCT collocations today (anti-farm: distinct item count per day).
+
+    Only marks completed=True, reward_claimed stays False (claim stays manual).
+    Idempotent — safe to call multiple times.
+
+    Returns True if the quest was newly auto-completed, False otherwise.
+    """
+    # Count distinct collocation_item_id reviewed today
+    distinct_count = (
+        db.query(func.count(func.distinct(CollocationFlashcard.collocation_item_id)))
+        .filter(
+            CollocationFlashcard.player_id == player_id,
+            CollocationFlashcard.campaign_id == campaign_id,
+            func.date(CollocationFlashcard.familiarity_set_at) == today,
+        )
+        .scalar()
+        or 0
+    )
+    if distinct_count < 5:
+        return False
+
+    # Find today's Collocation Forge daily quest
+    forge_quest = (
+        db.query(Quest)
+        .filter(
+            Quest.campaign_id == campaign_id,
+            Quest.session_type == "Daily Quest",
+            Quest.quest_date == today,
+            Quest.daily_slot_code == "vocab_collocation",
+        )
+        .first()
+    )
+    if forge_quest is None:
+        return False  # edge case: no quest generated for today
+    if forge_quest.completed:
+        return False  # already completed (manual or earlier)
+
+    # Auto-complete (no tracker proof needed — this IS the proof)
+    forge_quest.completed = True
+    forge_quest.completed_at = datetime.utcnow()
+    forge_quest.reward_claimed = False
+    forge_quest.reward_claimed_at = None
+    forge_quest.status = "completed"
+    forge_quest.completed_mode = "on_time"
+    forge_quest.earned_xp = forge_quest.base_xp or forge_quest.xp
+    forge_quest.completion_note = "Auto-completed: 5 distinct collocations reviewed today"
+    db.flush()
+    return True
 
 
 def uncomplete_quest_instance(db: Session, quest: Quest) -> Quest:
@@ -967,10 +1131,9 @@ def create_rank_suggestions_for_certificate(db: Session, cert: CertificateRecord
         "Speaking": cert.speaking_score,
     }
     # Inferred skills — no direct IELTS band; use overall_score as proxy
+    # Grammar + Collocation are support sources (not matrix skills), so excluded here.
     inferred = {
         "Vocabulary": cert.overall_score,
-        "Grammar": cert.overall_score,
-        "Collocation": cert.overall_score,
     }
 
     all_skills = {**components, **inferred}
@@ -1075,7 +1238,16 @@ def apply_rank_suggestion(db: Session, suggestion: SkillRankSuggestion) -> Skill
     state.confirmed_rank = suggestion.suggested_rank
 
     # Elevate XP to the minimum for the confirmed rank so the progress bar reflects reality
-    min_xp = RANK_MIN_XP.get(suggestion.suggested_rank, 0)
+    min_xp = 0
+    try:
+        policy = db.query(RankXpThreshold).filter_by(rank_name=suggestion.suggested_rank).first()
+        if policy:
+            min_xp = policy.min_xp
+        else:
+            min_xp = RANK_MIN_XP.get(suggestion.suggested_rank, 0)
+    except Exception:
+        min_xp = RANK_MIN_XP.get(suggestion.suggested_rank, 0)
+
     if (state.xp or 0) < min_xp:
         state.xp = min_xp
 

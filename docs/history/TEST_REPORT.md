@@ -2,6 +2,64 @@
 
 Newest first.
 
+## 2026-06-09 - Phase 7: Writing/Speaking non-boss-gated (Task 12) Verification
+
+Status: `Passed`
+
+Checks (via `TestCollocationMasterData` in `test_backend.py`, 48/48 tests passed):
+- **Database Schema & Migration**: Verified that `boss_gated` column is added to the `skills` table via migration `20260609_16_add_boss_gated_to_skills.py` with default `True`.
+- **Seeding Verification**: Confirmed that `"Writing"` and `"Speaking"` have `boss_gated` set to `False` in the database, while `"Listening"`, `"Reading"`, and `"Vocabulary"` are `True`.
+- **Direct Rank Promotion**: Verified that when claiming a quest for `"Writing"` that raises XP beyond the rank threshold (e.g. 1000 XP -> Rank E), the confirmed rank is directly promoted (e.g. `confirmed_rank == "E"`) and `promotion_status` remains `"none"` without triggering a boss gate block.
+- **Unlock Endpoint Block**: Verified that requesting a rank exam unlock for `"Writing"` (a non-boss-gated skill) raises a `400 Bad Request` with the message `"This skill does not require a boss exam for promotion"`.
+- **Regression check**: Confirmed that all 48 tests in the backend test suite pass successfully.
+
+---
+
+## 2026-06-09 - Phase 6: Main Quest Full-XP + Skill Tiering (Tasks 10 and 11) Verification
+
+Status: `Passed`
+
+Checks (via `TestCollocationMasterData` in `test_backend.py`, 47/47 tests passed):
+- **infer_main_quest_xp XP values**: Verified that Main Quest XP is correctly tiered: S3 (Writing + Grammar) yields 45 XP, core skills (S1/S2) yield 35 XP, and S4 review yields 25 XP unless it represents a mock exam (e.g. including "mock", "simulation", or "sectional test" in task details/focus), which awards 60 XP.
+- **Main Quest Full-XP Routing**: Verified that claiming a completed Main Quest credits its full XP to all covered matrix skills (e.g. claiming S2 credits 35 XP to both Reading and Vocabulary, and claiming S1 credits 35 XP to both Listening and Speaking).
+- **Correct isolation & no double-counting**: Verified that only targeted matrix skills receive the XP and other skill states remain unaffected, and that other Daily Quest or support routing queries do not count Main Quests.
+- **Regression check**: Confirmed that all 47 tests in the backend test suite pass successfully.
+
+---
+
+## 2026-06-09 - Phase 5: 9 Daily Slots (Tasks 8 and 9) Verification
+
+Status: `Passed`
+
+Checks (via `TestDailyQuestQuotaGenerator` in `test_backend.py`, 46/46 tests passed):
+- **9-Quest Daily Generation**: Verified that exactly 9 daily quests are generated per day across 9 distinct slots with correct base XP values matching the spec:
+  - `vocab_flashcard` (4 XP)
+  - `vocab_codex` (5 XP)
+  - `vocab_collocation` (5 XP)
+  - `listening` (10 XP)
+  - `reading` (10 XP)
+  - `writing` (12 XP)
+  - `speaking` (12 XP)
+  - `grammar_review` (5 XP)
+  - `grammar_exercise` (7 XP)
+- **Support-Source Routing**: Completed and claimed a `Grammar Review` quest (Grammar skill, 5 XP) and a `Collocation Forge` quest (Collocation skill, 5 XP) and verified that their XP was routed correctly into the parent matrix skills, yielding +5 XP for `Writing` and +5 XP for `Vocabulary` respectively.
+- **Quota & Ordering Verification**: Confirmed that customizing quotas and priority preferences correctly rotates and maps the new templates without regression.
+- **Regression check**: Confirmed that all 46 tests in the test suite pass successfully.
+
+---
+
+## 2026-06-09 - Task 7: Cap data-entry vocab XP at 40/word (mastery separate) Verification
+
+Status: `Passed`
+
+Checks (via `TestWaveDAndE` in `test_backend.py`, 7/7 tests passed):
+- **Capping Logic Verification**: Verified that standard vocabulary data-entry XP is capped at 40, and mastery score (capped at 50) is correctly added on top.
+- **Grouped queries**: Verified that grouped queries for examples and relations correctly compute counts per word without N+1 performance regressions.
+- **Regression check**: Confirmed that all 7 tests in the `TestWaveDAndE` suite pass.
+- **Test execution**: Successfully ran the unit test with output: `Ran 1 test in 0.375s, OK` and the suite: `Ran 7 tests in 0.989s, OK`.
+
+---
+
 ## 2026-06-08 - Collocation Master Data Complete Verification
 
 Status: `Passed`

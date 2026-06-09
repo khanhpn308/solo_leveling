@@ -1,177 +1,216 @@
 import { useState, useEffect } from 'react'
 
-function CollocationForge({ api, onXPUpdate }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [practiceData, setPracticeData] = useState(null)
-  
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [options, setOptions] = useState([])
-  const [selectedOption, setSelectedOption] = useState(null)
-  const [isCorrect, setIsCorrect] = useState(null)
-  const [completed, setCompleted] = useState(false)
-  const [xpEarned, setXpEarned] = useState(0)
+// Familiarity → neon CSS class
+function neonClass(familiarity) {
+  switch (familiarity) {
+    case 'easy': return 'coll-neon-easy'
+    case 'good': return 'coll-neon-good'
+    case 'hard': return 'coll-neon-hard'
+    default:     return 'coll-neon-again'
+  }
+}
+
+function familiarityLabel(familiarity) {
+  switch (familiarity) {
+    case 'easy': return '★ Graduated'
+    case 'good': return '◆ Good'
+    case 'hard': return '◈ Hard'
+    default:     return '○ New'
+  }
+}
+
+function CollocationForge({ api }) {
+  const [topics, setTopics] = useState([])
+  const [selectedTopic, setSelectedTopic] = useState(null)
+  const [items, setItems] = useState([])
+  const [loadingTopics, setLoadingTopics] = useState(true)
+  const [loadingItems, setLoadingItems] = useState(false)
+  const [error, setError] = useState('')
+  const [actionLoading, setActionLoading] = useState({})
 
   useEffect(() => {
-    loadPractice()
+    loadTopics()
   }, [])
 
-  async function loadPractice() {
+  async function loadTopics() {
     try {
-      setLoading(true)
-      setError(null)
-      setCompleted(false)
-      setCurrentIndex(0)
-      setXpEarned(0)
-      const data = await api('/vocabulary/practice/collocations')
-      if (!data || !data.matches || data.matches.length === 0) {
-        setPracticeData(null)
-      } else {
-        setPracticeData(data)
-        setupQuestion(data, 0)
+      setLoadingTopics(true)
+      const data = await api('/collocations/topics')
+      setTopics(data)
+    } catch (err) {
+      setError(err.message || 'Failed to load topics')
+    } finally {
+      setLoadingTopics(false)
+    }
+  }
+
+  async function loadItems(topic) {
+    try {
+      setLoadingItems(true)
+      setSelectedTopic(topic)
+      setItems([])
+      const data = await api(`/collocations/topics/${topic.id}/items`)
+      setItems(data)
+    } catch (err) {
+      setError(err.message || 'Failed to load items')
+    } finally {
+      setLoadingItems(false)
+    }
+  }
+
+  async function handleAddFlashcard(itemId) {
+    try {
+      setActionLoading(prev => ({ ...prev, [itemId]: true }))
+      await api(`/collocations/${itemId}/flashcard`, { method: 'POST' })
+      // Refresh items to update is_added and effective_familiarity
+      if (selectedTopic) {
+        const data = await api(`/collocations/topics/${selectedTopic.id}/items`)
+        setItems(data)
       }
     } catch (err) {
-      setError(err.message || 'Failed to load collocation practice')
+      setError(err.message || 'Failed to add flashcard')
     } finally {
-      setLoading(false)
+      setActionLoading(prev => ({ ...prev, [itemId]: false }))
     }
   }
 
-  function setupQuestion(data, index) {
-    if (index >= data.matches.length) {
-      setCompleted(true)
-      if (onXPUpdate && xpEarned > 0) {
-        onXPUpdate(xpEarned) // Just visual/mock since we didn't add a backend XP route yet
+  async function handleRemoveFlashcard(itemId) {
+    try {
+      setActionLoading(prev => ({ ...prev, [itemId]: true }))
+      await api(`/collocations/${itemId}/flashcard`, { method: 'DELETE' })
+      if (selectedTopic) {
+        const data = await api(`/collocations/topics/${selectedTopic.id}/items`)
+        setItems(data)
       }
-      return
-    }
-
-    const currentMatch = data.matches[index]
-    const correctOption = currentMatch.collocation
-
-    // Collect distractors: other matches' collocations + dedicated distractors
-    const otherCollocations = data.matches
-      .filter((m, i) => i !== index)
-      .map(m => m.collocation)
-    
-    const allDistractors = [...otherCollocations, ...data.distractors]
-    
-    // Shuffle and pick up to 3 distractors
-    const shuffledDistractors = [...new Set(allDistractors)].sort(() => 0.5 - Math.random())
-    const selectedDistractors = shuffledDistractors.slice(0, 3)
-
-    // Combine and shuffle options
-    const finalOptions = [correctOption, ...selectedDistractors].sort(() => 0.5 - Math.random())
-    
-    setOptions(finalOptions)
-    setSelectedOption(null)
-    setIsCorrect(null)
-  }
-
-  function handleSelect(opt) {
-    if (selectedOption !== null) return // Already answered
-    
-    const currentMatch = practiceData.matches[currentIndex]
-    setSelectedOption(opt)
-    
-    if (opt === currentMatch.collocation) {
-      setIsCorrect(true)
-      setXpEarned(prev => prev + 10)
-      setTimeout(() => {
-        setCurrentIndex(prev => {
-          const next = prev + 1
-          setupQuestion(practiceData, next)
-          return next
-        })
-      }, 1000)
-    } else {
-      setIsCorrect(false)
-      setTimeout(() => {
-        setSelectedOption(null)
-        setIsCorrect(null)
-      }, 1500)
+    } catch (err) {
+      setError(err.message || 'Failed to remove flashcard')
+    } finally {
+      setActionLoading(prev => ({ ...prev, [itemId]: false }))
     }
   }
-
-  if (loading) {
-    return <div className="vocab-loader">Heating up the Forge...</div>
-  }
-
-  if (error) {
-    return (
-      <div className="vocab-empty-state">
-        <p className="text-amber">{error}</p>
-        <button className="system-button mt-2" onClick={loadPractice}>Try Again</button>
-      </div>
-    )
-  }
-
-  if (!practiceData || practiceData.matches.length === 0) {
-    return (
-      <div className="vocab-empty-state">
-        <p>No collocations available. Awaken words and forge collocations first!</p>
-      </div>
-    )
-  }
-
-  if (completed) {
-    return (
-      <div className="forge-completed">
-        <div className="victory-badge">FORGE COMPLETE</div>
-        <h4>COLLOCATIONS MASTERED</h4>
-        <div className="victory-stat mt-4 mb-4">
-          <strong>+{xpEarned}</strong>
-          <span>Support Skill XP Earned</span>
-        </div>
-        <button className="system-button system-button--primary" onClick={loadPractice}>
-          Forge Again
-        </button>
-      </div>
-    )
-  }
-
-  const currentMatch = practiceData.matches[currentIndex]
 
   return (
-    <div className="collocation-forge">
-      <div className="forge-header">
-        <h3>COLLOCATION FORGE</h3>
-        <p>Combine words to create powerful expressions.</p>
-        <div className="forge-progress">
-          Set: {currentIndex + 1} / {practiceData.matches.length}
-        </div>
+    <div className="coll-browser">
+      <div className="coll-browser__header">
+        <h3 className="coll-browser__title">
+          <span className="coll-browser__icon">📚</span>
+          Collocation Browser
+        </h3>
+        <p className="coll-browser__subtitle">
+          Browse collocations by topic. Add items to your flashcard deck to start reviewing.
+        </p>
       </div>
 
-      <div className="forge-arena">
-        <div className="forge-core-word">
-          <span className="forge-label">Core Word</span>
-          <h2>{currentMatch.core_word}</h2>
-          {currentMatch.collocation_type && (
-            <span className="vocab-tag tag-level">{currentMatch.collocation_type}</span>
+      {error && <div className="vocab-error-banner">{error}</div>}
+
+      <div className="coll-browser__body">
+        {/* Topic list sidebar */}
+        <aside className="coll-topic-list">
+          <div className="coll-topic-list__head">Topics</div>
+          {loadingTopics && <div className="coll-topic-list__loading">Loading…</div>}
+          {!loadingTopics && topics.length === 0 && (
+            <div className="coll-topic-list__empty">No topics linked to your campaign.</div>
           )}
-        </div>
+          {topics.map(topic => (
+            <button
+              key={topic.id}
+              className={`coll-topic-btn ${selectedTopic?.id === topic.id ? 'is-active' : ''}`}
+              onClick={() => loadItems(topic)}
+              type="button"
+            >
+              <span className="coll-topic-btn__title">{topic.title}</span>
+              <span className="coll-topic-btn__meta">{topic.section_title} · {topic.item_count} items</span>
+            </button>
+          ))}
+        </aside>
 
-        <div className="forge-options">
-          {options.map((opt, idx) => {
-            let btnClass = 'forge-option-btn'
-            if (selectedOption === opt) {
-              btnClass += isCorrect ? ' correct' : ' wrong'
-            } else if (selectedOption !== null && opt === currentMatch.collocation) {
-              btnClass += ' correct-reveal' // Reveal correct if they got it wrong
-            }
+        {/* Items panel */}
+        <main className="coll-items-panel">
+          {!selectedTopic && (
+            <div className="coll-items-empty">
+              <div className="coll-items-empty__icon">👈</div>
+              <p>Select a topic from the left to browse its collocations.</p>
+            </div>
+          )}
 
-            return (
-              <button 
-                key={idx} 
-                className={btnClass}
-                onClick={() => handleSelect(opt)}
-                disabled={selectedOption !== null}
-              >
-                {opt}
-              </button>
-            )
-          })}
-        </div>
+          {selectedTopic && loadingItems && (
+            <div className="coll-items-loading">Loading collocations…</div>
+          )}
+
+          {selectedTopic && !loadingItems && items.length === 0 && (
+            <div className="coll-items-empty">No collocations found in this topic.</div>
+          )}
+
+          {selectedTopic && !loadingItems && items.length > 0 && (
+            <div className="coll-items-grid">
+              {items.map(item => {
+                const loading = actionLoading[item.id]
+                return (
+                  <div
+                    key={item.id}
+                    className={`coll-item-card ${neonClass(item.effective_familiarity)}`}
+                  >
+                    <div className="coll-item-card__header">
+                      <h4 className="coll-item-card__word">{item.collocation}</h4>
+                      <div className="coll-item-card__badges">
+                        {item.collocation_type && (
+                          <span className="coll-tag coll-tag--type">{item.collocation_type}</span>
+                        )}
+                        {item.is_added && (
+                          <span className={`coll-tag coll-tag--fam ${neonClass(item.effective_familiarity)}`}>
+                            {familiarityLabel(item.effective_familiarity)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="coll-item-card__body">
+                      {item.pronunciation_us && (
+                        <p className="coll-item-card__pron">/{item.pronunciation_us}/</p>
+                      )}
+                      {item.meaning_vi && (
+                        <p className="coll-item-card__meaning">{item.meaning_vi}</p>
+                      )}
+                      {item.example_en && (
+                        <p className="coll-item-card__example">
+                          <em>"{item.example_en}"</em>
+                        </p>
+                      )}
+                      {item.example_vi && (
+                        <p className="coll-item-card__example-vi">↳ {item.example_vi}</p>
+                      )}
+                    </div>
+
+                    <div className="coll-item-card__footer">
+                      {!item.is_added ? (
+                        <button
+                          className="system-button system-button--primary coll-add-btn"
+                          onClick={() => handleAddFlashcard(item.id)}
+                          disabled={loading}
+                        >
+                          {loading ? '…' : '+ Add to Flashcard'}
+                        </button>
+                      ) : (
+                        <div className="coll-added-row">
+                          <span className="coll-added-badge">✓ Added</span>
+                          {item.effective_familiarity !== 'easy' && (
+                            <button
+                              className="system-button coll-remove-btn"
+                              onClick={() => handleRemoveFlashcard(item.id)}
+                              disabled={loading}
+                            >
+                              {loading ? '…' : 'Remove'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </main>
       </div>
     </div>
   )

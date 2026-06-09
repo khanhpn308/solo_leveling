@@ -1163,6 +1163,55 @@ select:focus-visible {
   color: var(--cyan);
 }
 
+/* ── Task 17: 9-slot daily board ── */
+
+.quest-node__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.quest-slot-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid currentColor;
+  opacity: 0.85;
+}
+
+.quest-slot-chip--cyan    { color: var(--cyan); }
+.quest-slot-chip--amber   { color: var(--amber); }
+.quest-slot-chip--rose    { color: var(--danger); }
+.quest-slot-chip--violet  { color: var(--violet, #a78bfa); }
+.quest-slot-chip--green   { color: var(--success); }
+.quest-slot-chip--orange  { color: var(--amber); }
+.quest-slot-chip--steel   { color: var(--muted); }
+
+.quest-boss-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 165, 0, 0.12);
+  border: 1px solid var(--amber);
+  color: var(--amber);
+}
+
+/* claim-ready card gets a subtle gold tint to distinguish from claimed */
+.quest-node.is-claim-ready {
+  border-left: 3px solid var(--amber);
+  background: rgba(251, 191, 36, 0.06);
+}
+
 .subsection-divider {
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
@@ -1348,6 +1397,26 @@ select:focus-visible {
 .skill-rank-badge--f strong {
   color: #f1f4ff;
   text-shadow: 0 0 10px rgba(241, 244, 255, 0.22);
+}
+
+.skill-node__buffs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.skill-node__buff {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.skill-node__buff--active {
+  color: var(--success);
+}
+
+.skill-node__buff--empty {
+  color: var(--muted);
 }
 
 .quest-main-tab {
@@ -5241,3 +5310,17 @@ select:focus-visible {
 .exam-result__btn--retry { background: #ff5050; color: #fff; border: none; }
 .exam-result__btn--close  { background: transparent; border: 1px solid var(--line, rgba(255,255,255,0.15)); color: var(--text-muted, rgba(230,237,243,0.6)); }
 .exam-result__btn:hover { opacity: 0.85; }
+
+/* ── Target Editor (StatusModal + SetupSummaryPanel) ── */
+.target-editor { display: flex; flex-direction: column; gap: 8px; padding: 4px 0; }
+.target-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.target-save-btn {
+  margin-top: 8px; padding: 9px 20px;
+  background: var(--cyan, #7af0dd); color: #0d1117;
+  border: none; border-radius: 8px;
+  font-size: 0.9375rem; font-weight: 700; cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.target-save-btn:hover { opacity: 0.85; }
+.target-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.target-save-msg { margin: 4px 0 0; font-size: 0.8125rem; color: var(--cyan, #7af0dd); }

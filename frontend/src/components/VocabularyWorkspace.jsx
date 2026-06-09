@@ -21,6 +21,191 @@ const INITIAL_FORM = {
   source_reference: '',
 }
 
+// I4-4: Collocation Flashcard Review inline component
+function CollocationFlashcardReview({
+  api,
+  topics, setTopics,
+  cards, setCards,
+  cardIndex, setCardIndex,
+  showAnswer, setShowAnswer,
+  completed, setCompleted,
+  selectedTopic, setSelectedTopic,
+  loading, setLoading,
+}) {
+  const [reviewError, setReviewError] = useState('')
+
+  async function loadCards(topic) {
+    try {
+      setLoading(true)
+      setSelectedTopic(topic)
+      setCards([])
+      setCardIndex(0)
+      setShowAnswer(false)
+      setCompleted(false)
+      const data = await api(`/collocations/flashcard/topics/${topic.id}`)
+      setCards(data)
+    } catch (err) {
+      setReviewError(err.message || 'Failed to load flashcard items')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleReview(result) {
+    if (!cards.length) return
+    const item = cards[cardIndex]
+    try {
+      const res = await api(`/collocations/${item.id}/flashcard/review`, {
+        method: 'POST',
+        body: JSON.stringify({ result }),
+      })
+      if (res.collocation_forge_autocompleted) {
+        console.log('[I4-7] Collocation Forge daily quest auto-completed!')
+      }
+    } catch (err) {
+      console.error('Failed to submit review:', err)
+    }
+    const nextIndex = cardIndex + 1
+    if (nextIndex >= cards.length) {
+      setCompleted(true)
+    } else {
+      setCardIndex(nextIndex)
+      setShowAnswer(false)
+    }
+  }
+
+  function handleRestart() {
+    setSelectedTopic(null)
+    setCards([])
+    setCardIndex(0)
+    setShowAnswer(false)
+    setCompleted(false)
+    // Refresh topics
+    api('/collocations/flashcard/topics').then(data => setTopics(data)).catch(() => {})
+  }
+
+  // Topic selection screen
+  if (!selectedTopic) {
+    return (
+      <div className="coll-flash-lobby">
+        <div className="gate-crest">
+          <span className="gate-crest-icon">📚</span>
+          <h3>COLLOCATION REVIEW</h3>
+          <p>Choose a topic to review your added collocations.</p>
+        </div>
+        {loading && <div className="coll-topic-list__loading">Loading topics…</div>}
+        {!loading && topics.length === 0 && (
+          <div className="gate-clear-message">
+            No collocation flashcards added yet. Browse the <strong>Collocations</strong> tab to add cards.
+          </div>
+        )}
+        <div className="coll-flash-topic-grid">
+          {topics.map(topic => (
+            <button
+              key={topic.id}
+              className="coll-flash-topic-btn"
+              onClick={() => loadCards(topic)}
+            >
+              <span className="coll-flash-topic-btn__title">{topic.title}</span>
+              <span className="coll-flash-topic-btn__count">{topic.card_count} cards</span>
+              <span className="coll-flash-topic-btn__section">{topic.section_title}</span>
+            </button>
+          ))}
+        </div>
+        {reviewError && <div className="vocab-error-banner">{reviewError}</div>}
+      </div>
+    )
+  }
+
+  // Completed screen
+  if (completed) {
+    return (
+      <div className="gate-victory-screen">
+        <div className="victory-badge">SESSION COMPLETE</div>
+        <h4>COLLOCATION REVIEW DONE</h4>
+        <p>You reviewed all collocations in <strong>{selectedTopic.title}</strong>.</p>
+        <button className="system-button system-button--primary gate-exit-btn" onClick={handleRestart}>
+          Back to Topics
+        </button>
+      </div>
+    )
+  }
+
+  // Card loading
+  if (loading) {
+    return <div className="coll-items-loading">Loading cards…</div>
+  }
+
+  if (!cards.length) {
+    return (
+      <div className="coll-items-empty">
+        <p>No non-graduated cards found in this topic.</p>
+        <button className="system-button" onClick={handleRestart}>Back</button>
+      </div>
+    )
+  }
+
+  const item = cards[cardIndex]
+  const neonCls = item.effective_familiarity === 'easy' ? 'coll-neon-easy'
+    : item.effective_familiarity === 'good' ? 'coll-neon-good'
+    : item.effective_familiarity === 'hard' ? 'coll-neon-hard'
+    : 'coll-neon-again'
+
+  return (
+    <div className="card-arena">
+      <div className="arena-header">
+        <button className="system-button" onClick={handleRestart} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+          ← Topics
+        </button>
+        <span>Collocation {cardIndex + 1} of {cards.length}</span>
+      </div>
+      <div className={`flip-card coll-review-card ${neonCls} ${showAnswer ? 'is-flipped' : ''}`}>
+        <div className="flip-card-inner">
+          <div className="flip-card-front">
+            <div className="card-title">Recall Collocation</div>
+            <h2 className="card-vocab-word">{item.collocation}</h2>
+            {item.pronunciation_us && (
+              <p style={{ fontStyle: 'italic', color: '#9ca3af', margin: '4px 0' }}>/{item.pronunciation_us}/</p>
+            )}
+            {item.collocation_type && (
+              <span className="coll-tag coll-tag--type">{item.collocation_type}</span>
+            )}
+            <button className="system-button reveal-btn" onClick={() => setShowAnswer(true)}>
+              Reveal Meaning
+            </button>
+          </div>
+          <div className="flip-card-back">
+            <div className="card-title">Meaning</div>
+            <button
+              className="system-button coll-flip-back-btn"
+              onClick={() => setShowAnswer(false)}
+              style={{ position: 'absolute', top: '10px', left: '10px', padding: '4px 10px', fontSize: '0.8rem', opacity: 0.7 }}
+            >
+              ↩ Recall
+            </button>
+            <h2 className="card-vocab-word" style={{ fontSize: '1.4rem', marginBottom: '8px' }}>{item.collocation}</h2>
+            {item.meaning_vi && (
+              <p className="meaning-vi" style={{ color: '#a7f3d0', margin: '4px 0' }}>{item.meaning_vi}</p>
+            )}
+            {item.example_en && (
+              <p style={{ fontStyle: 'italic', margin: '8px 0 4px' }}>"{item.example_en}"</p>
+            )}
+            {item.example_vi && (
+              <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>↳ {item.example_vi}</p>
+            )}
+            <div className="difficulty-selectors" style={{ marginTop: '16px' }}>
+              <button className="system-button review-act-btn again" onClick={() => handleReview('again')}>Again</button>
+              <button className="system-button review-act-btn hard" onClick={() => handleReview('hard')}>Hard</button>
+              <button className="system-button review-act-btn good" onClick={() => handleReview('good')}>Good</button>
+              <button className="system-button review-act-btn easy" onClick={() => handleReview('easy')}>Easy ★</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onLoadData }) {
   const [activeTab, setActiveTab] = useState('codex')
   const [loading, setLoading] = useState(true)
@@ -35,6 +220,18 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
   const [activeReview, setActiveReview] = useState(null)
   const [showAnswer, setShowAnswer] = useState(false)
   const [reviewXpEarned, setReviewXpEarned] = useState(0)
+
+  // Flashcard sub-tab state (I4-4)
+  const [flashSubTab, setFlashSubTab] = useState('vocabulary') // 'vocabulary' | 'collocation'
+
+  // Collocation flashcard review state (I4-4)
+  const [collFlashTopics, setCollFlashTopics] = useState([])
+  const [collFlashCards, setCollFlashCards] = useState([])
+  const [collFlashCardIndex, setCollFlashCardIndex] = useState(0)
+  const [collFlashShowAnswer, setCollFlashShowAnswer] = useState(false)
+  const [collFlashCompleted, setCollFlashCompleted] = useState(false)
+  const [collFlashSelectedTopic, setCollFlashSelectedTopic] = useState(null)
+  const [collFlashLoading, setCollFlashLoading] = useState(false)
 
   // Error dungeon and boss states
   const [activeErrors, setActiveErrors] = useState([])
@@ -125,42 +322,9 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
     }
   }
 
-  // Collocation / Example add state
+  // Example add state
   const [activeItemDetails, setActiveItemDetails] = useState(null)
-  const [collocationText, setCollocationText] = useState('')
-  const [collocationType, setCollocationType] = useState('adjective + noun')
   const [exampleText, setExampleText] = useState('')
-
-  async function handleAddCollocation(itemId) {
-    if (!collocationText.trim()) return
-    try {
-      setSubmitting(true)
-      await api(`/vocabulary/${itemId}/collocations`, {
-        method: 'POST',
-        body: JSON.stringify({
-          collocation: collocationText,
-          collocation_type: collocationType,
-        }),
-      })
-      setCollocationText('')
-      loadData()
-    } catch (err) {
-      setError(err.message || 'Failed to add collocation')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleDeleteCollocation(collocationId) {
-    try {
-      setLoading(true)
-      await api(`/vocabulary/collocations/${collocationId}`, { method: 'DELETE' })
-      loadData()
-    } catch (err) {
-      setError(err.message || 'Failed to delete collocation')
-      setLoading(false)
-    }
-  }
 
   async function handleAddExample(itemId) {
     if (!exampleText.trim()) return
@@ -233,6 +397,19 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
     setShowAnswer(false)
   }
 
+  // I4-4: Collocation flashcard loading helpers
+  async function loadCollFlashTopics() {
+    try {
+      setCollFlashLoading(true)
+      const data = await api('/collocations/flashcard/topics')
+      setCollFlashTopics(data)
+    } catch (err) {
+      console.error('Failed to load collocation flashcard topics', err)
+    } finally {
+      setCollFlashLoading(false)
+    }
+  }
+
   const filteredItems = vocabularyItems.filter((item) => {
     const q = searchQuery.toLowerCase()
     return (
@@ -299,7 +476,7 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
             type="button"
             onClick={() => { setActiveTab('forge'); setIsFormOpen(false); }}
           >
-            <span className="vocab-nav-icon">🔨</span> Collocation Forge
+            <span className="vocab-nav-icon">📚</span> Collocations
           </button>
           <button
             className={`vocab-nav-btn ${activeTab === 'shadow-duel' ? 'is-active' : ''}`}
@@ -504,63 +681,6 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                       </p>
                     )}
 
-                    {/* Collocations */}
-                    <div className="vocab-detail-section">
-                      <h5>Collocations</h5>
-                      {item.collocations?.length > 0 ? (
-                        <ul className="vocab-list">
-                          {item.collocations.map((col) => (
-                            <li key={col.id}>
-                              <code>{col.collocation}</code> ({col.collocation_type})
-                              <button className="vocab-del-small" onClick={() => handleDeleteCollocation(col.id)}>
-                                ×
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="vocab-none">No collocations forged.</p>
-                      )}
-
-                      {activeItemDetails === `col-${item.id}` ? (
-                        <div className="small-add-form">
-                          <input
-                            type="text"
-                            placeholder="e.g. significant impact"
-                            value={collocationText}
-                            onChange={(e) => setCollocationText(e.target.value)}
-                            className="system-input small-input"
-                          />
-                          <select
-                            value={collocationType}
-                            onChange={(e) => setCollocationType(e.target.value)}
-                            className="system-input small-select"
-                          >
-                            <option value="adjective + noun">Adj + Noun</option>
-                            <option value="verb + noun">Verb + Noun</option>
-                            <option value="verb + preposition">Verb + Prep</option>
-                            <option value="fixed phrase">Fixed Phrase</option>
-                          </select>
-                          <button
-                            className="system-button system-button--primary small-btn"
-                            onClick={() => handleAddCollocation(item.id)}
-                          >
-                            Add
-                          </button>
-                          <button className="system-button small-btn" onClick={() => setActiveItemDetails(null)}>
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button className="vocab-add-link" onClick={() => {
-                          setActiveItemDetails(`col-${item.id}`)
-                          setCollocationText('')
-                        }}>
-                          + Forge Collocation
-                        </button>
-                      )}
-                    </div>
-
                     {/* Examples */}
                     <div className="vocab-detail-section">
                       <h5>Example Sentences</h5>
@@ -617,187 +737,217 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
 
         {activeTab === 'flashcard' && (
           <div className="flashcard-tab">
-            {activeReview ? (
-              <div className="flashcard-gate-active">
-                {activeReview.completed ? (
-                  <div className="gate-victory-screen">
-                    <div className="victory-badge">GATE CLEARED</div>
-                    <h4>LEXICAL AWAKENING SUCCESSFUL</h4>
-                    <p>You have reviewed all due vocabulary items in this session.</p>
-                    <div className="victory-stat">
-                      <strong>+{reviewXpEarned * 10}</strong>
-                      <span>Support Skill XP Gained</span>
-                    </div>
-                    <button className="system-button system-button--primary gate-exit-btn" onClick={handleCloseReview}>
-                      Close Gate
-                    </button>
-                  </div>
-                ) : (
-                  <div className="card-arena">
-                    <div className="arena-header">
-                      <span>MEMORY GATE DUEL</span>
-                      <span>
-                        Card {activeReview.currentIndex + 1} of {activeReview.cards.length}
-                      </span>
-                    </div>
+            {/* I4-4: sub-tab switcher */}
+            <div className="flashcard-subtabs">
+              <button
+                className={`flashcard-subtab-btn ${flashSubTab === 'vocabulary' ? 'is-active' : ''}`}
+                onClick={() => { setFlashSubTab('vocabulary') }}
+              >🧠 Vocabulary</button>
+              <button
+                className={`flashcard-subtab-btn ${flashSubTab === 'collocation' ? 'is-active' : ''}`}
+                onClick={() => {
+                  setFlashSubTab('collocation')
+                  if (collFlashTopics.length === 0) loadCollFlashTopics()
+                }}
+              >📚 Collocation</button>
+            </div>
 
-                    <div className={`flip-card ${showAnswer ? 'is-flipped' : ''}`}>
-                      <div className="flip-card-inner">
-                        <div className="flip-card-front">
-                          <div className="card-title">Recall Meaning</div>
-                          {activeReview.cards[activeReview.currentIndex].vocabulary_item ? (
-                            <div className="card-vocab-details">
-                              <h2 className="card-vocab-word">
-                                {activeReview.cards[activeReview.currentIndex].vocabulary_item.word}
-                              </h2>
-                              <div className="card-metadata-row" style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
-                                {activeReview.cards[activeReview.currentIndex].vocabulary_item.part_of_speech && (
-                                  <span className="card-pos-badge" style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', background: '#3b82f6', color: '#fff' }}>
-                                    {activeReview.cards[activeReview.currentIndex].vocabulary_item.part_of_speech}
-                                  </span>
-                                )}
-                                {activeReview.cards[activeReview.currentIndex].vocabulary_item.pronunciation_ipa && (
-                                  <span className="card-pronunciation" style={{ fontStyle: 'italic', color: '#9ca3af' }}>
-                                    {activeReview.cards[activeReview.currentIndex].vocabulary_item.pronunciation_ipa}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <h2 className="card-vocab-word">
-                              {activeReview.cards[activeReview.currentIndex].front_text}
-                            </h2>
-                          )}
-                          {activeReview.cards[activeReview.currentIndex].hint && (
-                            <p className="card-hint">
-                              <strong>Hint:</strong> {activeReview.cards[activeReview.currentIndex].hint}
-                            </p>
-                          )}
-                          <button className="system-button reveal-btn" onClick={() => setShowAnswer(true)}>
-                            Reveal Definition
-                          </button>
+            {/* Vocabulary sub-tab (unchanged) */}
+            {flashSubTab === 'vocabulary' && (
+              <>
+                {activeReview ? (
+                  <div className="flashcard-gate-active">
+                    {activeReview.completed ? (
+                      <div className="gate-victory-screen">
+                        <div className="victory-badge">GATE CLEARED</div>
+                        <h4>LEXICAL AWAKENING SUCCESSFUL</h4>
+                        <p>You have reviewed all due vocabulary items in this session.</p>
+                        <div className="victory-stat">
+                          <strong>+{reviewXpEarned * 10}</strong>
+                          <span>Support Skill XP Gained</span>
                         </div>
-                        <div className="flip-card-back">
-                          <div className="card-title">Definition</div>
-                          {activeReview.cards[activeReview.currentIndex].vocabulary_item ? (
-                            <div className="card-back-details" style={{ textAlign: 'left', width: '100%' }}>
-                              <div className="definition-box" style={{ marginBottom: '12px' }}>
-                                {activeReview.cards[activeReview.currentIndex].vocabulary_item.meaning_en && (
-                                  <p className="meaning-en" style={{ margin: '4px 0' }}>
-                                    <strong>EN:</strong> {activeReview.cards[activeReview.currentIndex].vocabulary_item.meaning_en}
-                                  </p>
-                                )}
-                                {activeReview.cards[activeReview.currentIndex].vocabulary_item.meaning_vi && (
-                                  <p className="meaning-vi" style={{ margin: '4px 0', color: '#a7f3d0' }}>
-                                    <strong>VI:</strong> {activeReview.cards[activeReview.currentIndex].vocabulary_item.meaning_vi}
-                                  </p>
-                                )}
-                              </div>
-                              
-                              {activeReview.cards[activeReview.currentIndex].vocabulary_item.examples && 
-                               activeReview.cards[activeReview.currentIndex].vocabulary_item.examples.length > 0 && (
-                                <div className="example-box" style={{ background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '4px', marginTop: '8px' }}>
-                                  <strong>Example Sentence:</strong>
-                                  <p className="example-text" style={{ fontStyle: 'italic', margin: '4px 0' }}>
-                                    "{activeReview.cards[activeReview.currentIndex].vocabulary_item.examples[0].example_sentence}"
-                                  </p>
-                                  {activeReview.cards[activeReview.currentIndex].vocabulary_item.examples[0].example_meaning && (
-                                    <p className="example-translation" style={{ color: '#9ca3af', fontSize: '0.9rem', margin: '0' }}>
-                                      ↳ {activeReview.cards[activeReview.currentIndex].vocabulary_item.examples[0].example_meaning}
-                                    </p>
-                                  )}
-                                </div>
-                              )}
+                        <button className="system-button system-button--primary gate-exit-btn" onClick={handleCloseReview}>
+                          Close Gate
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="card-arena">
+                        <div className="arena-header">
+                          <span>MEMORY GATE DUEL</span>
+                          <span>
+                            Card {activeReview.currentIndex + 1} of {activeReview.cards.length}
+                          </span>
+                        </div>
 
-                              {activeReview.cards[activeReview.currentIndex].vocabulary_item.collocations && 
-                               activeReview.cards[activeReview.currentIndex].vocabulary_item.collocations.length > 0 && (
-                                <div className="example-box" style={{ background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '4px', marginTop: '8px' }}>
-                                  <strong>Collocation:</strong>
-                                  <p className="example-text" style={{ fontStyle: 'italic', margin: '4px 0' }}>
-                                    "{activeReview.cards[activeReview.currentIndex].vocabulary_item.collocations[0].collocation}"
-                                  </p>
-                                  {activeReview.cards[activeReview.currentIndex].vocabulary_item.collocations[0].example_sentence && (
-                                    <p className="colloc-ex" style={{ fontStyle: 'italic', color: '#9ca3af', margin: '4px 0 0 0' }}>
-                                      e.g., "{activeReview.cards[activeReview.currentIndex].vocabulary_item.collocations[0].example_sentence}"
-                                    </p>
-                                  )}
-                                  {activeReview.cards[activeReview.currentIndex].vocabulary_item.collocations[0].example_meaning && (
-                                    <p className="example-translation" style={{ color: '#9ca3af', fontSize: '0.9rem', margin: '0' }}>
-                                      ↳ {activeReview.cards[activeReview.currentIndex].vocabulary_item.collocations[0].example_meaning}
-                                    </p>
-                                  )}
+                        <div className={`flip-card ${showAnswer ? 'is-flipped' : ''}`}>
+                          <div className="flip-card-inner">
+                            <div className="flip-card-front">
+                              <div className="card-title">Recall Meaning</div>
+                              {activeReview.cards[activeReview.currentIndex].vocabulary_item ? (
+                                <div className="card-vocab-details">
+                                  <h2 className="card-vocab-word">
+                                    {activeReview.cards[activeReview.currentIndex].vocabulary_item.word}
+                                  </h2>
+                                  <div className="card-metadata-row" style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
+                                    {activeReview.cards[activeReview.currentIndex].vocabulary_item.part_of_speech && (
+                                      <span className="card-pos-badge" style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', background: '#3b82f6', color: '#fff' }}>
+                                        {activeReview.cards[activeReview.currentIndex].vocabulary_item.part_of_speech}
+                                      </span>
+                                    )}
+                                    {activeReview.cards[activeReview.currentIndex].vocabulary_item.pronunciation_ipa && (
+                                      <span className="card-pronunciation" style={{ fontStyle: 'italic', color: '#9ca3af' }}>
+                                        {activeReview.cards[activeReview.currentIndex].vocabulary_item.pronunciation_ipa}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
+                              ) : (
+                                <h2 className="card-vocab-word">
+                                  {activeReview.cards[activeReview.currentIndex].front_text}
+                                </h2>
                               )}
+                              {activeReview.cards[activeReview.currentIndex].hint && (
+                                <p className="card-hint">
+                                  <strong>Hint:</strong> {activeReview.cards[activeReview.currentIndex].hint}
+                                </p>
+                              )}
+                              <button className="system-button reveal-btn" onClick={() => setShowAnswer(true)}>
+                                Reveal Definition
+                              </button>
                             </div>
-                          ) : (
-                            <pre className="card-back-text">
-                              {activeReview.cards[activeReview.currentIndex].back_text}
-                            </pre>
-                          )}
-                          
-                          <div className="difficulty-selectors">
-                            <button
-                              className="system-button review-act-btn again"
-                              onClick={() => handleReviewAction('again')}
-                            >
-                              Again <small>+0 XP</small>
-                            </button>
-                            <button
-                              className="system-button review-act-btn hard"
-                              onClick={() => handleReviewAction('hard')}
-                            >
-                              Hard <small>+10 XP</small>
-                            </button>
-                            <button
-                              className="system-button review-act-btn good"
-                              onClick={() => handleReviewAction('good')}
-                            >
-                              Good <small>+20 XP</small>
-                            </button>
-                            <button
-                              className="system-button review-act-btn easy"
-                              onClick={() => handleReviewAction('easy')}
-                            >
-                              Easy <small>+30 XP</small>
-                            </button>
+                            <div className="flip-card-back">
+                              <div className="card-title">Definition</div>
+                              {/* I4-6: Two-way flip — return to front */}
+                              <button
+                                className="system-button coll-flip-back-btn"
+                                onClick={() => setShowAnswer(false)}
+                                style={{ position: 'absolute', top: '10px', left: '10px', padding: '4px 10px', fontSize: '0.8rem', opacity: 0.7 }}
+                              >
+                                ↩ Recall
+                              </button>
+                              {activeReview.cards[activeReview.currentIndex].vocabulary_item ? (
+                                <div className="card-back-details" style={{ textAlign: 'left', width: '100%' }}>
+                                  <div className="definition-box" style={{ marginBottom: '12px' }}>
+                                    {activeReview.cards[activeReview.currentIndex].vocabulary_item.meaning_en && (
+                                      <p className="meaning-en" style={{ margin: '4px 0' }}>
+                                        <strong>EN:</strong> {activeReview.cards[activeReview.currentIndex].vocabulary_item.meaning_en}
+                                      </p>
+                                    )}
+                                    {activeReview.cards[activeReview.currentIndex].vocabulary_item.meaning_vi && (
+                                      <p className="meaning-vi" style={{ margin: '4px 0', color: '#a7f3d0' }}>
+                                        <strong>VI:</strong> {activeReview.cards[activeReview.currentIndex].vocabulary_item.meaning_vi}
+                                      </p>
+                                    )}
+                                  </div>
+                                  
+                                  {activeReview.cards[activeReview.currentIndex].vocabulary_item.examples && 
+                                   activeReview.cards[activeReview.currentIndex].vocabulary_item.examples.length > 0 && (
+                                    <div className="example-box" style={{ background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '4px', marginTop: '8px' }}>
+                                      <strong>Example Sentence:</strong>
+                                      <p className="example-text" style={{ fontStyle: 'italic', margin: '4px 0' }}>
+                                        "{activeReview.cards[activeReview.currentIndex].vocabulary_item.examples[0].example_sentence}"
+                                      </p>
+                                      {activeReview.cards[activeReview.currentIndex].vocabulary_item.examples[0].example_meaning && (
+                                        <p className="example-translation" style={{ color: '#9ca3af', fontSize: '0.9rem', margin: '0' }}>
+                                          ↳ {activeReview.cards[activeReview.currentIndex].vocabulary_item.examples[0].example_meaning}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+
+                                </div>
+                              ) : (
+                                <pre className="card-back-text">
+                                  {activeReview.cards[activeReview.currentIndex].back_text}
+                                </pre>
+                              )}
+                              
+                              <div className="difficulty-selectors">
+                                <button
+                                  className="system-button review-act-btn again"
+                                  onClick={() => handleReviewAction('again')}
+                                >
+                                  Again <small>+0 XP</small>
+                                </button>
+                                <button
+                                  className="system-button review-act-btn hard"
+                                  onClick={() => handleReviewAction('hard')}
+                                >
+                                  Hard <small>+10 XP</small>
+                                </button>
+                                <button
+                                  className="system-button review-act-btn good"
+                                  onClick={() => handleReviewAction('good')}
+                                >
+                                  Good <small>+20 XP</small>
+                                </button>
+                                <button
+                                  className="system-button review-act-btn easy"
+                                  onClick={() => handleReviewAction('easy')}
+                                >
+                                  Easy <small>+30 XP</small>
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="flashcard-gate-lobby">
-                <div className="gate-crest">
-                  <span className="gate-crest-icon">🧠</span>
-                  <h3>DAILY MEMORY GATE</h3>
-                  <p>Revise due flashcards to anchor their meaning and collocations.</p>
-                </div>
-
-                <div className="gate-status-panel">
-                  <div className="gate-stat-row">
-                    <span>Gate Status:</span>
-                    <strong className={dueFlashcards.length > 0 ? 'text-amber' : 'text-success'}>
-                      {dueFlashcards.length > 0 ? 'ACTIVE (MONSTERS DETECTED)' : 'SECURED'}
-                    </strong>
-                  </div>
-                  <div className="gate-stat-row">
-                    <span>Due Cards:</span>
-                    <strong>{dueFlashcards.length}</strong>
-                  </div>
-                </div>
-
-                {dueFlashcards.length > 0 ? (
-                  <button className="system-button system-button--primary gate-enter-btn" onClick={handleStartReview}>
-                    ENTER THE GATE
-                  </button>
                 ) : (
-                  <div className="gate-clear-message">
-                    All memory gates are secured. Discover new words to unlock more gates!
+                  <div className="flashcard-gate-lobby">
+                    <div className="gate-crest">
+                      <span className="gate-crest-icon">🧠</span>
+                      <h3>DAILY MEMORY GATE</h3>
+                      <p>Revise due flashcards to anchor their meaning and collocations.</p>
+                    </div>
+
+                    <div className="gate-status-panel">
+                      <div className="gate-stat-row">
+                        <span>Gate Status:</span>
+                        <strong className={dueFlashcards.length > 0 ? 'text-amber' : 'text-success'}>
+                          {dueFlashcards.length > 0 ? 'ACTIVE (MONSTERS DETECTED)' : 'SECURED'}
+                        </strong>
+                      </div>
+                      <div className="gate-stat-row">
+                        <span>Due Cards:</span>
+                        <strong>{dueFlashcards.length}</strong>
+                      </div>
+                    </div>
+
+                    {dueFlashcards.length > 0 ? (
+                      <button className="system-button system-button--primary gate-enter-btn" onClick={handleStartReview}>
+                        ENTER THE GATE
+                      </button>
+                    ) : (
+                      <div className="gate-clear-message">
+                        All memory gates are secured. Discover new words to unlock more gates!
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
+            )}
+
+            {/* Collocation flashcard sub-tab (I4-4) */}
+            {flashSubTab === 'collocation' && (
+              <CollocationFlashcardReview
+                api={api}
+                topics={collFlashTopics}
+                setTopics={setCollFlashTopics}
+                cards={collFlashCards}
+                setCards={setCollFlashCards}
+                cardIndex={collFlashCardIndex}
+                setCardIndex={setCollFlashCardIndex}
+                showAnswer={collFlashShowAnswer}
+                setShowAnswer={setCollFlashShowAnswer}
+                completed={collFlashCompleted}
+                setCompleted={setCollFlashCompleted}
+                selectedTopic={collFlashSelectedTopic}
+                setSelectedTopic={setCollFlashSelectedTopic}
+                loading={collFlashLoading}
+                setLoading={setCollFlashLoading}
+              />
             )}
           </div>
         )}

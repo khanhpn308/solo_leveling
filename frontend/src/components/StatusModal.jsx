@@ -2,6 +2,82 @@ import { useMemo, useState } from 'react'
 import OverlayFrame from './OverlayFrame'
 import SkillCards from './SkillCards'
 import { formatDate } from '../dashboard-data'
+import { updatePlayerTargets } from '../api/auth'
+
+const BAND_OPTIONS = ['4.0', '4.5', '5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5', '9.0']
+
+const TARGET_SKILLS = [
+  { key: 'overall', label: 'Overall', playerKey: 'targetOverall' },
+  { key: 'listening', label: 'Listening', playerKey: 'targetListening' },
+  { key: 'reading', label: 'Reading', playerKey: 'targetReading' },
+  { key: 'writing', label: 'Writing', playerKey: 'targetWriting' },
+  { key: 'speaking', label: 'Speaking', playerKey: 'targetSpeaking' },
+]
+
+function resolvePlayerTargets(player) {
+  const fallback = player.targetOverall || player.target || '6.5'
+  return {
+    overall: player.targetOverall || fallback,
+    listening: player.targetListening || fallback,
+    reading: player.targetReading || fallback,
+    writing: player.targetWriting || fallback,
+    speaking: player.targetSpeaking || fallback,
+  }
+}
+
+function TargetEditor({ player, onProfileRefresh }) {
+  const [targets, setTargets] = useState(() => resolvePlayerTargets(player))
+  const [saved, setSaved] = useState(() => resolvePlayerTargets(player))
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
+
+  const isDirty = TARGET_SKILLS.some(({ key }) => targets[key] !== saved[key])
+
+  function handleChange(key, val) {
+    setTargets((prev) => ({ ...prev, [key]: val }))
+    setSaveMsg('')
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setSaveMsg('')
+    try {
+      await updatePlayerTargets(targets)
+      setSaved({ ...targets })
+      setSaveMsg('Đã lưu')
+      if (onProfileRefresh) onProfileRefresh()
+    } catch {
+      setSaveMsg('Lỗi — thử lại')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="target-editor">
+      {TARGET_SKILLS.map(({ key, label }) => (
+        <label key={key} className="onboarding-score-row target-row">
+          <span className="onboarding-score-label">{label}</span>
+          <select
+            className="onboarding-score-input"
+            value={targets[key]}
+            onChange={(e) => handleChange(key, e.target.value)}
+          >
+            {BAND_OPTIONS.map((band) => (
+              <option key={band} value={band}>{band}</option>
+            ))}
+          </select>
+        </label>
+      ))}
+      {isDirty && (
+        <button className="target-save-btn" onClick={handleSave} disabled={saving}>
+          {saving ? 'Đang lưu…' : 'Lưu mục tiêu'}
+        </button>
+      )}
+      {saveMsg && <p className="target-save-msg">{saveMsg}</p>}
+    </div>
+  )
+}
 
 function ConditionCard({ label, value, note }) {
   return (
@@ -55,10 +131,12 @@ function StatusModal({
   skills,
   badges,
   recentCheckins,
+  onProfileRefresh,
 }) {
   const [isCheckInOpen, setIsCheckInOpen] = useState(false)
   const [isBadgeOpen, setIsBadgeOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [isTargetOpen, setIsTargetOpen] = useState(false)
 
   const todayCondition = useMemo(
     () => ({
@@ -208,6 +286,15 @@ function StatusModal({
           </header>
           <SkillCards skills={skills} compact />
         </section>
+
+        <AuxSection
+          title="Mục tiêu IELTS"
+          meta={`Overall ${player.targetOverall || player.target || '—'}`}
+          open={isTargetOpen}
+          onToggle={() => setIsTargetOpen((current) => !current)}
+        >
+          <TargetEditor player={player} onProfileRefresh={onProfileRefresh} />
+        </AuxSection>
 
         <AuxSection
           title="Badge Wall"

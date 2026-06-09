@@ -2,6 +2,47 @@
 
 Newest first.
 
+## 2026-06-09 - Phase 7: Writing/Speaking non-boss-gated (Task 12)
+
+- Added `boss_gated` field (`Boolean`, default `True`) to the `Skill` model in `models.py`.
+- Created Alembic migration `20260609_16_add_boss_gated_to_skills.py` to add `boss_gated` column to the `skills` table with a server default of `1`.
+- Updated `ensure_skills()` in `seed.py` to seed `boss_gated = False` for `"Writing"` and `"Speaking"` and `True` for all other skills (Listening, Reading, Vocabulary, Collocation, Grammar).
+- Updated `recompute_skill_progress()` in `services.py` to bypass rank boss promotion gating when the skill's `boss_gated` is false, directly promoting `confirmed_rank` to `rank` and resetting/clearing exam/promotion states.
+- Added guard to `/api/rank-exams/unlock` in `main.py` blocking exam unlocks for non-boss-gated skills with a `400 Bad Request`.
+- Added `test_non_boss_gated_skills` unit test to `test_backend.py` asserting correct seeding, direct rank promotion on quest claim, and unlock endpoint block.
+- Ran tests successfully; all 48 tests passed.
+- Marked Task 12 as completed in `TASKS.md`, keeping gap checks unchecked for review.
+
+---
+
+## 2026-06-09 - Phase 6: Main Quest Full-XP + Skill Tiering (Tasks 10 and 11)
+
+- Updated `infer_primary_skill` in `seed.py` to fall back to searching `task_detail` for matrix skill name keywords when resolving the primary skill, which properly maps S4 review sessions to their weekly dominant skill focus.
+- Rewrote `infer_main_quest_xp` in `seed.py` to tier XP by skill column: S3 -> 45 XP, S1/S2 -> 35 XP, S4 standard review -> 25 XP, and mock exam -> 60 XP. Passed `session.task_detail` to the function calls.
+- Added `resolve_main_quest_covered_skills` helper in `services.py` to map Main Quest session number and primary skill to the exact set of matrix skills covered (S1 -> Listening & Speaking, S2 -> Reading & Vocabulary, S3 -> Writing, S4 -> dominant skill).
+- Refactored `recompute_skill_progress` in `services.py` to credit the full Main Quest earned XP to every resolved covered matrix skill. Excluded Main Quests from Daily Quest and support routing queries to avoid double-counting.
+- Added `test_main_quest_xp_and_routing` unit/integration tests to `TestCollocationMasterData` in `test_backend.py`.
+- Ran backend unit tests successfully; all 47 tests pass.
+- Marked Tasks 10 and 11 as completed in `TASKS.md`, keeping gap checks unchecked for review.
+
+## 2026-06-09 - Phase 5: 9 Daily Slots (Tasks 8 and 9)
+
+- Verified that database schema `daily_slot_code` is `sa.String(length=20)` and natively supports the 9 slots without additional constraints.
+- Updated `quest_template_seed()` in `seed.py` to seed exactly the 9 redesigned daily quest templates with their spec names, skills, and base XP values.
+- Updated template quotas in `ensure_campaign_templates()` and campaign quotas copying in `ensure_campaign_settings_and_quotas()` to reflect the new 9-quest structure.
+- Refactored `slot_mapping` and resolved daily quest `skill_id` using the template's primary skill (`primary_skill.name`) in `ensure_quest_instances()`, allowing correct support-source routing (Grammar -> Writing, Collocation -> Vocabulary).
+- Added `test_nine_daily_slots_generation_and_routing` unit/integration test in `test_backend.py`.
+- Ran the full test suite; all 46 tests passed successfully.
+- Marked Tasks 8 and 9 as completed in `TASKS.md`, leaving the gap checks unchecked for peer review.
+
+## 2026-06-09 - Task 7: Cap data-entry vocab XP at 40/word (mastery separate)
+
+- Restructured `compute_vocabulary_xp` in `services.py` to cap vocabulary data-entry XP at 40 per word, keeping mastery score (up to 50) separate.
+- Added queries to group examples and relations by item to prevent N+1 database queries when calculating XP.
+- Added `test_vocabulary_anti_farm_cap` unit test in `test_backend.py` to assert correct capping behavior and that mastery score is added separately.
+- Ran tests successfully; all 7 tests in `TestWaveDAndE` pass.
+- Left the gap check unchecked in `TASKS.md` for peer review.
+
 ## 2026-06-08 - Collocation Master Data System Complete
 
 - Cleaned up all legacy references to the deprecated `VocabularyCollocation` model and `vocabulary_collocations` database table in `services.py` and `test_backend.py`.

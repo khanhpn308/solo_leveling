@@ -62,6 +62,17 @@ from .models import (
     VocabularyNode,
     VocabularyEdge,
     VocabularyError,
+    CollocationCollection,
+    CollocationSection,
+    CollocationTopic,
+    CollocationItem,
+    CampaignCollocationLink,
+    PlayerCollocationProgress,
+    CollocationFlashcard,
+    RankXpThreshold,
+    QuestXpPolicy,
+    WeeklyMissionXpPolicy,
+    MainQuestXpPolicy,
 )
 from .schemas import (
     BadgeOut,
@@ -130,6 +141,7 @@ from .schemas import (
     AccountRegisterIn,
     AccountLoginIn,
     OnboardingActivateIn,
+    PlayerTargetsIn,
     TokenOut,
     AccountMeOut,
     PlayerMeOut,
@@ -147,6 +159,11 @@ from .schemas import (
     RankExamAttemptOut,
     RankExamStatusOut,
     SupportBreakdownItem,
+    CollocationBrowseTopicOut,
+    CollocationBrowseItemOut,
+    CollocationFlashcardTopicOut,
+    CollocationFlashcardItemOut,
+    CollocationReviewIn,
 )
 from .seed import activate_campaign_for_player, ensure_quest_instances, ensure_roadmap_phases, ensure_skills, ensure_templates, parse_start_date, seed_database
 from .services import (
@@ -335,6 +352,7 @@ def get_campaign_skill_outputs(db: Session, campaign: Campaign) -> list[SkillOut
                 .filter(
                     Quest.campaign_id == campaign.id,
                     Quest.skill_id == src_skill.id,
+                    Quest.session_type != "Main Quest",
                     Quest.completed == True,
                     Quest.reward_claimed == True,
                 )
@@ -684,10 +702,20 @@ def activate_campaign(
         player.display_name = body.display_name.strip()
         player.name = body.display_name.strip()
 
-    # target_band from onboarding takes precedence over template default
-    if body and body.target_band and body.target_band.strip():
-        player.target_overall_band = body.target_band.strip()
-        player.target = f"IELTS Academic {body.target_band.strip()}"
+    # Persist target bands from onboarding (overall + 4 skills)
+    if body:
+        overall = body.target_overall_band or body.target_band
+        if overall and overall.strip():
+            player.target_overall_band = overall.strip()
+            player.target = f"IELTS Academic {overall.strip()}"
+        if body.target_listening_band:
+            player.target_listening_band = body.target_listening_band.strip()
+        if body.target_reading_band:
+            player.target_reading_band = body.target_reading_band.strip()
+        if body.target_writing_band:
+            player.target_writing_band = body.target_writing_band.strip()
+        if body.target_speaking_band:
+            player.target_speaking_band = body.target_speaking_band.strip()
 
     template_code = (body.campaign_template_code if body else None) or "ielts_18_month_foundation"
     start_date = (body.start_date if body else None)
@@ -787,6 +815,30 @@ def get_summary(player: Player = Depends(get_current_player), campaign: Campaign
 
 @app.get("/api/profile", response_model=PlayerProfileOut)
 def get_profile(player: Player = Depends(get_current_player), campaign: Campaign = Depends(get_current_campaign), db: Session = Depends(get_db)):
+    refresh_progress_state(db, player=player, campaign=campaign)
+    db.refresh(player)
+    return player
+
+
+@app.patch("/api/player/targets", response_model=PlayerProfileOut)
+def patch_player_targets(
+    payload: PlayerTargetsIn,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db)
+):
+    if payload.target_overall_band is not None:
+        player.target_overall_band = payload.target_overall_band.strip()
+        player.target = f"IELTS Academic {payload.target_overall_band.strip()}"
+    if payload.target_listening_band is not None:
+        player.target_listening_band = payload.target_listening_band.strip()
+    if payload.target_reading_band is not None:
+        player.target_reading_band = payload.target_reading_band.strip()
+    if payload.target_writing_band is not None:
+        player.target_writing_band = payload.target_writing_band.strip()
+    if payload.target_speaking_band is not None:
+        player.target_speaking_band = payload.target_speaking_band.strip()
+    db.commit()
     refresh_progress_state(db, player=player, campaign=campaign)
     db.refresh(player)
     return player
@@ -1466,6 +1518,13 @@ def reset_database(db: Session = Depends(get_db)):
             VocabularyExample,
             VocabularyItem,
             BadgeUnlock,
+            PlayerCollocationProgress,
+            CollocationFlashcard,
+            CampaignCollocationLink,
+            CollocationItem,
+            CollocationTopic,
+            CollocationSection,
+            CollocationCollection,
             CampaignSkillState,
             WeaknessSuggestion,
             SkillRankHistory,
@@ -1487,6 +1546,10 @@ def reset_database(db: Session = Depends(get_db)):
             PhaseMaterial,
             RoadmapPhase,
             StudyMaterial,
+            RankXpThreshold,
+            QuestXpPolicy,
+            WeeklyMissionXpPolicy,
+            MainQuestXpPolicy,
             Skill,
             Campaign,
             Player,
@@ -1525,6 +1588,8 @@ def unlock_rank_exam(payload: RankExamStartIn, campaign: Campaign = Depends(get_
     skill = db.query(Skill).filter(Skill.id == payload.skill_id).first()
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    if not skill.boss_gated:
+        raise HTTPException(status_code=400, detail="This skill does not require a boss exam for promotion")
 
     state = db.query(CampaignSkillState).filter(
         CampaignSkillState.campaign_id == campaign.id,
@@ -2157,6 +2222,305 @@ def submit_vocabulary_boss_endpoint(boss_id: int, payload: VocabularyBossSubmitI
     if boss_id not in [1, 2, 3, 4]:
         raise HTTPException(status_code=400, detail="Invalid boss ID")
     return services.submit_vocabulary_boss_result(db, player.id, boss_id, payload.score_pct)
+
+
+# ---------------------------------------------------------------------------
+# I4-2: Collocation browser + flashcard endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/collocations/topics", response_model=list[CollocationBrowseTopicOut])
+def get_collocation_browse_topics(
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Browse: all topics in the campaign-linked collections, enriched with item_count."""
+    from sqlalchemy import func as sqlfunc
+    # Get collection IDs linked to this campaign
+    link_ids = [
+        row.collection_id
+        for row in db.query(CampaignCollocationLink.collection_id)
+        .filter(CampaignCollocationLink.campaign_id == campaign.id)
+        .all()
+    ]
+    if not link_ids:
+        return []
+
+    # Item counts per topic
+    item_counts = dict(
+        db.query(CollocationItem.topic_id, sqlfunc.count(CollocationItem.id))
+        .join(CollocationTopic, CollocationTopic.id == CollocationItem.topic_id)
+        .join(CollocationSection, CollocationSection.id == CollocationTopic.section_id)
+        .filter(CollocationSection.collection_id.in_(link_ids))
+        .group_by(CollocationItem.topic_id)
+        .all()
+    )
+
+    topics = (
+        db.query(CollocationTopic)
+        .join(CollocationSection, CollocationSection.id == CollocationTopic.section_id)
+        .filter(CollocationSection.collection_id.in_(link_ids))
+        .order_by(CollocationSection.section_order, CollocationTopic.topic_order)
+        .all()
+    )
+    result = []
+    for t in topics:
+        result.append(CollocationBrowseTopicOut(
+            id=t.id,
+            title=t.title,
+            topic_order=t.topic_order,
+            section_title=t.section.title if t.section else "",
+            section_order=t.section.section_order if t.section else 0,
+            item_count=item_counts.get(t.id, 0),
+        ))
+    return result
+
+
+@app.get("/api/collocations/topics/{topic_id}/items", response_model=list[CollocationBrowseItemOut])
+def get_collocation_browse_items(
+    topic_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Browse: items in a topic with effective_familiarity + is_added from collocation_flashcards."""
+    from datetime import datetime as _dt
+    items = (
+        db.query(CollocationItem)
+        .filter(CollocationItem.topic_id == topic_id)
+        .order_by(CollocationItem.item_order)
+        .all()
+    )
+    # Fetch all flashcard rows for this player/campaign in one query
+    item_ids = [i.id for i in items]
+    fc_map: dict[int, CollocationFlashcard] = {}
+    if item_ids:
+        rows = (
+            db.query(CollocationFlashcard)
+            .filter(
+                CollocationFlashcard.player_id == player.id,
+                CollocationFlashcard.campaign_id == campaign.id,
+                CollocationFlashcard.collocation_item_id.in_(item_ids),
+            )
+            .all()
+        )
+        fc_map = {r.collocation_item_id: r for r in rows}
+
+    now = _dt.utcnow()
+    result = []
+    for item in items:
+        fc = fc_map.get(item.id)
+        eff = services.effective_familiarity(fc.familiarity, fc.familiarity_set_at, now) if fc else "again"
+        result.append(CollocationBrowseItemOut(
+            id=item.id,
+            collocation=item.collocation,
+            pronunciation_us=item.pronunciation_us,
+            meaning_vi=item.meaning_vi,
+            example_en=item.example_en,
+            example_vi=item.example_vi,
+            collocation_type=item.collocation_type,
+            item_order=item.item_order,
+            effective_familiarity=eff,
+            is_added=fc is not None,
+        ))
+    return result
+
+
+@app.post("/api/collocations/{item_id}/flashcard")
+def add_collocation_flashcard(
+    item_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Add flashcard for an item (idempotent). Re-adding a graduated 'easy' card resets to 'again'."""
+    existing = (
+        db.query(CollocationFlashcard)
+        .filter(
+            CollocationFlashcard.player_id == player.id,
+            CollocationFlashcard.campaign_id == campaign.id,
+            CollocationFlashcard.collocation_item_id == item_id,
+        )
+        .first()
+    )
+    if existing:
+        if existing.familiarity == "easy":
+            # Re-add: graduate reset to again
+            existing.familiarity = "again"
+            existing.familiarity_set_at = datetime.utcnow()
+            db.commit()
+        return {"detail": "flashcard exists", "familiarity": existing.familiarity}
+    # Verify item exists
+    item = db.query(CollocationItem).filter(CollocationItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Collocation item not found")
+    fc = CollocationFlashcard(
+        player_id=player.id,
+        campaign_id=campaign.id,
+        collocation_item_id=item_id,
+        familiarity="again",
+        familiarity_set_at=datetime.utcnow(),
+    )
+    db.add(fc)
+    db.commit()
+    return {"detail": "flashcard added", "familiarity": "again"}
+
+
+@app.delete("/api/collocations/{item_id}/flashcard")
+def remove_collocation_flashcard(
+    item_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Remove a flashcard row (removes from flashcard tab; still browsable)."""
+    fc = (
+        db.query(CollocationFlashcard)
+        .filter(
+            CollocationFlashcard.player_id == player.id,
+            CollocationFlashcard.campaign_id == campaign.id,
+            CollocationFlashcard.collocation_item_id == item_id,
+        )
+        .first()
+    )
+    if not fc:
+        raise HTTPException(status_code=404, detail="Flashcard not found")
+    db.delete(fc)
+    db.commit()
+    return {"detail": "flashcard removed"}
+
+
+@app.post("/api/collocations/{item_id}/flashcard/review")
+def review_collocation_flashcard(
+    item_id: int,
+    body: CollocationReviewIn,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Set familiarity (again/hard/good/easy) for a collocation flashcard, then check auto-complete."""
+    valid_results = {"again", "hard", "good", "easy"}
+    if body.result not in valid_results:
+        raise HTTPException(status_code=422, detail=f"result must be one of {valid_results}")
+    fc = (
+        db.query(CollocationFlashcard)
+        .filter(
+            CollocationFlashcard.player_id == player.id,
+            CollocationFlashcard.campaign_id == campaign.id,
+            CollocationFlashcard.collocation_item_id == item_id,
+        )
+        .first()
+    )
+    if not fc:
+        raise HTTPException(status_code=404, detail="Flashcard not found — add it first")
+    fc.familiarity = body.result
+    fc.familiarity_set_at = datetime.utcnow()
+    db.flush()
+    # I4-7: Auto-complete Collocation Forge daily quest if 5 distinct reviewed today
+    today = date.today()
+    autocompleted = services.try_autocomplete_collocation_forge(
+        db, player_id=player.id, campaign_id=campaign.id, today=today
+    )
+    db.commit()
+    return {
+        "detail": "familiarity updated",
+        "familiarity": fc.familiarity,
+        "collocation_forge_autocompleted": autocompleted,
+    }
+
+
+@app.get("/api/collocations/flashcard/topics", response_model=list[CollocationFlashcardTopicOut])
+def get_collocation_flashcard_topics(
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Flashcard: topics with ≥1 non-graduated (familiarity != 'easy') added card."""
+    from datetime import datetime as _dt
+    now = _dt.utcnow()
+    # Fetch all non-easy flashcard rows for this player/campaign
+    fc_rows = (
+        db.query(CollocationFlashcard)
+        .filter(
+            CollocationFlashcard.player_id == player.id,
+            CollocationFlashcard.campaign_id == campaign.id,
+            CollocationFlashcard.familiarity != "easy",
+        )
+        .all()
+    )
+    # Apply lazy decay — exclude cards that decay to same level (they still show)
+    # Group by topic_id
+    topic_card_counts: dict[int, int] = {}
+    for fc in fc_rows:
+        eff = services.effective_familiarity(fc.familiarity, fc.familiarity_set_at, now)
+        # 'easy' after decay still = graduated (shouldn't happen since stored != easy,
+        # but guard defensively)
+        if eff == "easy":
+            continue
+        item = db.query(CollocationItem).filter(CollocationItem.id == fc.collocation_item_id).first()
+        if item:
+            topic_card_counts[item.topic_id] = topic_card_counts.get(item.topic_id, 0) + 1
+
+    if not topic_card_counts:
+        return []
+
+    topics = (
+        db.query(CollocationTopic)
+        .filter(CollocationTopic.id.in_(list(topic_card_counts.keys())))
+        .order_by(CollocationTopic.topic_order)
+        .all()
+    )
+    result = []
+    for t in topics:
+        result.append(CollocationFlashcardTopicOut(
+            id=t.id,
+            title=t.title,
+            topic_order=t.topic_order,
+            section_title=t.section.title if t.section else "",
+            card_count=topic_card_counts.get(t.id, 0),
+        ))
+    return result
+
+
+@app.get("/api/collocations/flashcard/topics/{topic_id}", response_model=list[CollocationFlashcardItemOut])
+def get_collocation_flashcard_items(
+    topic_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Flashcard: non-graduated added cards in a topic for the review loop."""
+    from datetime import datetime as _dt
+    now = _dt.utcnow()
+    fc_rows = (
+        db.query(CollocationFlashcard)
+        .join(CollocationItem, CollocationItem.id == CollocationFlashcard.collocation_item_id)
+        .filter(
+            CollocationFlashcard.player_id == player.id,
+            CollocationFlashcard.campaign_id == campaign.id,
+            CollocationFlashcard.familiarity != "easy",
+            CollocationItem.topic_id == topic_id,
+        )
+        .order_by(CollocationItem.item_order)
+        .all()
+    )
+    result = []
+    for fc in fc_rows:
+        eff = services.effective_familiarity(fc.familiarity, fc.familiarity_set_at, now)
+        item = fc.collocation_item
+        result.append(CollocationFlashcardItemOut(
+            id=item.id,
+            collocation=item.collocation,
+            pronunciation_us=item.pronunciation_us,
+            meaning_vi=item.meaning_vi,
+            example_en=item.example_en,
+            example_vi=item.example_vi,
+            collocation_type=item.collocation_type,
+            item_order=item.item_order,
+            effective_familiarity=eff,
+        ))
+    return result
+
 
 
 

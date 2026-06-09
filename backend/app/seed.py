@@ -35,9 +35,18 @@ from .models import (
     VocabularySetting,
     WeeklyMission,
     WeeklyMissionItem,
+    CollocationCollection,
+    CollocationSection,
+    CollocationTopic,
+    CollocationItem,
+    CampaignCollocationLink,
+    RankXpThreshold,
+    QuestXpPolicy,
+    WeeklyMissionXpPolicy,
+    MainQuestXpPolicy,
 )
 from .auth_utils import hash_password
-from .services import create_rank_suggestions_for_test
+from .services import create_rank_suggestions_for_test, link_collection_to_campaign
 
 SKILLS = [
     ("Listening", "🎧", "Current strength; still needs work on Sections 3-4, distractors, and spelling."),
@@ -64,6 +73,13 @@ BADGES = [
     ("Lexical Awakener", "🌌", "Clear the final Lexical Awakening Boss Battle (Boss 04)."),
     ("Writing Lexical Buff", "📜", "Clear the Collocation Hunter Boss Battle (Boss 03)."),
 ]
+
+
+MATERIAL_ANCHOR_DATE = date(2026, 6, 4)  # Week 1 Session 1 in material.md (Thursday)
+
+
+def rebase_material_date(material_date: date, campaign_start: date) -> date:
+    return campaign_start + (material_date - MATERIAL_ANCHOR_DATE)
 
 
 ROADMAP_PHASES = [
@@ -370,12 +386,12 @@ def campaign_end_date(start_date: date) -> date:
 def quest_template_seed() -> list[dict]:
     return [
         {
-            "title": "Reading Core Sweep",
+            "title": "Reading Daily",
             "description": "Complete 1 reading passage, mark it, and analyze 3-5 long sentences.",
             "skill": "Reading",
             "phase_code": "phase-2",
             "material_title": "IELTS Advantage Reading Skills",
-            "base_xp": 25,
+            "base_xp": 10,
             "difficulty": "normal",
             "difficulty_description": "Detailed reading and analysis.",
             "quest_role": "core",
@@ -386,12 +402,12 @@ def quest_template_seed() -> list[dict]:
             "allowed_phase_end": 5,
         },
         {
-            "title": "Listening Core Sweep",
+            "title": "Listening Daily",
             "description": "Complete 1 listening task, review the transcript, and note distractors and spelling traps.",
             "skill": "Listening",
             "phase_code": "phase-2",
             "material_title": "IELTS Advantage - Speaking and Listening Skills",
-            "base_xp": 20,
+            "base_xp": 10,
             "difficulty": "normal",
             "difficulty_description": "Task completion plus transcript review.",
             "quest_role": "core",
@@ -402,12 +418,12 @@ def quest_template_seed() -> list[dict]:
             "allowed_phase_end": 5,
         },
         {
-            "title": "Writing Core Draft",
+            "title": "Writing Daily",
             "description": "Write 1 paragraph or short response and self-review it against IELTS criteria.",
             "skill": "Writing",
             "phase_code": "phase-2",
             "material_title": "IELTS Advantage Writing Skills",
-            "base_xp": 25,
+            "base_xp": 12,
             "difficulty": "normal",
             "difficulty_description": "Drafting plus self-review.",
             "quest_role": "core",
@@ -418,12 +434,12 @@ def quest_template_seed() -> list[dict]:
             "allowed_phase_end": 5,
         },
         {
-            "title": "Speaking Core Record",
+            "title": "Speaking Daily",
             "description": "Record Speaking Part 1/2/3, listen back, and note 3 points to improve.",
             "skill": "Speaking",
             "phase_code": "phase-2",
             "material_title": "IELTS Advantage - Speaking and Listening Skills",
-            "base_xp": 25,
+            "base_xp": 12,
             "difficulty": "normal",
             "difficulty_description": "Recording plus self-evaluation.",
             "quest_role": "core",
@@ -434,60 +450,12 @@ def quest_template_seed() -> list[dict]:
             "allowed_phase_end": 5,
         },
         {
-            "title": "Vocabulary Support Pack",
-            "description": "Learn 10 new words, 3 collocations, and 2 paraphrase pairs.",
-            "skill": "Vocabulary",
-            "phase_code": "phase-1",
-            "material_title": "English Vocabulary in Use Upper-Intermediate",
-            "base_xp": 10,
-            "difficulty": "easy",
-            "difficulty_description": "Short and easy to sustain.",
-            "quest_role": "support",
-            "resource_name": "English Vocabulary in Use Upper-Intermediate",
-            "resource_category": "book",
-            "resource_note": "Use in phases 1-2, then revisit later.",
-            "allowed_phase_start": 1,
-            "allowed_phase_end": 5,
-        },
-        {
-            "title": "Grammar Support Forge",
-            "description": "Study 1 grammar point, do a short exercise, and write 3 application sentences.",
-            "skill": "Grammar",
-            "phase_code": "phase-1",
-            "material_title": "Cambridge Grammar for IELTS",
-            "base_xp": 15,
-            "difficulty": "easy",
-            "difficulty_description": "Guided review.",
-            "quest_role": "support",
-            "resource_name": "Cambridge Grammar for IELTS",
-            "resource_category": "book",
-            "resource_note": "Return to related units when errors appear.",
-            "allowed_phase_start": 1,
-            "allowed_phase_end": 5,
-        },
-        {
-            "title": "Collocation Support Pack",
-            "description": "Study 5 collocations and write 3 sentences with personal context.",
-            "skill": "Collocation",
-            "phase_code": "phase-1",
-            "material_title": "English Collocations in Use Intermediate",
-            "base_xp": 10,
-            "difficulty": "easy",
-            "difficulty_description": "Quick support loop.",
-            "quest_role": "support",
-            "resource_name": "English Collocations in Use Intermediate",
-            "resource_category": "book",
-            "resource_note": "Switch to Advanced in later phases.",
-            "allowed_phase_start": 1,
-            "allowed_phase_end": 5,
-        },
-        {
-            "title": "Memory Gate",
+            "title": "Flashcard Gate",
             "description": "Review 20 flashcards using the spaced-repetition gate and mark 5 as mastered.",
             "skill": "Vocabulary",
             "phase_code": "phase-1",
             "material_title": "Any current notebook",
-            "base_xp": 15,
+            "base_xp": 4,
             "difficulty": "easy",
             "difficulty_description": "Flashcard review gate.",
             "quest_role": "support",
@@ -508,7 +476,7 @@ def quest_template_seed() -> list[dict]:
             "skill": "Vocabulary",
             "phase_code": "phase-1",
             "material_title": "Any current notebook",
-            "base_xp": 12,
+            "base_xp": 5,
             "difficulty": "easy",
             "difficulty_description": "Create and save a codex entry.",
             "quest_role": "support",
@@ -529,7 +497,7 @@ def quest_template_seed() -> list[dict]:
             "skill": "Collocation",
             "phase_code": "phase-1",
             "material_title": "English Collocations in Use Intermediate",
-            "base_xp": 14,
+            "base_xp": 5,
             "difficulty": "easy",
             "difficulty_description": "Produce collocation examples.",
             "quest_role": "support",
@@ -545,93 +513,35 @@ def quest_template_seed() -> list[dict]:
             "completion_payload": "{\"examples\":3}",
         },
         {
-            "title": "Context Hunt",
-            "description": "Find 3 real-sentence contexts for 5 target words from reading materials and save them.",
-            "skill": "Vocabulary",
+            "title": "Grammar Review",
+            "description": "Study 1 grammar point, do a short exercise, and write 3 application sentences.",
+            "skill": "Grammar",
             "phase_code": "phase-1",
-            "material_title": "Any current notebook",
-            "base_xp": 16,
-            "difficulty": "normal",
-            "difficulty_description": "Collect contextual examples from readings.",
-            "quest_role": "support",
-            "resource_name": "Any current notebook",
-            "resource_category": "review",
-            "resource_note": "Contextual sentence collection.",
-            "allowed_phase_start": 1,
-            "allowed_phase_end": 5,
-            "quest_track_code": "vocab_context",
-            "activity_type": "context_collection",
-            "target_metric": "contexts_saved",
-            "target_count": 3,
-            "completion_payload": "{\"contexts\":3}",
-        },
-        {
-            "title": "Error Dungeon",
-            "description": "Log 3 recurring vocabulary errors and write corrective notes for each.",
-            "skill": "Vocabulary",
-            "phase_code": "phase-1",
-            "material_title": "Any current notebook",
-            "base_xp": 18,
-            "difficulty": "normal",
-            "difficulty_description": "Error logging and corrective practice.",
-            "quest_role": "support",
-            "resource_name": "Any current notebook",
-            "resource_category": "review",
-            "resource_note": "Log recurring errors and corrections.",
-            "allowed_phase_start": 1,
-            "allowed_phase_end": 5,
-            "quest_track_code": "vocab_error",
-            "activity_type": "error_logging",
-            "target_metric": "errors_logged",
-            "target_count": 3,
-            "completion_payload": "{\"errors\":3}",
-        },
-        {
-            "title": "Mini Review Burst",
-            "description": "Quick 5-10 minute review: flashcards, transcript notes, or error recall.",
-            "skill": "Vocabulary",
-            "phase_code": "phase-1",
-            "material_title": "Any current notebook",
+            "material_title": "Cambridge Grammar for IELTS",
             "base_xp": 5,
             "difficulty": "easy",
-            "difficulty_description": "Very light to protect the streak.",
-            "quest_role": "mini",
-            "resource_name": "Any current notebook",
-            "resource_category": "review",
-            "resource_note": "Mini quest can follow the day's main skill.",
+            "difficulty_description": "Guided review.",
+            "quest_role": "support",
+            "resource_name": "Cambridge Grammar for IELTS",
+            "resource_category": "book",
+            "resource_note": "Return to related units when errors appear.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
         {
-            "title": "Mock Reading Raid",
-            "description": "Complete a timed Reading set and summarize mistakes; intended for phases 4-5.",
-            "skill": "Reading",
-            "phase_code": "phase-4",
-            "material_title": "Cambridge IELTS 17",
-            "base_xp": 40,
-            "difficulty": "hard",
-            "difficulty_description": "Timed practice with post-task analysis.",
-            "quest_role": "core",
-            "resource_name": "Cambridge IELTS 17",
-            "resource_category": "mock",
-            "resource_note": "Only appears in phases 4-5.",
-            "allowed_phase_start": 4,
-            "allowed_phase_end": 5,
-        },
-        {
-            "title": "Mock Listening Raid",
-            "description": "Complete a timed Listening set and review the transcript carefully; intended for phases 4-5.",
-            "skill": "Listening",
-            "phase_code": "phase-4",
-            "material_title": "Cambridge IELTS 17",
-            "base_xp": 40,
-            "difficulty": "hard",
-            "difficulty_description": "Timed practice with transcript review after the set.",
-            "quest_role": "core",
-            "resource_name": "Cambridge IELTS 17",
-            "resource_category": "mock",
-            "resource_note": "Only appears in phases 4-5.",
-            "allowed_phase_start": 4,
+            "title": "Grammar Exercise",
+            "description": "Study 1 grammar point, do a short exercise, and write 3 application sentences.",
+            "skill": "Grammar",
+            "phase_code": "phase-1",
+            "material_title": "Cambridge Grammar for IELTS",
+            "base_xp": 7,
+            "difficulty": "easy",
+            "difficulty_description": "Guided review.",
+            "quest_role": "support",
+            "resource_name": "Cambridge Grammar for IELTS",
+            "resource_category": "book",
+            "resource_note": "Return to related units when errors appear.",
+            "allowed_phase_start": 1,
             "allowed_phase_end": 5,
         },
     ]
@@ -749,24 +659,153 @@ def normalize_material_names(raw_value: str) -> list[str]:
     return deduped
 
 
-def infer_primary_skill(skill_summary: str) -> str:
+def infer_primary_skill(skill_summary: str, task_detail: str = "") -> str:
     ordered = ["Listening", "Reading", "Writing", "Speaking", "Vocabulary", "Collocation", "Grammar"]
     for skill_name in ordered:
         if skill_name.lower() in skill_summary.lower():
             return skill_name
+    for skill_name in ordered:
+        if skill_name.lower() in task_detail.lower():
+            return skill_name
     return "Reading"
 
 
-def infer_main_quest_xp(session_no: int, skill_summary: str) -> int:
-    if session_no == 1:
-        return 35
-    if session_no == 2:
-        return 40
+def infer_main_quest_tier(session_no: int, skill_summary: str, task_detail: str = "") -> str:
     if session_no == 3:
-        return 40
-    if "Error log" in skill_summary or "Review" in skill_summary:
+        return "heavy_output"
+    if session_no in (1, 2):
+        return "standard"
+    if session_no == 4:
+        combined = (skill_summary + " " + task_detail).lower()
+        if "mock" in combined or "simulation" in combined or "sectional test" in combined:
+            return "mock"
+        return "review_error_logging"
+    return "review_error_logging"
+
+
+def infer_main_quest_xp(session_no: int, skill_summary: str, task_detail: str = "", db: Session | None = None) -> int:
+    if db is not None:
+        try:
+            tier = infer_main_quest_tier(session_no, skill_summary, task_detail)
+            policy = db.query(MainQuestXpPolicy).filter_by(tier_code=tier).first()
+            if policy:
+                return policy.xp_reward
+        except Exception:
+            pass
+
+    if session_no == 3:
+        return 45
+    if session_no in (1, 2):
+        return 35
+    if session_no == 4:
+        combined = (skill_summary + " " + task_detail).lower()
+        if "mock" in combined or "simulation" in combined or "sectional test" in combined:
+            return 60
         return 25
-    return 30
+    return 25
+
+
+def map_template_to_activity_code(title: str) -> str:
+    title_lower = title.lower()
+    if "reading daily" in title_lower: return "reading"
+    if "listening daily" in title_lower: return "listening"
+    if "writing daily" in title_lower: return "writing"
+    if "speaking daily" in title_lower: return "speaking"
+    if "flashcard gate" in title_lower: return "vocab_flashcard"
+    if "codex entry" in title_lower: return "vocab_codex"
+    if "collocation forge" in title_lower: return "vocab_collocation"
+    if "grammar review" in title_lower: return "grammar_review"
+    if "grammar exercise" in title_lower: return "grammar_exercise"
+    return title_lower.replace(" ", "_")
+
+
+def map_weekly_pattern_to_mission_type(pattern_code: str) -> str:
+    pattern_lower = pattern_code.lower()
+    if "balanced" in pattern_lower: return "listening_weekly"
+    if "reading" in pattern_lower: return "reading_weekly"
+    if "vocabulary" in pattern_lower or "vocab" in pattern_lower: return "vocab_weekly"
+    if "grammar" in pattern_lower: return "grammar_weekly"
+    if "speaking" in pattern_lower: return "speaking_weekly"
+    if "output" in pattern_lower: return "writing_weekly"
+    if "onboarding" in pattern_lower: return "onboarding"
+    return pattern_lower
+
+
+def ensure_policy_tables(db: Session) -> None:
+    # 1. Rank XP Thresholds
+    rank_thresholds = [
+        ("F", 0, 1),
+        ("E", 862, 11),
+        ("D", 2460, 21),
+        ("C", 4604, 31),
+        ("B", 7212, 41),
+        ("A", 10234, 51),
+        ("S", 13279, 60),
+    ]
+    for rank_name, min_xp, first_level in rank_thresholds:
+        existing = db.query(RankXpThreshold).filter_by(rank_name=rank_name).first()
+        if not existing:
+            db.add(RankXpThreshold(rank_name=rank_name, min_xp=min_xp, first_level=first_level))
+        else:
+            existing.min_xp = min_xp
+            existing.first_level = first_level
+    db.flush()
+
+    # 2. Quest XP Policies
+    quest_policies = [
+        ("vocab_flashcard", "Vocabulary", 4),
+        ("vocab_codex", "Vocabulary", 5),
+        ("vocab_collocation", "Vocabulary", 5),
+        ("listening", "Listening", 10),
+        ("reading", "Reading", 10),
+        ("writing", "Writing", 12),
+        ("speaking", "Speaking", 12),
+        ("grammar_review", "Writing", 5),
+        ("grammar_exercise", "Writing", 7),
+    ]
+    for activity_code, skill_code, xp_reward in quest_policies:
+        existing = db.query(QuestXpPolicy).filter_by(activity_code=activity_code).first()
+        if not existing:
+            db.add(QuestXpPolicy(activity_code=activity_code, skill_code=skill_code, xp_reward=xp_reward))
+        else:
+            existing.skill_code = skill_code
+            existing.xp_reward = xp_reward
+    db.flush()
+
+    # 3. Weekly Mission XP Policies
+    weekly_policies = [
+        ("vocab_weekly", "Vocabulary", 55),
+        ("listening_weekly", "Listening", 40),
+        ("reading_weekly", "Reading", 40),
+        ("writing_weekly", "Writing", 45),
+        ("speaking_weekly", "Speaking", 45),
+        ("grammar_weekly", "Writing", 45),
+        ("onboarding", "Writing", 25),
+    ]
+    for mission_type, skill_name, xp_reward in weekly_policies:
+        existing = db.query(WeeklyMissionXpPolicy).filter_by(mission_type=mission_type).first()
+        if not existing:
+            db.add(WeeklyMissionXpPolicy(mission_type=mission_type, reward_target_skill=skill_name, xp_reward=xp_reward))
+        else:
+            existing.reward_target_skill = skill_name
+            existing.xp_reward = xp_reward
+    db.flush()
+
+    # 4. Main Quest XP Policies
+    main_policies = [
+        ("light_intro", 25),
+        ("standard", 35),
+        ("heavy_output", 45),
+        ("review_error_logging", 25),
+        ("mock", 60),
+    ]
+    for tier_code, xp_reward in main_policies:
+        existing = db.query(MainQuestXpPolicy).filter_by(tier_code=tier_code).first()
+        if not existing:
+            db.add(MainQuestXpPolicy(tier_code=tier_code, xp_reward=xp_reward))
+        else:
+            existing.xp_reward = xp_reward
+    db.flush()
 
 
 def weekly_mission_patterns(phase_index: int) -> list[dict]:
@@ -815,6 +854,30 @@ def weekly_mission_patterns(phase_index: int) -> list[dict]:
                 ("Complete 2 Writing/Speaking core quests", 2),
                 ("Self-review at least 2 recurring weak points", 2),
                 ("Complete 1 mini review tied to an output skill", 1),
+            ],
+        },
+        {
+            "pattern_code": f"{phase_index}-speaking-focus",
+            "title": f"Weekly Mission - {phase_name} Speaking Focus",
+            "description": "Drill Speaking fluency and pronunciation through structured practice.",
+            "reward_xp": 45,
+            "reward_skill": "Speaking",
+            "items": [
+                ("Complete 2 Speaking core quests", 2),
+                ("Record and self-assess 3 speaking responses", 3),
+                ("Log 2 pronunciation or fluency notes in Error Log", 2),
+            ],
+        },
+        {
+            "pattern_code": f"{phase_index}-grammar-focus",
+            "title": f"Weekly Mission - {phase_name} Grammar Focus",
+            "description": "Strengthen grammar structures to improve Writing accuracy.",
+            "reward_xp": 45,
+            "reward_skill": "Writing",
+            "items": [
+                ("Complete 2 Grammar Exercise or Grammar Review quests", 2),
+                ("Apply 3 grammar rules in Writing practice", 3),
+                ("Review 2 error log grammar entries", 2),
             ],
         },
     ]
@@ -927,15 +990,18 @@ def ensure_skills(db: Session) -> dict[str, Skill]:
     skill_by_name: dict[str, Skill] = {}
     for name, icon, _ in SKILLS:
         skill = db.query(Skill).filter(Skill.name == name).first()
+        boss_gated = name not in ("Writing", "Speaking")
         if not skill:
             skill = Skill(
                 name=name,
                 icon=icon,
+                boss_gated=boss_gated,
             )
             db.add(skill)
             db.flush()
         else:
             skill.icon = icon
+            skill.boss_gated = boss_gated
         skill_by_name[name] = skill
     return skill_by_name
 
@@ -1064,13 +1130,15 @@ def ensure_study_plan(
             .filter(StudyPlanWeek.campaign_id == campaign.id, StudyPlanWeek.week_no == row["week_no"])
             .first()
         )
+        rebased_start = rebase_material_date(row["week_start"], campaign.start_date)
+        rebased_end = rebase_material_date(row["week_end"], campaign.start_date)
         if not week:
             week = StudyPlanWeek(
                 campaign_id=campaign.id,
                 phase_id=phase.id,
                 week_no=row["week_no"],
-                week_start=row["week_start"],
-                week_end=row["week_end"],
+                week_start=rebased_start,
+                week_end=rebased_end,
                 weekly_focus=row["weekly_focus"],
                 weekly_output=row["weekly_output"],
                 material_summary=row["material_summary"],
@@ -1078,6 +1146,9 @@ def ensure_study_plan(
             )
             db.add(week)
             db.flush()
+        else:
+            week.week_start = rebased_start
+            week.week_end = rebased_end
         week_by_no[week.week_no] = week
 
     session_entities: list[StudyPlanSession] = []
@@ -1095,6 +1166,8 @@ def ensure_study_plan(
             )
             .first()
         )
+        rebased_date = rebase_material_date(row["study_date"], campaign.start_date)
+        rebased_label = rebased_date.strftime("%A")
         if not session:
             session = StudyPlanSession(
                 campaign_id=campaign.id,
@@ -1102,8 +1175,8 @@ def ensure_study_plan(
                 study_plan_week_id=week.id,
                 week_no=week.week_no,
                 session_no=session_no,
-                study_date=row["study_date"],
-                weekday_label=row["weekday_label"],
+                study_date=rebased_date,
+                weekday_label=rebased_label,
                 session_label=row["session_label"],
                 skill_summary=row["skill_summary"],
                 task_detail=row["task_detail"],
@@ -1115,6 +1188,9 @@ def ensure_study_plan(
             )
             db.add(session)
             db.flush()
+        else:
+            session.study_date = rebased_date
+            session.weekday_label = rebased_label
         session_entities.append(session)
 
     return week_by_no, session_entities
@@ -1128,6 +1204,10 @@ def ensure_templates(
 ) -> dict[str, QuestTemplate]:
     template_by_title: dict[str, QuestTemplate] = {}
     for item in quest_template_seed():
+        activity_code = map_template_to_activity_code(item["title"])
+        policy = db.query(QuestXpPolicy).filter_by(activity_code=activity_code).first()
+        base_xp = policy.xp_reward if policy else item["base_xp"]
+
         template = db.query(QuestTemplate).filter(QuestTemplate.title == item["title"]).first()
         if not template:
             template = QuestTemplate(
@@ -1136,7 +1216,7 @@ def ensure_templates(
                 primary_skill_id=skill_by_name[item["skill"]].id,
                 phase_id=phase_by_code[item["phase_code"]].id,
                 material_id=material_by_title[item["material_title"]].id,
-                base_xp=item["base_xp"],
+                base_xp=base_xp,
                 difficulty=item["difficulty"],
                 difficulty_description=item["difficulty_description"],
                 quest_role=item["quest_role"],
@@ -1160,7 +1240,7 @@ def ensure_templates(
             template.primary_skill_id = skill_by_name[item["skill"]].id
             template.phase_id = phase_by_code[item["phase_code"]].id
             template.material_id = material_by_title[item["material_title"]].id
-            template.base_xp = item["base_xp"]
+            template.base_xp = base_xp
             template.difficulty = item["difficulty"]
             template.difficulty_description = item["difficulty_description"]
             template.quest_role = item["quest_role"]
@@ -1254,28 +1334,25 @@ def ensure_quest_instances(
     # Map skill/activity combinations to distinct daily slot codes and templates
     slot_mapping = {
         "Vocabulary": [
-            ("vocab_flashcard", "Memory Gate"),
+            ("vocab_flashcard", "Flashcard Gate"),
             ("vocab_codex", "Codex Entry"),
-            ("vocab_collocation", "Context Hunt"),
-            ("vocab_error", "Error Dungeon")
+            ("vocab_collocation", "Collocation Forge")
         ],
         "Reading": [
-            ("reading_scan", "Reading Core Sweep")
+            ("reading", "Reading Daily")
         ],
         "Listening": [
-            ("listening_dictation", "Listening Core Sweep")
+            ("listening", "Listening Daily")
         ],
         "Grammar": [
-            ("grammar_pattern", "Grammar Support Forge")
-        ],
-        "Collocation": [
-            ("collocation_forge", "Collocation Forge")
+            ("grammar_review", "Grammar Review"),
+            ("grammar_exercise", "Grammar Exercise")
         ],
         "Writing": [
-            ("writing_theme", "Writing Core Draft")
+            ("writing", "Writing Daily")
         ],
         "Speaking": [
-            ("speaking_theme", "Speaking Core Record")
+            ("speaking", "Speaking Daily")
         ]
     }
 
@@ -1339,7 +1416,7 @@ def ensure_quest_instances(
                         ).first()
                         if existing and template_title in template_by_title:
                             template = template_by_title[template_title]
-                            skill = skill_by_name.get(skill_name)
+                            skill = skill_by_name.get(template.primary_skill.name) or skill_by_name.get(skill_name)
                             existing.stage = phase_name
                             existing.title = template.title
                             existing.skill_id = skill.id if skill else existing.skill_id
@@ -1362,7 +1439,7 @@ def ensure_quest_instances(
 
                     if template_title in template_by_title:
                         template = template_by_title[template_title]
-                        skill = skill_by_name.get(skill_name)
+                        skill = skill_by_name.get(template.primary_skill.name) or skill_by_name.get(skill_name)
                         if skill:
                             db.add(
                                 Quest(
@@ -1414,17 +1491,19 @@ def ensure_main_quest_instances(
             session_week = week_by_no.get(session.week_no)
             material_names = normalize_material_names(session.material_summary)
             primary_material = material_by_title.get(material_names[0]) if material_names else None
+            existing.quest_date = session.study_date  # self-heal: keep main quest date in sync with rebased session date
+            existing.week_no = session.week_no
             existing.stage = session_week.phase.title if session_week else phase_label(phase_for_week(session.week_no))
             existing.title = f"Main Quest W{session.week_no:02d} - {session.session_label}"
             existing.source = session.material_summary
             existing.details = session.task_detail
             existing.phase_id = session.phase_id
             existing.material_id = primary_material.id if primary_material else None
-            existing.base_xp = infer_main_quest_xp(session.session_no, session.skill_summary)
-            existing.xp = infer_main_quest_xp(session.session_no, session.skill_summary)
+            existing.base_xp = infer_main_quest_xp(session.session_no, session.skill_summary, session.task_detail, db=db)
+            existing.xp = infer_main_quest_xp(session.session_no, session.skill_summary, session.task_detail, db=db)
             existing.completion_note = session.deliverable
             continue
-        primary_skill_name = infer_primary_skill(session.skill_summary)
+        primary_skill_name = infer_primary_skill(session.skill_summary, session.task_detail)
         primary_skill = skill_by_name[primary_skill_name]
         material_names = normalize_material_names(session.material_summary)
         primary_material = material_by_title.get(material_names[0]) if material_names else None
@@ -1438,7 +1517,7 @@ def ensure_main_quest_instances(
                 skill_id=primary_skill.id,
                 source=session.material_summary,
                 details=session.task_detail,
-                xp=infer_main_quest_xp(session.session_no, session.skill_summary),
+                xp=infer_main_quest_xp(session.session_no, session.skill_summary, session.task_detail, db=db),
                 session_type="Main Quest",
                 campaign_id=campaign.id,
                 phase_id=session.phase_id,
@@ -1449,7 +1528,7 @@ def ensure_main_quest_instances(
                 status="pending",
                 quest_role="main",
                 difficulty="normal",
-                base_xp=infer_main_quest_xp(session.session_no, session.skill_summary),
+                base_xp=infer_main_quest_xp(session.session_no, session.skill_summary, session.task_detail, db=db),
                 earned_xp=0,
                 completion_note=session.deliverable,
             )
@@ -1488,6 +1567,14 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
                 ("Complete any 2 daily quests", 2),
                 ("Create 1 check-in and 1 weakness note", 2),
             ]
+            policy = db.query(WeeklyMissionXpPolicy).filter_by(mission_type="onboarding").first()
+            reward_xp = policy.xp_reward if policy else 25
+            reward_skill_id = None
+            if policy:
+                skill = db.query(Skill).filter_by(name=policy.reward_target_skill).first()
+                if skill:
+                    reward_skill_id = skill.id
+
             mission = (
                 db.query(WeeklyMission)
                 .filter(WeeklyMission.campaign_id == campaign.id, WeeklyMission.week_start == week_start)
@@ -1502,8 +1589,10 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
                     pattern_code="onboarding",
                     title="Onboarding Week",
                     description="Get used to the dashboard, check-ins, and a lighter quest loop.",
-                    reward_xp=25,
+                    reward_xp=reward_xp,
                     status="active",
+                    reward_skill_id=reward_skill_id,
+                    primary_skill_id=reward_skill_id,
                 )
                 db.add(mission)
                 db.flush()
@@ -1513,7 +1602,9 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
                 mission.pattern_code = "onboarding"
                 mission.title = "Onboarding Week"
                 mission.description = "Get used to the dashboard, check-ins, and a lighter quest loop."
-                mission.reward_xp = 25
+                mission.reward_xp = reward_xp
+                mission.reward_skill_id = reward_skill_id
+                mission.primary_skill_id = reward_skill_id
             existing_items = (
                 db.query(WeeklyMissionItem)
                 .filter(WeeklyMissionItem.weekly_mission_id == mission.id)
@@ -1536,6 +1627,18 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
                     )
             continue
 
+        mission_type = map_weekly_pattern_to_mission_type(pattern["pattern_code"])
+        policy = db.query(WeeklyMissionXpPolicy).filter_by(mission_type=mission_type).first()
+        reward_xp = policy.xp_reward if policy else pattern["reward_xp"]
+        reward_skill_id = None
+        if policy:
+            skill = db.query(Skill).filter_by(name=policy.reward_target_skill).first()
+            if skill:
+                reward_skill_id = skill.id
+        elif pattern.get("reward_skill") and pattern.get("reward_skill") in [s.name for s in db.query(Skill).all()]:
+            skill = db.query(Skill).filter(Skill.name == pattern.get("reward_skill")).first()
+            reward_skill_id = skill.id
+
         mission = (
             db.query(WeeklyMission)
             .filter(WeeklyMission.campaign_id == campaign.id, WeeklyMission.week_start == week_start)
@@ -1550,12 +1653,12 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
                 pattern_code=pattern["pattern_code"],
                 title=pattern["title"],
                 description=pattern["description"],
-                reward_xp=pattern["reward_xp"],
+                reward_xp=reward_xp,
                 status="active",
-                primary_skill_id=None,
+                primary_skill_id=reward_skill_id,
                 mission_track_code=pattern.get("pattern_code", ""),
                 activity_type=pattern.get("activity_type", ""),
-                reward_skill_id=None,
+                reward_skill_id=reward_skill_id,
             )
             db.add(mission)
             db.flush()
@@ -1565,12 +1668,9 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
             mission.pattern_code = pattern["pattern_code"]
             mission.title = pattern["title"]
             mission.description = pattern["description"]
-            mission.reward_xp = pattern["reward_xp"]
-        # assign optional fields
-        if pattern.get("reward_skill") and pattern.get("reward_skill") in [s.name for s in db.query(Skill).all()]:
-            skill = db.query(Skill).filter(Skill.name == pattern.get("reward_skill")).first()
-            mission.reward_skill_id = skill.id
-            mission.primary_skill_id = skill.id
+            mission.reward_xp = reward_xp
+            mission.reward_skill_id = reward_skill_id
+            mission.primary_skill_id = reward_skill_id
         mission.mission_track_code = pattern.get("pattern_code", mission.mission_track_code)
         mission.activity_type = pattern.get("activity_type", mission.activity_type)
         existing_items = (
@@ -1692,10 +1792,10 @@ def ensure_campaign_templates(db: Session, skill_by_name: dict[str, Skill]) -> C
         "Vocabulary": 3,
         "Reading": 1,
         "Listening": 1,
-        "Grammar": 1,
-        "Collocation": 1,
-        "Writing": 0,
-        "Speaking": 0,
+        "Grammar": 2,
+        "Collocation": 0,
+        "Writing": 1,
+        "Speaking": 1,
     }
     for skill_name, daily_val in quotas.items():
         skill = skill_by_name.get(skill_name)
@@ -1715,6 +1815,10 @@ def ensure_campaign_templates(db: Session, skill_by_name: dict[str, Skill]) -> C
                     preferred_activity_types=[]
                 )
                 db.add(quota)
+            else:
+                quota.daily_quota = daily_val
+                quota.weekly_quota = daily_val * 7
+                quota.is_active = True
     db.flush()
     return template
 
@@ -1787,6 +1891,10 @@ def ensure_campaign_settings_and_quotas(db: Session, campaign: Campaign, templat
                 preferred_activity_types=quota_temp.preferred_activity_types
             )
             db.add(quota)
+        else:
+            quota.daily_quota = quota_temp.daily_quota
+            quota.weekly_quota = quota_temp.weekly_quota
+            quota.is_active = quota_temp.is_active
             
     # vocabulary settings
     vocab_setting = db.query(VocabularySetting).filter(VocabularySetting.campaign_id == campaign.id).first()
@@ -1943,19 +2051,258 @@ def ensure_rank_exam_pools(db: Session, skill_by_name: dict[str, Skill]) -> None
     db.flush()
 
 
+def collocations_file_path() -> Path:
+    candidates: list[Path] = []
+    
+    configured_path = os.getenv("COLLOCATIONS_PATH")
+    if configured_path:
+        candidates.append(Path(configured_path))
+        
+    current_file = Path(__file__).resolve()
+    rel_path = Path("material/vocabularies/month1-6/English_Collocations_campaign1-3_3-6.md")
+    candidates.extend(
+        [
+            current_file.parents[2] / rel_path,
+            current_file.parents[1] / rel_path,
+            Path.cwd() / rel_path,
+        ]
+    )
+    
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+            
+    searched = ", ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError(f"Collocations file not found. Checked: {searched}")
+
+
+def parse_collocations_file(filepath: Path) -> dict:
+    text = filepath.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    
+    sections = []
+    current_section = None
+    current_topic = None
+    
+    re_section = re.compile(r"^##\s+(\d+)\.\s+(.*)")
+    re_topic = re.compile(r"^_(?:Section|Topic):\s+(.*)_")
+    
+    topic_order_count = 0
+    item_order_count = 0
+    
+    for line in lines:
+        line_stripped = line.strip()
+        if not line_stripped:
+            continue
+            
+        section_match = re_section.match(line_stripped)
+        if section_match:
+            section_order = int(section_match.group(1))
+            section_title = section_match.group(2).strip()
+            
+            current_section = {
+                "section_order": section_order,
+                "title": section_title,
+                "topics": []
+            }
+            sections.append(current_section)
+            current_topic = None
+            topic_order_count = 0
+            continue
+            
+        topic_match = re_topic.match(line_stripped)
+        if topic_match:
+            topic_title = topic_match.group(1).strip()
+            topic_order_count += 1
+            
+            current_topic = {
+                "title": topic_title,
+                "topic_order": topic_order_count,
+                "items": []
+            }
+            if current_section is not None:
+                current_section["topics"].append(current_topic)
+            item_order_count = 0
+            continue
+            
+        if line_stripped.startswith("|") and line_stripped.endswith("|"):
+            parts = [p.strip() for p in line_stripped.split("|")[1:-1]]
+            if not parts:
+                continue
+            collocation = parts[0]
+            if collocation.lower() in ("collocation", "---") or "---" in collocation:
+                continue
+                
+            if current_section is None:
+                current_section = {
+                    "section_order": 1,
+                    "title": "Default Section",
+                    "topics": []
+                }
+                sections.append(current_section)
+                
+            if current_topic is None:
+                topic_order_count += 1
+                current_topic = {
+                    "title": "Default Topic",
+                    "topic_order": topic_order_count,
+                    "items": []
+                }
+                current_section["topics"].append(current_topic)
+                
+            pronunciation_us = parts[1] if len(parts) > 1 else None
+            meaning_vi = parts[2] if len(parts) > 2 else None
+            example_en = parts[3] if len(parts) > 3 else None
+            example_vi = parts[4] if len(parts) > 4 else None
+            
+            if pronunciation_us == "": pronunciation_us = None
+            if meaning_vi == "": meaning_vi = None
+            if example_en == "": example_en = None
+            if example_vi == "": example_vi = None
+            
+            item_order_count += 1
+            
+            item_data = {
+                "collocation": collocation,
+                "pronunciation_us": pronunciation_us,
+                "meaning_vi": meaning_vi,
+                "example_en": example_en,
+                "example_vi": example_vi,
+                "item_order": item_order_count
+            }
+            current_topic["items"].append(item_data)
+            
+    return {
+        "code": "intermediate-collocations",
+        "title": "English Collocations in Use Intermediate",
+        "description": "English Collocations campaign 1-3, units 3-6",
+        "source_book": "English Collocations in Use Intermediate",
+        "level": "Intermediate",
+        "sections": sections
+    }
+
+
+def ensure_collocations(db: Session, campaign: Campaign) -> None:
+    try:
+        filepath = collocations_file_path()
+        data = parse_collocations_file(filepath)
+    except FileNotFoundError:
+        return
+
+    # 1. Get or create CollocationCollection
+    collection = db.query(CollocationCollection).filter_by(code=data["code"]).first()
+    if not collection:
+        collection = CollocationCollection(
+            code=data["code"],
+            title=data["title"],
+            description=data["description"],
+            source_book=data["source_book"],
+            level=data["level"],
+            is_active=True
+        )
+        db.add(collection)
+        db.flush()
+
+    # 2. Link to campaign
+    link_collection_to_campaign(db, campaign.id, collection.id)
+
+    # 3. Sections & Topics & Items (idempotent)
+    for section_data in data["sections"]:
+        section = db.query(CollocationSection).filter_by(
+            collection_id=collection.id,
+            section_order=section_data["section_order"]
+        ).first()
+        if not section:
+            section = CollocationSection(
+                collection_id=collection.id,
+                title=section_data["title"],
+                section_order=section_data["section_order"]
+            )
+            db.add(section)
+            db.flush()
+        else:
+            if section.title != section_data["title"]:
+                section.title = section_data["title"]
+                db.flush()
+
+        for topic_data in section_data["topics"]:
+            topic = db.query(CollocationTopic).filter_by(
+                section_id=section.id,
+                title=topic_data["title"]
+            ).first()
+            if not topic:
+                topic = CollocationTopic(
+                    section_id=section.id,
+                    title=topic_data["title"],
+                    topic_number=section.section_order,
+                    topic_order=topic_data["topic_order"]
+                )
+                db.add(topic)
+                db.flush()
+            else:
+                if topic.topic_order != topic_data["topic_order"] or topic.topic_number != section.section_order:
+                    topic.topic_order = topic_data["topic_order"]
+                    topic.topic_number = section.section_order
+                    db.flush()
+
+            # Key on (item_order, collocation) so identical strings at different
+            # positions are treated as distinct items (spec §9: allow duplicates).
+            existing_items = {
+                (item.item_order, item.collocation): item
+                for item in db.query(CollocationItem).filter_by(topic_id=topic.id).all()
+            }
+
+            for item_data in topic_data["items"]:
+                colloc = item_data["collocation"]
+                key = (item_data["item_order"], colloc)
+                if key not in existing_items:
+                    new_item = CollocationItem(
+                        topic_id=topic.id,
+                        collocation=colloc,
+                        pronunciation_us=item_data["pronunciation_us"],
+                        meaning_vi=item_data["meaning_vi"],
+                        example_en=item_data["example_en"],
+                        example_vi=item_data["example_vi"],
+                        collocation_type=None,
+                        item_order=item_data["item_order"]
+                    )
+                    db.add(new_item)
+                else:
+                    item = existing_items[key]
+                    updated = False
+                    if item.pronunciation_us != item_data["pronunciation_us"]:
+                        item.pronunciation_us = item_data["pronunciation_us"]
+                        updated = True
+                    if item.meaning_vi != item_data["meaning_vi"]:
+                        item.meaning_vi = item_data["meaning_vi"]
+                        updated = True
+                    if item.example_en != item_data["example_en"]:
+                        item.example_en = item_data["example_en"]
+                        updated = True
+                    if item.example_vi != item_data["example_vi"]:
+                        item.example_vi = item_data["example_vi"]
+                        updated = True
+                    if item.item_order != item_data["item_order"]:
+                        item.item_order = item_data["item_order"]
+                        updated = True
+                    
+            db.flush()
+
+
 def seed_database(db: Session, start_date: date) -> None:
     player = ensure_player(db, start_date)
     campaign = ensure_campaign(db, player, start_date)
     skill_by_name = ensure_skills(db)
     badges = ensure_badges(db)
     material_by_title = ensure_materials(db)
-    
+
     # Run Phase 4 extensions
     template = ensure_campaign_templates(db, skill_by_name)
     ensure_account_and_profile(db, player)
     ensure_campaign_settings_and_quotas(db, campaign, template, skill_by_name)
     ensure_rank_exam_pools(db, skill_by_name)
-    
+    ensure_policy_tables(db)  # must run before ensure_templates (templates read QuestXpPolicy)
+
     phase_by_code = ensure_roadmap_phases(db, campaign)
     ensure_phase_materials(db, phase_by_code, material_by_title)
     week_by_no, study_plan_sessions = ensure_study_plan(db, campaign, phase_by_code)
@@ -1965,12 +2312,15 @@ def seed_database(db: Session, start_date: date) -> None:
     backfill_quest_phase_and_material(db, campaign, phase_by_code)
     ensure_weekly_missions(db, campaign)
     ensure_bosses(db, campaign, badges)
+    ensure_collocations(db, campaign)
     db.commit()
 
 
 def parse_start_date() -> date:
-    raw = os.getenv("APP_START_DATE", "2026-06-04")
-    return date.fromisoformat(raw)
+    raw = os.getenv("APP_START_DATE")
+    if raw:
+        return date.fromisoformat(raw)
+    return date.today()
 
 
 def activate_campaign_for_player(db: Session, player: Player, template_code: str = "ielts_18_month_foundation", start_date: date | None = None) -> Campaign:
@@ -2016,7 +2366,8 @@ def activate_campaign_for_player(db: Session, player: Player, template_code: str
 
     ensure_campaign_settings_and_quotas(db, campaign, template, skill_by_name)
     ensure_rank_exam_pools(db, skill_by_name)
-    
+    ensure_policy_tables(db)  # must run before ensure_templates
+
     phase_by_code = ensure_roadmap_phases(db, campaign)
     ensure_phase_materials(db, phase_by_code, material_by_title)
     week_by_no, study_plan_sessions = ensure_study_plan(db, campaign, phase_by_code)
@@ -2026,6 +2377,7 @@ def activate_campaign_for_player(db: Session, player: Player, template_code: str
     backfill_quest_phase_and_material(db, campaign, phase_by_code)
     ensure_weekly_missions(db, campaign)
     ensure_bosses(db, campaign, badges)
+    ensure_collocations(db, campaign)
 
     # ensure campaign skill states are created
     from .services import ensure_campaign_skill_states

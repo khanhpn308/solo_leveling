@@ -1,6 +1,226 @@
 # Completed Tasks
 
-Last updated: `2026-06-09` (session 8e — Tasks 5+6 Grammar→Writing / Collocation→Vocabulary routing)
+Last updated: `2026-06-09` (session 8k — Main Quest Start-Date Rebase: MQ-1/2/3 + live smoke ✓)
+
+## Session 8k — Main Quest Start-Date Rebase (lazy-purring-sundae.md)
+
+> **Bug fixed:** Main quest dates were hard-anchored to `2026-06-04`. Picking any other onboarding start date left main-quest `quest_date` on the material.md absolute dates → first main quests rendered **expired**. Root cause: `material/material.md` stores absolute session dates; `parse_material_plan()` read them verbatim into `StudyPlanSession.study_date`, and main quests copied that via `quest_date=session.study_date`. Daily quests were already rebased off `campaign.start_date`; study-plan weeks/sessions were not.
+
+### Task MQ-1 — `MATERIAL_ANCHOR_DATE` + `rebase_material_date` helper *(gap-check [x])*
+- **File:** `backend/app/seed.py`
+- Added `MATERIAL_ANCHOR_DATE = date(2026, 6, 4)` (seed.py:78 — Week1/Session1 in material.md, a Thursday).
+- Added pure helper `rebase_material_date(material_date, campaign_start) -> date` returning `campaign_start + (material_date - MATERIAL_ANCHOR_DATE)` (seed.py:81-82). No DB.
+- **Verified:** identity case `rebase(2026-06-04, 2026-06-04)==2026-06-04`; offset case `rebase(2026-06-06, 2026-07-15)==2026-07-17` (+2 preserved). PASS.
+
+### Task MQ-2 — Rebase week + session dates + weekday label in `ensure_study_plan` *(gap-check [x])*
+- **File:** `backend/app/seed.py` (`ensure_study_plan`, ~1126-1196)
+- Week create + **update** branch: `week_start`/`week_end` wrapped in `rebase_material_date(..., campaign.start_date)`.
+- Session create + **update** branch: `study_date` rebased; `weekday_label = rebased_date.strftime("%A")` (overrides material text, always matches real weekday).
+- Existing-row update branches added (week + session) → re-seed self-heals dates.
+- Main quests need no change — `quest_date=session.study_date` (seed.py:1511) inherits the rebased value.
+- **Verified (live smoke):** campaign `start_date=2026-06-15` (Monday) → S1=2026-06-15, S2/S3/S4 = 17/19/21 (+0/+2/+4/+6); `weekday_label=Monday`; week1 start 2026-06-15, week2 2026-06-22 (+7, shares window with daily quests).
+- **Risk cleared:** grep `test_backend.py` for literal weekday strings (`"Thursday"` etc.) → 0 hits; no test asserts material weekday labels.
+
+### Task MQ-3 — Fallback start date `date.today()`, not stale `2026-06-04` *(gap-check [x])*
+- **File:** `backend/app/seed.py` (`parse_start_date`, 2317-2321)
+- Changed bare fallback from `"2026-06-04"` to `date.today()`; kept `APP_START_DATE` env override (`if raw: return date.fromisoformat(raw)` else `date.today()`).
+- Container `docker-compose` sets `APP_START_DATE=2026-06-04` → demo seed stays deterministic via the override path; only the bare fallback changed.
+- **Verified:** env unset → `parse_start_date()==date.today()`; env `2026-07-15` → returns that date.
+
+### Latent gap fixed — `ensure_main_quest_instances` existing-branch date self-heal
+- **File:** `backend/app/seed.py` (~1490)
+- The existing-row branch of `ensure_main_quest_instances` updated title/xp/material but **not** `quest_date` → a re-seed of an existing campaign left main-quest dates stale.
+- Added `existing.quest_date = session.study_date` + `existing.week_no = session.week_no` so re-seed keeps main-quest dates in sync with the rebased session date. (Dev path uses `/api/dev/reset` which deletes rows first; this is defensive for in-place re-seed.)
+
+### Validated
+- Backend suite: **61 passed, 0 failed** (`python -m pytest app/test_backend.py`).
+- Live smoke: `/api/dev/reset` + register + `activate-campaign{start_date:2026-06-15}` → Main Quest #1 `pending` on 2026-06-15 (not expired); spacing/weekday/week-window all correct.
+- No frontend change required (dates are backend-derived; FE renders status as-is).
+
+---
+
+## Session 8i — Task 18 Archived (Phase 10 — Frontend: Skill buff lines)
+
+Last updated previously: `2026-06-09` (session 8i — Task 18 done; Checkpoint G ✓)
+
+## Session 8i — Task 18 Archived (Phase 10 — Frontend: Skill buff lines)
+
+### Task 18 — Skill cards render support sources as buff lines *(gap-check [x])*
+- **Files:** `frontend/src/components/SkillCards.jsx`, `frontend/src/styles.css`
+- `SupportBuffLines` component: renders each `support_breakdown` item as a one-liner `+N XP from {source}` (green when XP > 0; muted `—` when XP = 0). Full mode only — compact mode unchanged.
+- Writing card → Grammar buff; Vocabulary card → Collocation buff. No rank/level badge on buff lines.
+- Grammar/Collocation tile exclusion already enforced by backend `MATRIX_SKILLS`; no FE filter needed.
+- CSS: `.skill-node__buffs` (flex-column, gap 4px), `.skill-node__buff--active` (var(--success)), `.skill-node__buff--empty` (var(--muted)).
+- **Build:** ✓ 0 errors.
+
+---
+
+## Session 8h — Phase GAP-FIX-2: Tasks GAP-15-1 … GAP-15-4
+
+### Task GAP-15-1 — Main quest XP reads `MainQuestXpPolicy` (closes hard-code path)
+
+- **Root cause:** `infer_main_quest_xp` accepts `db=None` and reads `MainQuestXpPolicy` only when `db` is passed, but all 4 callsites in `ensure_main_quest_instances` (seed.py:1457, 1458, 1475, 1486) omitted `db=` → always used hard-coded tier values (45/35/25/60). Latent: hard-code values matched policy seed values.
+- **Fix:** `backend/app/seed.py` — added `db=db` to all 4 `infer_main_quest_xp(...)` calls in `ensure_main_quest_instances`.
+- **Test added:** `TestGap151MainQuestReadsPolicy.test_main_quest_xp_reads_policy_not_hardcode` — mutates `MainQuestXpPolicy.standard` 35→40, calls `infer_main_quest_xp(1, ..., db=db)`, asserts result=40 (policy read); also asserts result=35 when `db=None` (fallback intact). PASS.
+- **Tasks closed:** GAP-15-1 gap-check → `[x]`.
+
+### Task GAP-15-2 — `reset_database` wipes the 4 policy tables
+
+- **Root cause:** `reset_database` delete-list in `main.py` omitted `RankXpThreshold`, `QuestXpPolicy`, `WeeklyMissionXpPolicy`, `MainQuestXpPolicy`. The `/api/dev/reset` endpoint never wiped them, masking future seed bugs.
+- **Fix:** `backend/app/main.py` — added 4 policy models to imports and to the delete-list (placed before `Skill`, FK-safe).
+- **Tasks closed:** GAP-15-2 gap-check → `[x]`.
+
+### Task GAP-15-3 — All `WeeklyMissionXpPolicy` rows are reachable
+
+- **Root cause:** `map_weekly_pattern_to_mission_type` only mapped 4 pattern codes (`balanced→listening_weekly`, `reading→reading_weekly`, `vocabulary→vocab_weekly`, `output→writing_weekly`). `speaking_weekly` and `grammar_weekly` policy rows (both XP=45) were dead — never read by any pattern.
+- **Fix:** `backend/app/seed.py` — added two new pattern dicts in `weekly_mission_patterns` (`{phase_index}-speaking-focus` → `speaking_weekly`, `{phase_index}-grammar-focus` → `grammar_weekly`); added `"speaking"→speaking_weekly` and `"grammar"→grammar_weekly` branches to `map_weekly_pattern_to_mission_type` (before `"output"` branch to avoid early match).
+- **Tests added:** `TestGap153WeeklyPolicyAllRowsReachable`:
+  - `test_all_weekly_policy_mission_types_reachable` — asserts every `WeeklyMissionXpPolicy.mission_type` is reachable from at least one pattern code. PASS.
+  - `test_speaking_weekly_missions_seeded` — asserts speaking_weekly missions exist after activate-campaign. PASS.
+  - `test_grammar_weekly_missions_seeded` — asserts grammar_weekly missions exist after activate-campaign. PASS.
+- **Tasks closed:** GAP-15-3 gap-check → `[x]`.
+
+### Task GAP-15-4 — Fix stale spec-ref in Task 15 verification
+
+- **Audit result:** No "Phase XP-3" or "§12 Phase XP-3 validation list" string existed in Task 15's Verification field — only in the description of GAP-15-4 itself. Self-resolved on audit.
+- **Tasks closed:** GAP-15-4 gap-check → `[x]`.
+
+### Validated
+
+- Suite: **60 passed, 1 skipped, 0 failed** (+4 new tests: GAP-15-1 × 1, GAP-15-3 × 3).
+- All GAP-15-1…4 gap-checks `[x]`. Task 15 gap-check `[x]`. Checkpoint GAP-2 `[x]`.
+
+---
+
+## Session 8h — Task 17 Archived (Phase 10 — Frontend: 9-slot Daily Board)
+
+### Task 17 — 9-slot daily board + boss-lock badge *(gap-check [x])*
+- **Files:** `frontend/src/components/DailyQuestPanel.jsx`, `frontend/src/components/QuestOverlay.jsx`, `frontend/src/App.jsx`, `frontend/src/styles.css`
+- `SlotChip`: maps `daily_slot_code` → human label + accent colour per spec §5.1 slot table.
+- `BossLockBadge`: reads `promotion_status` from skills array via `skillStatusMap` memoized in `DailyQuestPanel`. Shows amber lock badge when `promotion_status != "none"`. Writing/Speaking: backend never sets boss_required → badge never shows.
+- `is-claim-ready` CSS: gold left-border + tinted background distinguishes completed-unclaimed from claimed.
+- `skills` prop threaded: `App.jsx` → `QuestOverlay` → `DailyQuestPanel`.
+- Summary card label updated "Daily Slots" (was "Daily Command"); total shows `max(slots, 9)`.
+- **Build:** ✓ 0 errors.
+
+---
+
+## Session 8h — Task 16 Archived (Phase 10 — Frontend: Player Rank)
+
+### Task 16 — Player shows RANK only; stale FE formulas removed *(gap-check [x])*
+- **File:** `frontend/src/dashboard-data.js`
+- Removed `PLAYER_RANK_THRESHOLDS` constant, `getPlayerLevel(totalXp)` fn, `getPlayerRank(totalXp)` fn.
+- `buildDashboardView`: `level`/`rank` in player block now read `player.player_level` / `player.player_rank` from backend (no FE recompute).
+- `buildPlayerSnapshot`: fallback chain no longer calls stale FE fns — uses `null`/`'F'` defaults.
+- `getPlayerXpProgress`: default `level` param changed from `getPlayerLevel(totalXp)` → `1`.
+- **Tests:** `npm run test:dashboard-data` 5/5 PASS; `npm run build` ✓ 222 modules 0 errors.
+- **Gap noted:** `getPlayerXpProgress` body uses `(level-1)*120` curve (stale). Deferred — only affects progress bar width, not rank display.
+
+---
+
+## Session 8h — Task 15 Archived (Phase 9 — Policy Tables)
+
+### Task 15 — Add + seed the 4 XP policy tables and read from them *(gap-check [x])*
+- **Files:** `backend/app/seed.py`, `backend/app/main.py`, `backend/app/test_backend.py`, `backend/alembic/versions/20260609_17_add_policy_tables.py`
+- Migration `20260609_17` creates `rank_xp_thresholds`, `quest_xp_policies`, `weekly_mission_xp_policies`, `main_quest_xp_policies` with unique indexes.
+- `ensure_policy_tables` seeds all 4 tables with §2.3/§5.1/§6/§7 values; wired into `seed_database` + `activate_campaign_for_player`.
+- Daily quests read `base_xp` from `QuestXpPolicy` via `ensure_templates`.
+- Weekly missions read `reward_xp` from `WeeklyMissionXpPolicy` via pattern→mission_type mapping.
+- Main quests read XP from `MainQuestXpPolicy` via `infer_main_quest_xp(db=db)` (GAP-15-1 fix).
+- 4 policy tables wiped on `/api/dev/reset` (GAP-15-2 fix).
+- All `WeeklyMissionXpPolicy` rows reachable (GAP-15-3 fix).
+- `TestPolicyTables` (6 tests) + `TestGap151MainQuestReadsPolicy` (1 test) + `TestGap153WeeklyPolicyAllRowsReachable` (3 tests) — all PASS.
+
+---
+
+## Session 8g — Phase GAP-FIX: Tasks GAP-1 and GAP-2
+
+### Task GAP-1 — `support_breakdown` excludes Main Quest XP
+
+- **Root cause:** `get_campaign_skill_outputs` (main.py ~line 340) queried **all** claimed Grammar/Collocation quests to compute `support_xp_by_name`, but `recompute_skill_progress` (services.py:728) folds only **non-Main** support quests into the matrix skill XP. This made `support_breakdown.xp` disagree with the XP actually inside `state.xp` when a Grammar/Collocation Main Quest existed — violating the Task 5/6 "no double-count" contract.
+- **Fix:** `backend/app/main.py` `get_campaign_skill_outputs` ~line 341: added `Quest.session_type != "Main Quest"` to the `support_xp_by_name` filter.
+- **Test added:** `test_gap1_support_breakdown_excludes_main_quest_xp` — seeds Grammar Main Quest (100 XP) + Grammar Daily (30 XP), asserts Writing `support_breakdown[Grammar].xp == 30` (Main excluded). PASS.
+- **Tasks closed:** Tasks 5 and 6 gap-check → `[x]`.
+
+### Task GAP-2 — Collocation seed allows intra-topic duplicate strings
+
+- **Root cause:** `ensure_collocations` (seed.py ~line 2203) used `{item.collocation: item}` as the dedup dict, so two collocation items with the same string but different `item_order` in the same topic would drop the second — violating §9 "allow duplicates". Latent (real file has 0 dup-string topics; seeded count == 1409).
+- **Fix:** `backend/app/seed.py` `ensure_collocations`: changed dedup key to `{(item.item_order, item.collocation): item}`; lookup uses `key = (item_data["item_order"], colloc)`; `else` branch now references `existing_items[key]`.
+- **Test added:** `test_gap2_collocation_seed_allows_duplicate_strings_different_order` — patches `collocations_file_path` + `parse_collocations_file` with a fixture containing 2 items with identical collocation strings at `item_order=1` and `item_order=2`; asserts seeded count == 2 and idempotent second run == 2. PASS.
+- **Tasks closed:** Tasks 13 and 14 gap-check → `[x]`.
+
+### Validated
+
+- Suite: **50 passed, 1 skipped, 0 failed** (was 48 before session 8g).
+- All Tasks 5–14 gap-checks are now `[x]`. Archived below.
+
+---
+
+## Session 8g — Tasks 5–14 Archived (XP / Level / Rank Redesign — Phases 3–8)
+
+### Task 5 — Route Grammar quest XP into Writing *(gap-check [x])*
+- **Files:** `backend/app/services.py`, `backend/app/schemas.py`, `backend/app/main.py`
+- `SUPPORT_ROUTING = {Grammar: Writing, Collocation: Vocabulary}` in services.py.
+- `recompute_skill_progress` folds non-Main Grammar quest XP into Writing matrix state.
+- `/summary` Writing entry exposes `support_breakdown: [{source:"Grammar", xp:N}]` (no double-count).
+- Grammar excluded from MATRIX_SKILLS tile list.
+- **Gap:** GAP-1 found (support_breakdown over-counted Main Quests) → fixed in Task GAP-1.
+
+### Task 6 — Confirm Collocation routing into Vocabulary *(gap-check [x])*
+- **Files:** `backend/app/services.py`, `backend/app/schemas.py`, `backend/app/main.py`
+- Collocation quest XP (Daily only) folds into Vocabulary via SUPPORT_ROUTING.
+- `/summary` Vocabulary entry exposes `support_breakdown: [{source:"Collocation", xp:N}]`.
+- Collocation excluded from tile list; `compute_vocabulary_xp` adds +5 per collocation progression.
+- **Gap:** same GAP-1 root cause → fixed in Task GAP-1.
+
+### Task 7 — Cap data-entry vocab XP at 40/word *(gap-check [x])*
+- **File:** `backend/app/services.py`
+- `compute_vocabulary_xp`: data-entry per-word capped `min(data_entry_xp, 40)`; mastery `min(mastery_score, 50)` added on top.
+- No gaps found in audit.
+
+### Task 8 — Migration to widen daily_slot_code to 9 values *(gap-check [x])*
+- **File:** `backend/alembic/versions/20260609_15_daily_slots_9.py`
+- No-op placeholder: column already `String(20)`, no enum constraint. `upgrade()`/`downgrade()` both `pass`.
+- No gaps found in audit.
+
+### Task 9 — Daily quest generation produces 9 slots/day *(gap-check [x])*
+- **File:** `backend/app/seed.py`
+- `ensure_quest_instances` slot_mapping: Vocab 3 + Reading 1 + Listening 1 + Grammar 2 + Writing 1 + Speaking 1 = **9 slots/day**.
+- Quota seed = 9; unique constraint `(campaign_id, quest_date, daily_slot_code)` enforces uniqueness.
+- No gaps found in audit.
+
+### Task 10 — Rewrite infer_main_quest_xp to tier by skill *(gap-check [x])*
+- **File:** `backend/app/seed.py`
+- `infer_main_quest_xp`: Writing/Speaking-heavy → 45; Listening/Reading → 35; Review/Error → 25; mock test → 60. Reads `MainQuestXpPolicy` when `db` passed.
+- `test_main_quest_xp_and_routing` PASS.
+- No gaps found in audit.
+
+### Task 11 — Main Quest full-XP routing to every matrix skill in session *(gap-check [x])*
+- **Files:** `backend/app/services.py`, `backend/app/seed.py`
+- `resolve_main_quest_covered_skills`: S1→{Listening,Speaking}, S2→{Reading,Vocabulary}, S3→{Writing}, S4→primary.
+- `recompute_skill_progress` credits full `earned_xp` to each covered skill; no double-count.
+- `test_main_quest_xp_and_routing` green.
+- No gaps found in audit.
+
+### Task 12 — Make Writing/Speaking non-boss-gated *(gap-check [x])*
+- **Files:** `backend/app/models.py`, `backend/alembic/versions/20260609_16_add_boss_gated_to_skills.py`, `backend/app/seed.py`, `backend/app/services.py`
+- Migration adds `skills.boss_gated Boolean server_default=1`; seed sets Writing=False, Speaking=False, others=True.
+- `recompute_skill_progress`: `if not state.skill.boss_gated` → auto-confirm rank, `promotion_status="none"`.
+- `test_non_boss_gated_skills` green.
+- No gaps found in audit.
+
+### Task 13 — Collocation markdown parser *(gap-check [x])*
+- **File:** `backend/app/seed.py` (`parse_collocations_file`)
+- Parses 60 sections, 1409 items; `ancient monument` maps all 5 columns; tolerates noisy IPA.
+- **Gap:** GAP-2 found at seed step (ensure_collocations dedup) → fixed in Task GAP-2.
+
+### Task 14 — Idempotent seed of collocations + campaign link *(gap-check [x])*
+- **File:** `backend/app/seed.py` (`ensure_collocations`)
+- Seeds `CollocationCollection/Section/Topic/Item` + `CampaignCollocationLink`; get-or-create idempotent.
+- `test_collocation_parser_and_seed` verifies stable count on two seeds + Vocabulary XP +5 per progression.
+- **Gap:** GAP-2 → fixed: dedup key changed from `collocation` string to `(item_order, collocation)` tuple.
+
+---
 
 ## Session 8d — Fix Pre-existing Certificate Suggestion Failures
 

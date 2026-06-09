@@ -1,14 +1,6 @@
-const PLAYER_RANK_THRESHOLDS = [
-  { minXp: 10000, rank: 'S' },
-  { minXp: 7000,  rank: 'A' },
-  { minXp: 4500,  rank: 'B' },
-  { minXp: 2500,  rank: 'C' },
-  { minXp: 1200,  rank: 'D' },
-  { minXp: 500,   rank: 'E' },
-  { minXp: 0,     rank: 'F' },
-]
-
-// Sorted ascending: F=0, E=500, D=1200, C=2500, B=4500, A=7000, S=10000
+// PLAYER_RANK_THRESHOLDS removed — player rank/level now comes from backend
+// (player_rank, player_level fields in /summary). Do NOT compute from total_xp.
+// Sorted ascending: F=0, E=862, D=2460, C=4604, B=7212, A=10234, S=13279 (spec §2.3)
 const SKILL_XP_THRESHOLDS = [0, 500, 1200, 2500, 4500, 7000, 10000]
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/
 
@@ -462,13 +454,9 @@ export function getQuestActionMeta(quest, pendingState, todayIso = getTodayISO()
   return { label: 'COMPLETE', action: 'complete', disabled: false, tone: 'ready' }
 }
 
-export function getPlayerLevel(totalXp) {
-  return Math.max(1, Math.floor(totalXp / 120) + 1)
-}
-
-export function getPlayerRank(totalXp) {
-  return PLAYER_RANK_THRESHOLDS.find((item) => totalXp >= item.minXp)?.rank ?? 'F'
-}
+// getPlayerLevel / getPlayerRank removed — player rank and level are backend-derived.
+// Consume player_rank and player_level directly from /summary or /auth/me response.
+// See buildDashboardView and buildPlayerSnapshot for correct usage.
 
 export function getSkillProgress(xp) {
   const next = SKILL_XP_THRESHOLDS.find((threshold) => threshold > xp) ?? SKILL_XP_THRESHOLDS.at(-1)
@@ -565,8 +553,8 @@ export function buildDashboardView(summary, quests, checkins) {
   return {
     player: {
       ...player,
-      level: getPlayerLevel(totalXp),
-      rank: getPlayerRank(totalXp),
+      level: player.player_level ?? null,   // from backend — do not recompute from XP
+      rank: player.player_rank ?? 'F',      // from backend — do not recompute from XP
       totalXp,
       hasStarted,
       phaseLabel: getCurrentPhaseLabel(currentWeekNo),
@@ -620,29 +608,55 @@ export function buildDashboardView(summary, quests, checkins) {
   }
 }
 
-export function getPlayerXpProgress(totalXp, level = getPlayerLevel(totalXp)) {
-  const currentFloor = Math.max(0, (level - 1) * 120)
-  const nextLevelXp = level * 120
-  const currentXp = Math.max(0, totalXp - currentFloor)
+// Player/skill level curve — MUST mirror backend services.py:_LEVEL_XP
+// xp(L) = round(19 * (L^1.6 - 1)) for L in 1..60. spec §2.1.
+// _LEVEL_XP[i] = min XP for level (i+1). Do NOT use a flat per-level step.
+const LEVEL_XP_FLOORS = Array.from({ length: 60 }, (_, i) => {
+  const L = i + 1
+  return Math.round(19 * (Math.pow(L, 1.6) - 1))
+})
+
+export function getPlayerXpProgress(totalXp, level = 1) {
+  const xp = Math.max(0, totalXp ?? 0)
+  // level may be null (backend not yet loaded) — derive from XP as a fallback.
+  let lvl = level
+  if (!lvl || lvl < 1) {
+    lvl = 1
+    for (let i = 0; i < LEVEL_XP_FLOORS.length; i += 1) {
+      if (xp >= LEVEL_XP_FLOORS[i]) lvl = i + 1
+      else break
+    }
+  }
+  lvl = Math.max(1, Math.min(60, lvl))
+
+  const currentFloor = LEVEL_XP_FLOORS[lvl - 1]
+  // At max level (60) there is no next level — cap the bar full.
+  const nextLevelXp = lvl >= 60 ? currentFloor : LEVEL_XP_FLOORS[lvl]
+  const currentXp = Math.max(0, xp - currentFloor)
   const neededXp = Math.max(1, nextLevelXp - currentFloor)
 
   return {
     currentXp,
     nextLevelXp,
-    percent: Math.max(0, Math.min(100, Math.round((currentXp / neededXp) * 100))),
-    remainingXp: Math.max(0, nextLevelXp - totalXp),
+    percent: lvl >= 60 ? 100 : Math.max(0, Math.min(100, Math.round((currentXp / neededXp) * 100))),
+    remainingXp: lvl >= 60 ? 0 : Math.max(0, nextLevelXp - xp),
   }
 }
 
 export function buildPlayerSnapshot(summaryPlayer = {}, profile = {}) {
   const totalXp = profile.player_xp ?? summaryPlayer.total_xp ?? 0
-  const level = profile.player_level ?? summaryPlayer.player_level ?? getPlayerLevel(totalXp)
-  const rank = profile.player_rank ?? summaryPlayer.player_rank ?? getPlayerRank(totalXp)
+  const level = profile.player_level ?? summaryPlayer.player_level ?? null
+  const rank = profile.player_rank ?? summaryPlayer.player_rank ?? 'F'
 
   return {
     displayName: profile.display_name || summaryPlayer.name || 'Hunter',
     title: summaryPlayer.title || 'Quest Runner',
     target: profile.target_overall_band || summaryPlayer.target || '',
+    targetOverall: profile.target_overall_band || null,
+    targetListening: profile.target_listening_band || null,
+    targetReading: profile.target_reading_band || null,
+    targetWriting: profile.target_writing_band || null,
+    targetSpeaking: profile.target_speaking_band || null,
     currentLevelLabel: profile.current_estimated_level || summaryPlayer.current_level || '',
     strongestSkill: profile.strongest_skill || '',
     weakestSkill: profile.weakest_skill || '',

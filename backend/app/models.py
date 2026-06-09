@@ -123,6 +123,10 @@ class Player(Base):
     total_xp: Mapped[int] = mapped_column(Integer, default=0)
     display_name: Mapped[str] = mapped_column(String(120), default="IELTS Hunter")
     target_overall_band: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
+    target_listening_band: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
+    target_reading_band: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
+    target_writing_band: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
+    target_speaking_band: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
     current_estimated_level: Mapped[str] = mapped_column(String(50), default="B1")
     strongest_skill: Mapped[str] = mapped_column(String(80), default="Listening")
     weakest_skill: Mapped[str] = mapped_column(String(80), default="Reading")
@@ -339,6 +343,7 @@ class Skill(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     icon: Mapped[str] = mapped_column(String(32), default="*")
+    boss_gated: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)
 
     quests: Mapped[list["Quest"]] = relationship(back_populates="skill", foreign_keys="Quest.skill_id")
     templates: Mapped[list["QuestTemplate"]] = relationship(back_populates="primary_skill", foreign_keys="QuestTemplate.primary_skill_id")
@@ -1070,6 +1075,7 @@ class CollocationItem(Base):
 
     topic: Mapped[CollocationTopic] = relationship(back_populates="items")
     progresses: Mapped[list["PlayerCollocationProgress"]] = relationship(back_populates="collocation_item", cascade="all, delete-orphan")
+    flashcards: Mapped[list["CollocationFlashcard"]] = relationship(back_populates="collocation_item", cascade="all, delete-orphan")
 
 
 class CampaignCollocationLink(Base):
@@ -1360,4 +1366,58 @@ class RankExamAnswer(Base):
 
     attempt: Mapped["RankExamAttempt"] = relationship(back_populates="answers")
     question: Mapped["RankExamQuestion"] = relationship()
+
+
+class RankXpThreshold(Base):
+    __tablename__ = "rank_xp_thresholds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    rank_name: Mapped[str] = mapped_column(String(10), unique=True, nullable=False, index=True)
+    min_xp: Mapped[int] = mapped_column(Integer, nullable=False)
+    first_level: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class QuestXpPolicy(Base):
+    __tablename__ = "quest_xp_policies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    activity_code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    skill_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    xp_reward: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class WeeklyMissionXpPolicy(Base):
+    __tablename__ = "weekly_mission_xp_policies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    mission_type: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    reward_target_skill: Mapped[str] = mapped_column(String(50), nullable=False)
+    xp_reward: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class MainQuestXpPolicy(Base):
+    __tablename__ = "main_quest_xp_policies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tier_code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    xp_reward: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class CollocationFlashcard(Base):
+    __tablename__ = "collocation_flashcards"
+    __table_args__ = (
+        UniqueConstraint("player_id", "campaign_id", "collocation_item_id", name="uq_collocation_flashcard"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), nullable=False, index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False, index=True)
+    collocation_item_id: Mapped[int] = mapped_column(ForeignKey("collocation_items.id"), nullable=False, index=True)
+    familiarity: Mapped[str] = mapped_column(String(10), nullable=False, default="again")
+    familiarity_set_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    player: Mapped["Player"] = relationship(foreign_keys=[player_id])
+    campaign: Mapped["Campaign"] = relationship(foreign_keys=[campaign_id])
+    collocation_item: Mapped["CollocationItem"] = relationship(back_populates="flashcards")
 

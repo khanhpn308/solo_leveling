@@ -22,6 +22,7 @@ function QuestOverlay({
   dailyQuests,
   allQuests,
   commandDeck,
+  skills,
   onQuestAction,
   questPendingById,
   successQuestId,
@@ -132,6 +133,7 @@ function QuestOverlay({
           quests={dailyQuests}
           onQuestAction={onQuestAction}
           commandDeck={commandDeck}
+          skills={skills}
           questPendingById={questPendingById}
           successQuestId={successQuestId}
           rewardPulseToken={rewardPulseToken}

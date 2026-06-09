@@ -945,6 +945,7 @@ function App() {
             skills={view.skills}
             badges={view.badges}
             recentCheckins={view.commandDeck.recentCheckins}
+            onProfileRefresh={() => loadInitialData({ silent: true })}
           />
         </Suspense>
       ) : null}
@@ -962,6 +963,7 @@ function App() {
             dailyQuests={view.todayQuests}
             allQuests={view.quests}
             commandDeck={view.commandDeck}
+            skills={view.skills}
             onQuestAction={handleQuestAction}
             questPendingById={questPendingById}
             successQuestId={successQuestId}

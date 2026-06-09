@@ -7,6 +7,7 @@ import {
   buildMainQuestMap,
   getCalendarDayDiff,
   getCompletionMode,
+  getPlayerXpProgress,
   getQuestEarnedXp,
   getQuestStatus,
   getTodayISO,
@@ -273,6 +274,32 @@ test('buildDashboardView derives currentWeekNo, daysUntilStart, and stale skill 
   const grammarStaleSuggestion = view.suggestions.find((item) => item.id === 'Grammar-stale')
   assert.ok(grammarStaleSuggestion)
   assert.equal(grammarStaleSuggestion.detail.includes('5'), true)
+})
+
+test('getPlayerXpProgress mirrors the backend 19*(L^1.6-1) curve, not a flat 120/level step', () => {
+  // Backend floors (services.py:_LEVEL_XP): L1=0, L11=862, L12=994, L60=13279.
+  // Player at 900 XP is level 11 (rank E): floor 862, next 994.
+  const mid = getPlayerXpProgress(900, 11)
+  assert.equal(mid.nextLevelXp, 994)
+  assert.equal(mid.currentXp, 38)          // 900 - 862
+  assert.equal(mid.remainingXp, 94)        // 994 - 900
+  assert.equal(mid.percent, Math.round((38 / 132) * 100)) // 29%
+
+  // Level 1 floor = 0; next (L2) = round(19*(2^1.6-1)) = 39.
+  const low = getPlayerXpProgress(10, 1)
+  assert.equal(low.nextLevelXp, 39)
+  assert.equal(low.currentXp, 10)
+  assert.equal(low.remainingXp, 29)
+
+  // Max level 60 — bar full, nothing remaining.
+  const max = getPlayerXpProgress(13279, 60)
+  assert.equal(max.percent, 100)
+  assert.equal(max.remainingXp, 0)
+
+  // Null level (backend not loaded yet) → derive level from XP, no NaN.
+  const derived = getPlayerXpProgress(900, null)
+  assert.equal(derived.nextLevelXp, 994)
+  assert.equal(derived.remainingXp, 94)
 })
 
 test('calendar day diff ignores DST-shortened elapsed hours', () => {

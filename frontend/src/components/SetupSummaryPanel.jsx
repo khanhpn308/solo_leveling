@@ -1,14 +1,90 @@
+import { useState } from 'react'
 import PanelFrame from './PanelFrame'
 import { TEST_EVIDENCE } from '../dashboard-data'
+import { updatePlayerTargets } from '../api/auth'
 
-function SetupSummaryPanel({ player, skills }) {
+const BAND_OPTIONS = ['4.0', '4.5', '5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5', '9.0']
+
+const TARGET_SKILLS = [
+  { key: 'overall', label: 'Overall', playerKey: 'targetOverall' },
+  { key: 'listening', label: 'Listening', playerKey: 'targetListening' },
+  { key: 'reading', label: 'Reading', playerKey: 'targetReading' },
+  { key: 'writing', label: 'Writing', playerKey: 'targetWriting' },
+  { key: 'speaking', label: 'Speaking', playerKey: 'targetSpeaking' },
+]
+
+function resolveInitialTargets(player) {
+  const fallback = player.targetOverall || player.target || '6.5'
+  return {
+    overall: player.targetOverall || fallback,
+    listening: player.targetListening || fallback,
+    reading: player.targetReading || fallback,
+    writing: player.targetWriting || fallback,
+    speaking: player.targetSpeaking || fallback,
+  }
+}
+
+function SetupSummaryPanel({ player, skills, onProfileRefresh }) {
+  const [targets, setTargets] = useState(() => resolveInitialTargets(player))
+  const [saved, setSaved] = useState(() => resolveInitialTargets(player))
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
+
+  const isDirty = TARGET_SKILLS.some(({ key }) => targets[key] !== saved[key])
+
+  function handleChange(key, val) {
+    setTargets((prev) => ({ ...prev, [key]: val }))
+    setSaveMsg('')
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setSaveMsg('')
+    try {
+      await updatePlayerTargets(targets)
+      setSaved({ ...targets })
+      setSaveMsg('Đã lưu')
+      if (onProfileRefresh) onProfileRefresh()
+    } catch {
+      setSaveMsg('Lỗi — thử lại')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <PanelFrame title="Campaign Setup" tag={player.hasStarted ? 'Start locked in' : `${player.daysUntilStart} days left`}>
       <div className="setup-grid">
-        <div className="setup-card">
-          <span className="setup-card__label">Target</span>
-          <strong>{player.target}</strong>
-          <p>Current level is around B1, with Listening stronger than Reading.</p>
+        <div className="setup-card setup-card--target">
+          <span className="setup-card__label">Mục tiêu IELTS</span>
+          <div className="target-grid">
+            {TARGET_SKILLS.map(({ key, label }) => (
+              <label key={key} className="onboarding-score-row target-row">
+                <span className="onboarding-score-label">{label}</span>
+                <select
+                  className="onboarding-score-input"
+                  value={targets[key]}
+                  onChange={(e) => handleChange(key, e.target.value)}
+                >
+                  {BAND_OPTIONS.map((band) => (
+                    <option key={band} value={band}>
+                      {band}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+          {isDirty && (
+            <button
+              className="target-save-btn"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? 'Đang lưu…' : 'Lưu mục tiêu'}
+            </button>
+          )}
+          {saveMsg && <p className="target-save-msg">{saveMsg}</p>}
         </div>
         <div className="setup-card">
           <span className="setup-card__label">Evidence</span>
