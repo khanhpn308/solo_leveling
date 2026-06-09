@@ -22,11 +22,13 @@ services:
     build: ./backend
     container_name: ielts_quest_backend
     restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     environment:
       DATABASE_URL: mysql+pymysql://ielts_user:ielts_password@mysql:3306/ielts_quest
       APP_START_DATE: "2026-06-04"
       MATERIAL_PLAN_PATH: /app/material.md
       CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+      PYTHONUNBUFFERED: "1"
     ports:
       - "8000:8000"
     depends_on:
@@ -34,14 +36,14 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-      - ./material.md:/app/material.md:ro
+      - ./material/material.md:/app/material.md:ro
 
   frontend:
     build: ./frontend
     container_name: ielts_quest_frontend
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://localhost:8000/api
+      VITE_API_URL: http://127.0.0.1:8000/api
     ports:
       - "5173:5173"
     depends_on:

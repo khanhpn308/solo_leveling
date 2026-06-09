@@ -1,7 +1,7 @@
 import { useId, useRef } from 'react'
 import { usePresenceLayer } from './usePresenceLayer'
 
-function NavigationDrawer({ open, onClose, onOpenQuestTab, onOpenCertificates, onOpenBoss }) {
+function NavigationDrawer({ open, onClose, onOpenQuestTab, onOpenCertificates, onOpenBoss, onOpenVocabulary }) {
   const closeButtonRef = useRef(null)
   const titleId = useId()
   const { isMounted, phase, rootRef } = usePresenceLayer({
@@ -56,6 +56,10 @@ function NavigationDrawer({ open, onClose, onOpenQuestTab, onOpenCertificates, o
               </button>
             </div>
           </div>
+          <button type="button" onClick={onOpenVocabulary}>
+            <span>Lexical Awakening</span>
+            <small>Codex Archive & Flashcard Gate</small>
+          </button>
           <button type="button" onClick={onOpenCertificates}>
             <span>Certificate</span>
             <small>IELTS / Aptis / TOEIC / TOEFL</small>

@@ -1,5 +1,6 @@
+import React from 'react'
 import PanelFrame from './PanelFrame'
-import { formatDate, getQuestActionMeta, getQuestRewardValue, getTodayISO } from '../dashboard-data'
+import { formatDate, getQuestActionMeta, getQuestRewardValue, getTodayISO, uniqueItems } from '../dashboard-data'
 
 function QuestActionButton({ quest, pendingState, todayIso, onQuestAction }) {
   const actionMeta = getQuestActionMeta(quest, pendingState, todayIso)
@@ -32,6 +33,7 @@ function renderQuestCard(quest, onQuestAction, questPendingById, successQuestId,
         </p>
         <h3>{quest.title}</h3>
         <p>{quest.details}</p>
+        {quest.completed && quest.completion_payload ? <div className="quest-completion-payload">{quest.completion_payload}</div> : null}
         <div className="quest-node__foot">
           <span>{quest.source}</span>
           <span>{quest.completed && !quest.rewardClaimed ? 'Reward waiting' : quest.status}</span>
@@ -40,6 +42,7 @@ function renderQuestCard(quest, onQuestAction, questPendingById, successQuestId,
       <div className="quest-node__reward">
         <strong>+{getQuestRewardValue(quest)}</strong>
         <span>{quest.completed && !quest.rewardClaimed ? 'claim XP' : 'XP'}</span>
+        {quest.reward_skill_name ? <small className="quest-reward-skill">{quest.reward_skill_name}</small> : null}
         <QuestActionButton
           quest={quest}
           pendingState={pendingState}
@@ -51,36 +54,10 @@ function renderQuestCard(quest, onQuestAction, questPendingById, successQuestId,
   )
 }
 
-function renderBacklogCard(quest, onQuestAction, questPendingById, successQuestId, todayIso) {
-  const pendingState = questPendingById[quest.id]
-  const isPending = Boolean(pendingState)
-
-  return (
-    <article
-      key={quest.id}
-      className={`backlog-item backlog-item--${quest.status} ${isPending ? 'is-pending' : ''} ${successQuestId === quest.id ? 'is-success-flash' : ''}`}
-    >
-      <div>
-        <strong>{quest.title}</strong>
-        <p>
-          {quest.skill_name} / {formatDate(quest.quest_date)}
-        </p>
-      </div>
-      <div className="backlog-item__actions">
-        <span>{quest.completed && !quest.rewardClaimed ? 'Reward waiting' : quest.status}</span>
-        <QuestActionButton
-          quest={quest}
-          pendingState={pendingState}
-          todayIso={todayIso}
-          onQuestAction={onQuestAction}
-        />
-      </div>
-    </article>
-  )
-}
-
-function DailyQuestPanel({ quests, backlog, onQuestAction, commandDeck, questPendingById, successQuestId, rewardPulseToken }) {
+function DailyQuestPanel({ quests, onQuestAction, commandDeck, questPendingById, successQuestId, rewardPulseToken }) {
   const todayIso = getTodayISO()
+  const [filterSkill, setFilterSkill] = React.useState("")
+  const skillOptions = uniqueItems((quests ?? []).map((q) => q.skill_name))
 
   return (
     <PanelFrame
@@ -94,32 +71,35 @@ function DailyQuestPanel({ quests, backlog, onQuestAction, commandDeck, questPen
           <strong>{quests.length}</strong>
         </div>
         <div className={`quest-summary__card ${rewardPulseToken ? 'quest-summary__card--pulse' : ''}`}>
-          <span>Backlog</span>
-          <strong>{commandDeck.backlogCount}</strong>
-        </div>
-        <div className={`quest-summary__card ${rewardPulseToken ? 'quest-summary__card--pulse' : ''}`}>
           <span>Claim Ready</span>
           <strong>{quests.filter((quest) => quest.completed && !quest.rewardClaimed).length}</strong>
         </div>
       </div>
 
+      <div className="quest-tabs">
+        <button
+          type="button"
+          className={`quest-tab-button ${filterSkill === "" ? "is-active" : ""}`}
+          onClick={() => setFilterSkill("")}
+        >
+          All
+        </button>
+        {skillOptions.map((s) => (
+          <button
+            key={s}
+            type="button"
+            className={`quest-tab-button ${filterSkill === s ? "is-active" : ""}`}
+            onClick={() => setFilterSkill(s)}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
       <div className="quest-stack">
-        {quests.map((quest) => renderQuestCard(quest, onQuestAction, questPendingById, successQuestId, todayIso))}
+        {(filterSkill ? quests.filter((q) => q.skill_name === filterSkill) : quests).map((quest) => renderQuestCard(quest, onQuestAction, questPendingById, successQuestId, todayIso))}
       </div>
 
-      <div className="subsection-divider" />
-
-      <div className="backlog-header">
-        <h3>Overdue Backlog</h3>
-        <span>Finish the quest first, then claim the reward XP from the cleared card.</span>
-      </div>
-      <div className="backlog-list">
-        {backlog.length === 0 ? (
-          <div className="empty-state">There is no overdue backlog right now.</div>
-        ) : (
-          backlog.map((quest) => renderBacklogCard(quest, onQuestAction, questPendingById, successQuestId, todayIso))
-        )}
-      </div>
     </PanelFrame>
   )
 }

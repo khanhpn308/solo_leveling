@@ -1,29 +1,42 @@
 from __future__ import annotations
 
 import os
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from pathlib import Path
 import re
 
 from sqlalchemy.orm import Session
 
 from .models import (
+    Account,
+    AccountPreference,
     Badge,
     BossBattle,
     Campaign,
+    CampaignSetting,
+    CampaignTemplate,
+    CampaignTemplateSkillQuota,
+    CampaignSkillQuestQuota,
+    CertificateRecord,
+    PlayerLearningProfile,
     PhaseMaterial,
     Player,
     Quest,
     QuestTemplate,
+    RankExamPool,
+    RankExamVersion,
+    RankExamQuestion,
     RoadmapPhase,
     Skill,
     StudyPlanSession,
     StudyPlanWeek,
     StudyMaterial,
     TestRecord,
+    VocabularySetting,
     WeeklyMission,
     WeeklyMissionItem,
 )
+from .auth_utils import hash_password
 from .services import create_rank_suggestions_for_test
 
 SKILLS = [
@@ -47,17 +60,11 @@ BADGES = [
     ("Error Killer", "⚔️", "Log and fix many fully understood mistakes."),
     ("Band 6 Challenger", "🥈", "Clear the mid-roadmap checkpoint."),
     ("Band 7 Candidate", "🏆", "Finish the final mock-test sequence."),
+    ("Memory Streak Badge I", "🌟", "Clear the Vocabulary Monthly Checkpoint (Boss 02)."),
+    ("Lexical Awakener", "🌌", "Clear the final Lexical Awakening Boss Battle (Boss 04)."),
+    ("Writing Lexical Buff", "📜", "Clear the Collocation Hunter Boss Battle (Boss 03)."),
 ]
 
-RANK_THRESHOLDS = [
-    (3500, "S", 7),
-    (2500, "A", 6),
-    (1700, "B", 5),
-    (1000, "C", 4),
-    (500, "D", 3),
-    (200, "E", 2),
-    (0, "F", 1),
-]
 
 ROADMAP_PHASES = [
     {
@@ -331,11 +338,6 @@ MATERIAL_ALIASES = {
 }
 
 
-def get_rank_level(xp: int) -> tuple[str, int]:
-    for threshold, rank, level in RANK_THRESHOLDS:
-        if xp >= threshold:
-            return rank, level
-    return "F", 1
 
 
 def phase_label(phase_index: int) -> str:
@@ -478,6 +480,111 @@ def quest_template_seed() -> list[dict]:
             "resource_note": "Switch to Advanced in later phases.",
             "allowed_phase_start": 1,
             "allowed_phase_end": 5,
+        },
+        {
+            "title": "Memory Gate",
+            "description": "Review 20 flashcards using the spaced-repetition gate and mark 5 as mastered.",
+            "skill": "Vocabulary",
+            "phase_code": "phase-1",
+            "material_title": "Any current notebook",
+            "base_xp": 15,
+            "difficulty": "easy",
+            "difficulty_description": "Flashcard review gate.",
+            "quest_role": "support",
+            "resource_name": "Any current notebook",
+            "resource_category": "review",
+            "resource_note": "Spaced repetition session.",
+            "allowed_phase_start": 1,
+            "allowed_phase_end": 5,
+            "quest_track_code": "vocab_memory",
+            "activity_type": "flashcard_review",
+            "target_metric": "mastered_count",
+            "target_count": 5,
+            "completion_payload": "{\"mastered\":5}",
+        },
+        {
+            "title": "Codex Entry",
+            "description": "Create 1 codex entry: add a new word with meaning, example, and one collocation.",
+            "skill": "Vocabulary",
+            "phase_code": "phase-1",
+            "material_title": "Any current notebook",
+            "base_xp": 12,
+            "difficulty": "easy",
+            "difficulty_description": "Create and save a codex entry.",
+            "quest_role": "support",
+            "resource_name": "Any current notebook",
+            "resource_category": "review",
+            "resource_note": "Personalized vocabulary entry.",
+            "allowed_phase_start": 1,
+            "allowed_phase_end": 5,
+            "quest_track_code": "vocab_codex",
+            "activity_type": "codex_create",
+            "target_metric": "entries_created",
+            "target_count": 1,
+            "completion_payload": "{\"entries\":1}",
+        },
+        {
+            "title": "Collocation Forge",
+            "description": "Practice 5 collocations in sentences and submit 3 valid personal examples.",
+            "skill": "Collocation",
+            "phase_code": "phase-1",
+            "material_title": "English Collocations in Use Intermediate",
+            "base_xp": 14,
+            "difficulty": "easy",
+            "difficulty_description": "Produce collocation examples.",
+            "quest_role": "support",
+            "resource_name": "English Collocations in Use Intermediate",
+            "resource_category": "book",
+            "resource_note": "Write personal-context sentences.",
+            "allowed_phase_start": 1,
+            "allowed_phase_end": 5,
+            "quest_track_code": "vocab_collocation",
+            "activity_type": "collocation_practice",
+            "target_metric": "examples_submitted",
+            "target_count": 3,
+            "completion_payload": "{\"examples\":3}",
+        },
+        {
+            "title": "Context Hunt",
+            "description": "Find 3 real-sentence contexts for 5 target words from reading materials and save them.",
+            "skill": "Vocabulary",
+            "phase_code": "phase-1",
+            "material_title": "Any current notebook",
+            "base_xp": 16,
+            "difficulty": "normal",
+            "difficulty_description": "Collect contextual examples from readings.",
+            "quest_role": "support",
+            "resource_name": "Any current notebook",
+            "resource_category": "review",
+            "resource_note": "Contextual sentence collection.",
+            "allowed_phase_start": 1,
+            "allowed_phase_end": 5,
+            "quest_track_code": "vocab_context",
+            "activity_type": "context_collection",
+            "target_metric": "contexts_saved",
+            "target_count": 3,
+            "completion_payload": "{\"contexts\":3}",
+        },
+        {
+            "title": "Error Dungeon",
+            "description": "Log 3 recurring vocabulary errors and write corrective notes for each.",
+            "skill": "Vocabulary",
+            "phase_code": "phase-1",
+            "material_title": "Any current notebook",
+            "base_xp": 18,
+            "difficulty": "normal",
+            "difficulty_description": "Error logging and corrective practice.",
+            "quest_role": "support",
+            "resource_name": "Any current notebook",
+            "resource_category": "review",
+            "resource_note": "Log recurring errors and corrections.",
+            "allowed_phase_start": 1,
+            "allowed_phase_end": 5,
+            "quest_track_code": "vocab_error",
+            "activity_type": "error_logging",
+            "target_metric": "errors_logged",
+            "target_count": 3,
+            "completion_payload": "{\"errors\":3}",
         },
         {
             "title": "Mini Review Burst",
@@ -688,6 +795,18 @@ def weekly_mission_patterns(phase_index: int) -> list[dict]:
             ],
         },
         {
+            "pattern_code": f"{phase_index}-vocabulary-expansion",
+            "title": f"Weekly Mission - {phase_name} Vocabulary Expansion",
+            "description": "Expand vocabulary: create codex entries, review flashcards, and log contexts.",
+            "reward_xp": 50,
+            "reward_skill": "Vocabulary",
+            "items": [
+                ("Create 2 codex entries", 2),
+                ("Review 30 flashcards via spaced repetition", 30),
+                ("Save 5 contextual sentences for target words", 5),
+            ],
+        },
+        {
             "pattern_code": f"{phase_index}-output-focus",
             "title": f"Weekly Mission - {phase_name} Output Focus",
             "description": "Increase Writing and Speaking output to reduce avoidance.",
@@ -717,8 +836,43 @@ def onboarding_week_start(start_date: date) -> date:
     return start_date - timedelta(days=start_date.weekday())
 
 
+def ensure_demo_account(db: Session) -> Account:
+    account = db.query(Account).filter(Account.email_normalized == "dev@example.com").first()
+    if not account:
+        account = Account(
+            email="dev@example.com",
+            email_normalized="dev@example.com",
+            password_hash=hash_password("password123"),
+            display_name="Dev User",
+            status="active",
+            role="user",
+            onboarding_completed=True,
+            onboarding_completed_at=datetime.utcnow(),
+        )
+        db.add(account)
+        db.flush()
+
+    main_account = db.query(Account).filter(Account.email_normalized == "ad00000@gmail.com").first()
+    if not main_account:
+        main_account = Account(
+            email="ad00000@gmail.com",
+            email_normalized="ad00000@gmail.com",
+            password_hash=hash_password("khanhxx007"),
+            display_name="AD00000",
+            status="active",
+            role="user",
+            onboarding_completed=True,
+            onboarding_completed_at=datetime.utcnow(),
+        )
+        db.add(main_account)
+        db.flush()
+
+    return main_account
+
+
 def ensure_player(db: Session, start_date: date) -> Player:
-    player = db.query(Player).first()
+    demo_account = ensure_demo_account(db)
+    player = db.query(Player).filter(Player.account_id == demo_account.id).first()
     if player:
         return player
     player = Player(
@@ -744,6 +898,7 @@ def ensure_player(db: Session, start_date: date) -> Player:
         shield_regen_progress=0,
         perfect_day_count=0,
         setup_completed=True,
+        account_id=demo_account.id,
     )
     db.add(player)
     db.flush()
@@ -770,24 +925,17 @@ def ensure_campaign(db: Session, player: Player, start_date: date) -> Campaign:
 
 def ensure_skills(db: Session) -> dict[str, Skill]:
     skill_by_name: dict[str, Skill] = {}
-    for name, icon, weak_point in SKILLS:
+    for name, icon, _ in SKILLS:
         skill = db.query(Skill).filter(Skill.name == name).first()
         if not skill:
             skill = Skill(
                 name=name,
                 icon=icon,
-                weak_point=weak_point,
-                user_weakness_note=weak_point,
-                confirmed_rank="F",
             )
             db.add(skill)
             db.flush()
         else:
-            previous_weak_point = skill.weak_point
             skill.icon = icon
-            skill.weak_point = weak_point
-            if not (skill.user_weakness_note or "").strip() or skill.user_weakness_note == previous_weak_point:
-                skill.user_weakness_note = weak_point
         skill_by_name[name] = skill
     return skill_by_name
 
@@ -998,6 +1146,12 @@ def ensure_templates(
                 allowed_phase_start=item["allowed_phase_start"],
                 allowed_phase_end=item["allowed_phase_end"],
                 is_active=True,
+                quest_track_code=item.get("quest_track_code", ""),
+                activity_type=item.get("activity_type", ""),
+                reward_skill_id=skill_by_name[item["skill"]].id if item.get("reward_skill_id") == item.get("skill") else None,
+                target_metric=item.get("target_metric", ""),
+                target_count=item.get("target_count", 1),
+                completion_payload=item.get("completion_payload", ""),
             )
             db.add(template)
             db.flush()
@@ -1016,6 +1170,17 @@ def ensure_templates(
             template.allowed_phase_start = item["allowed_phase_start"]
             template.allowed_phase_end = item["allowed_phase_end"]
             template.is_active = True
+        # Update optional new fields
+        template.quest_track_code = item.get("quest_track_code", getattr(template, "quest_track_code", ""))
+        template.activity_type = item.get("activity_type", getattr(template, "activity_type", ""))
+        # reward_skill_id can be provided as a skill name
+        if item.get("reward_skill_id"):
+            rs = item.get("reward_skill_id")
+            if isinstance(rs, str) and rs in skill_by_name:
+                template.reward_skill_id = skill_by_name[rs].id
+        template.target_metric = item.get("target_metric", getattr(template, "target_metric", ""))
+        template.target_count = item.get("target_count", getattr(template, "target_count", 1))
+        template.completion_payload = item.get("completion_payload", getattr(template, "completion_payload", ""))
         template_by_title[template.title] = template
     return template_by_title
 
@@ -1077,10 +1242,48 @@ def ensure_quest_instances(
     template_by_title: dict[str, QuestTemplate],
     phase_by_code: dict[str, RoadmapPhase],
 ) -> None:
+    # 1. Fetch active quotas for this campaign
+    quotas = db.query(CampaignSkillQuestQuota).filter(
+        CampaignSkillQuestQuota.campaign_id == campaign.id,
+        CampaignSkillQuestQuota.is_active == True
+    ).all()
+
+    # Map skill name to quota
+    quota_by_skill_name = {q.skill.name: q for q in quotas if q.skill}
+
+    # Map skill/activity combinations to distinct daily slot codes and templates
+    slot_mapping = {
+        "Vocabulary": [
+            ("vocab_flashcard", "Memory Gate"),
+            ("vocab_codex", "Codex Entry"),
+            ("vocab_collocation", "Context Hunt"),
+            ("vocab_error", "Error Dungeon")
+        ],
+        "Reading": [
+            ("reading_scan", "Reading Core Sweep")
+        ],
+        "Listening": [
+            ("listening_dictation", "Listening Core Sweep")
+        ],
+        "Grammar": [
+            ("grammar_pattern", "Grammar Support Forge")
+        ],
+        "Collocation": [
+            ("collocation_forge", "Collocation Forge")
+        ],
+        "Writing": [
+            ("writing_theme", "Writing Core Draft")
+        ],
+        "Speaking": [
+            ("speaking_theme", "Speaking Core Record")
+        ]
+    }
+
+    # Fetch existing quest daily slot codes to avoid duplicates
     existing_daily_keys = {
-        (quest.quest_date, quest.quest_role)
-        for quest in db.query(Quest.quest_date, Quest.quest_role)
-        .filter(Quest.campaign_id == campaign.id)
+        (quest.quest_date, quest.daily_slot_code)
+        for quest in db.query(Quest.quest_date, Quest.daily_slot_code)
+        .filter(Quest.campaign_id == campaign.id, Quest.session_type == "Daily Quest")
         .all()
     }
 
@@ -1089,66 +1292,108 @@ def ensure_quest_instances(
         phase_index = phase_for_week(week_no)
         phase_name = phase_label(phase_index)
         week_start = campaign.start_date + timedelta(days=(week_no - 1) * 7)
-        rotation = daily_template_rotation(phase_index)
+        phase = phase_by_code.get(f"phase-{phase_index}")
+        phase_id = phase.id if phase else None
+
         for day_offset in range(7):
-            base = day_offset * 3
-            titles = rotation[base : base + 3]
-            for template_title in titles:
-                template = template_by_title[template_title]
-                quest_date = week_start + timedelta(days=day_offset)
-                if (quest_date, template.quest_role) in existing_daily_keys:
-                    existing = (
-                        db.query(Quest)
-                        .filter(
+            quest_date = week_start + timedelta(days=day_offset)
+
+            for skill_name, slots in slot_mapping.items():
+                quota = quota_by_skill_name.get(skill_name)
+                if not quota or quota.daily_quota <= 0:
+                    continue
+
+                # Reorder slots based on preferred_activity_types
+                preferred = quota.preferred_activity_types
+                pref_list = []
+                if isinstance(preferred, list):
+                    pref_list = [str(x) for x in preferred]
+                elif isinstance(preferred, str):
+                    pref_list = [preferred]
+
+                ordered_slots = []
+                if pref_list:
+                    for pref_act in pref_list:
+                        for slot_code, title in slots:
+                            template = template_by_title.get(title)
+                            act_type = getattr(template, "activity_type", "") if template else ""
+                            if act_type == pref_act and (slot_code, title) not in ordered_slots:
+                                ordered_slots.append((slot_code, title))
+                    for slot_code, title in slots:
+                        if (slot_code, title) not in ordered_slots:
+                            ordered_slots.append((slot_code, title))
+                else:
+                    ordered_slots = slots
+
+                # Generate daily quests up to the quota limit
+                limit = min(quota.daily_quota, len(ordered_slots))
+                for i in range(limit):
+                    slot_code, template_title = ordered_slots[i]
+
+                    if (quest_date, slot_code) in existing_daily_keys:
+                        existing = db.query(Quest).filter(
                             Quest.campaign_id == campaign.id,
                             Quest.quest_date == quest_date,
-                            Quest.quest_role == template.quest_role,
-                            Quest.session_type == "Daily Quest",
-                        )
-                        .first()
-                    )
-                    if existing:
-                        skill = next(skill for skill in skill_by_name.values() if skill.id == template.primary_skill_id)
-                        phase = phase_by_code[f"phase-{phase_index}"]
-                        existing.stage = phase_name
-                        existing.title = template.title
-                        existing.skill_id = skill.id
-                        existing.source = template.resource_name
-                        existing.details = template.description
-                        existing.phase_id = phase.id
-                        existing.template_id = template.id
-                        existing.material_id = template.material_id
-                        existing.difficulty = template.difficulty
-                        existing.base_xp = template.base_xp
-                        existing.xp = template.base_xp
-                        existing.daily_slot_code = template.quest_role
-                    continue
-                skill = next(skill for skill in skill_by_name.values() if skill.id == template.primary_skill_id)
-                phase = phase_by_code[f"phase-{phase_index}"]
-                db.add(
-                    Quest(
-                        quest_date=quest_date,
-                        week_no=week_no,
-                        stage=phase_name,
-                        title=template.title,
-                        skill_id=skill.id,
-                        source=template.resource_name,
-                        details=template.description,
-                        xp=template.base_xp,
-                        session_type="Daily Quest",
-                        campaign_id=campaign.id,
-                        phase_id=phase.id,
-                        template_id=template.id,
-                        material_id=template.material_id,
-                        status="pending",
-                        quest_role=template.quest_role,
-                        daily_slot_code=template.quest_role,
-                        difficulty=template.difficulty,
-                        base_xp=template.base_xp,
-                        earned_xp=0,
-                    )
-                )
-                existing_daily_keys.add((quest_date, template.quest_role))
+                            Quest.daily_slot_code == slot_code,
+                            Quest.session_type == "Daily Quest"
+                        ).first()
+                        if existing and template_title in template_by_title:
+                            template = template_by_title[template_title]
+                            skill = skill_by_name.get(skill_name)
+                            existing.stage = phase_name
+                            existing.title = template.title
+                            existing.skill_id = skill.id if skill else existing.skill_id
+                            existing.source = template.resource_name
+                            existing.details = template.description
+                            existing.phase_id = phase_id or existing.phase_id
+                            existing.template_id = template.id
+                            existing.material_id = template.material_id
+                            existing.difficulty = template.difficulty
+                            existing.base_xp = template.base_xp
+                            existing.xp = template.base_xp
+                            existing.quest_role = template.quest_role
+                            existing.quest_track_code = getattr(template, "quest_track_code", "")
+                            existing.activity_type = getattr(template, "activity_type", "")
+                            existing.reward_skill_id = getattr(template, "reward_skill_id", None)
+                            existing.target_metric = getattr(template, "target_metric", "")
+                            existing.target_count = getattr(template, "target_count", 1)
+                            existing.completion_payload = getattr(template, "completion_payload", "")
+                        continue
+
+                    if template_title in template_by_title:
+                        template = template_by_title[template_title]
+                        skill = skill_by_name.get(skill_name)
+                        if skill:
+                            db.add(
+                                Quest(
+                                    quest_date=quest_date,
+                                    week_no=week_no,
+                                    stage=phase_name,
+                                    title=template.title,
+                                    skill_id=skill.id,
+                                    source=template.resource_name,
+                                    details=template.description,
+                                    xp=template.base_xp,
+                                    session_type="Daily Quest",
+                                    campaign_id=campaign.id,
+                                    phase_id=phase_id,
+                                    template_id=template.id,
+                                    material_id=template.material_id,
+                                    status="pending",
+                                    quest_role=template.quest_role,
+                                    daily_slot_code=slot_code,
+                                    difficulty=template.difficulty,
+                                    base_xp=template.base_xp,
+                                    earned_xp=0,
+                                    quest_track_code=getattr(template, "quest_track_code", ""),
+                                    activity_type=getattr(template, "activity_type", ""),
+                                    reward_skill_id=getattr(template, "reward_skill_id", None),
+                                    target_metric=getattr(template, "target_metric", ""),
+                                    target_count=getattr(template, "target_count", 1),
+                                    completion_payload=getattr(template, "completion_payload", ""),
+                                )
+                            )
+                            existing_daily_keys.add((quest_date, slot_code))
 
 
 def ensure_main_quest_instances(
@@ -1307,6 +1552,10 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
                 description=pattern["description"],
                 reward_xp=pattern["reward_xp"],
                 status="active",
+                primary_skill_id=None,
+                mission_track_code=pattern.get("pattern_code", ""),
+                activity_type=pattern.get("activity_type", ""),
+                reward_skill_id=None,
             )
             db.add(mission)
             db.flush()
@@ -1317,6 +1566,13 @@ def ensure_weekly_missions(db: Session, campaign: Campaign) -> None:
             mission.title = pattern["title"]
             mission.description = pattern["description"]
             mission.reward_xp = pattern["reward_xp"]
+        # assign optional fields
+        if pattern.get("reward_skill") and pattern.get("reward_skill") in [s.name for s in db.query(Skill).all()]:
+            skill = db.query(Skill).filter(Skill.name == pattern.get("reward_skill")).first()
+            mission.reward_skill_id = skill.id
+            mission.primary_skill_id = skill.id
+        mission.mission_track_code = pattern.get("pattern_code", mission.mission_track_code)
+        mission.activity_type = pattern.get("activity_type", mission.activity_type)
         existing_items = (
             db.query(WeeklyMissionItem)
             .filter(WeeklyMissionItem.weekly_mission_id == mission.id)
@@ -1415,12 +1671,291 @@ def ensure_test_records(db: Session, player: Player, campaign: Campaign) -> None
         create_rank_suggestions_for_test(db, record)
 
 
+def ensure_campaign_templates(db: Session, skill_by_name: dict[str, Skill]) -> CampaignTemplate:
+    template = db.query(CampaignTemplate).filter(CampaignTemplate.code == "ielts_18_month_foundation").first()
+    if not template:
+        template = CampaignTemplate(
+            code="ielts_18_month_foundation",
+            title="IELTS 18-Month Hunter Roadmap",
+            description="Complete game-styled progress tracking toward IELTS 7.0-7.5 target over an 18-month duration.",
+            certificate_type="IELTS",
+            target_band="7.0-7.5",
+            duration_months=18,
+            total_weeks=78,
+            is_active=True
+        )
+        db.add(template)
+        db.flush()
+    
+    # quotas mapping
+    quotas = {
+        "Vocabulary": 3,
+        "Reading": 1,
+        "Listening": 1,
+        "Grammar": 1,
+        "Collocation": 1,
+        "Writing": 0,
+        "Speaking": 0,
+    }
+    for skill_name, daily_val in quotas.items():
+        skill = skill_by_name.get(skill_name)
+        if skill:
+            quota = db.query(CampaignTemplateSkillQuota).filter(
+                CampaignTemplateSkillQuota.campaign_template_id == template.id,
+                CampaignTemplateSkillQuota.skill_id == skill.id
+            ).first()
+            if not quota:
+                quota = CampaignTemplateSkillQuota(
+                    campaign_template_id=template.id,
+                    skill_id=skill.id,
+                    daily_quota=daily_val,
+                    weekly_quota=daily_val * 7,
+                    priority=100,
+                    is_active=True,
+                    preferred_activity_types=[]
+                )
+                db.add(quota)
+    db.flush()
+    return template
+
+
+def ensure_account_and_profile(db: Session, player: Player) -> Account:
+    main_account = ensure_demo_account(db)
+
+    pref = db.query(AccountPreference).filter(AccountPreference.account_id == main_account.id).first()
+    if not pref:
+        pref = AccountPreference(
+            account_id=main_account.id,
+            locale="vi",
+            timezone="Asia/Ho_Chi_Minh",
+            theme="dark",
+            notification_enabled=True
+        )
+        db.add(pref)
+
+    profile = db.query(PlayerLearningProfile).filter(PlayerLearningProfile.player_id == player.id).first()
+    if not profile:
+        profile = PlayerLearningProfile(
+            player_id=player.id,
+            preferred_learning_style="mixed",
+            dictionary_mode="bilingual_first",
+            pronunciation_focus=True,
+            collocation_focus=True,
+            native_language="vi",
+            interface_learning_language="mixed"
+        )
+        db.add(profile)
+
+    db.flush()
+    return main_account
+
+
+def ensure_campaign_settings_and_quotas(db: Session, campaign: Campaign, template: CampaignTemplate, skill_by_name: dict[str, Skill]) -> None:
+    # campaign template link
+    if not campaign.campaign_template_id:
+        campaign.campaign_template_id = template.id
+        campaign.setup_completed = True
+        campaign.setup_completed_at = datetime.utcnow()
+        
+    # settings
+    setting = db.query(CampaignSetting).filter(CampaignSetting.campaign_id == campaign.id).first()
+    if not setting:
+        setting = CampaignSetting(
+            campaign_id=campaign.id,
+            target_certificate="IELTS",
+            target_band="7.0-7.5",
+            current_english_level="B1",
+            start_date=campaign.start_date,
+            study_duration_months=18
+        )
+        db.add(setting)
+        
+    # skill quotas
+    for quota_temp in template.skill_quotas:
+        quota = db.query(CampaignSkillQuestQuota).filter(
+            CampaignSkillQuestQuota.campaign_id == campaign.id,
+            CampaignSkillQuestQuota.skill_id == quota_temp.skill_id
+        ).first()
+        if not quota:
+            quota = CampaignSkillQuestQuota(
+                campaign_id=campaign.id,
+                skill_id=quota_temp.skill_id,
+                daily_quota=quota_temp.daily_quota,
+                weekly_quota=quota_temp.weekly_quota,
+                priority=quota_temp.priority,
+                is_active=quota_temp.is_active,
+                preferred_activity_types=quota_temp.preferred_activity_types
+            )
+            db.add(quota)
+            
+    # vocabulary settings
+    vocab_setting = db.query(VocabularySetting).filter(VocabularySetting.campaign_id == campaign.id).first()
+    if not vocab_setting:
+        vocab_setting = VocabularySetting(
+            campaign_id=campaign.id,
+            daily_new_words_target=5,
+            daily_flashcard_target=20,
+            daily_collocation_target=3,
+            daily_context_hunt_target=5,
+            daily_error_review_target=3,
+            vocab_review_mode="mixed",
+            vocab_grouping_mode="topic",
+            dictionary_mode="bilingual_first",
+            example_sentence_required=True,
+            pronunciation_required=False,
+            word_family_required=False,
+            synonym_antonym_required=False,
+            collocation_required=True,
+            spaced_repetition_enabled=True
+        )
+        db.add(vocab_setting)
+    db.flush()
+
+
+def ensure_rank_exam_pools(db: Session, skill_by_name: dict[str, Skill]) -> None:
+    # Seed F -> E pools for MVP skills: Vocabulary, Reading, Listening, Grammar, Collocation
+    mvp_skills = ["Vocabulary", "Reading", "Listening", "Grammar", "Collocation"]
+    
+    questions_data = {
+        "Vocabulary": [
+            ("What is the synonym of 'abandon'?", ["Keep", "Leave", "Find", "Hold"], "Leave"),
+            ("What is the antonym of 'abundant'?", ["Scarce", "Plentiful", "Rich", "Full"], "Scarce"),
+            ("Select the word that means 'to make something better':", ["Aggravate", "Ameliorate", "Decline", "Worsen"], "Ameliorate"),
+            ("Choose the correct word for: 'lasting for a very short time'", ["Ephemeral", "Permanent", "Eternal", "Constant"], "Ephemeral"),
+            ("Identify the correct synonym for 'capricious':", ["Unpredictable", "Stable", "Reliable", "Constant"], "Unpredictable"),
+        ],
+        "Reading": [
+            ("What reading technique is used to find a specific piece of information (e.g., a date)?", ["Skimming", "Scanning", "Intensive Reading", "Extensive Reading"], "Scanning"),
+            ("Skimming a text helps to identify what?", ["Specific names", "The main idea/gist", "Spelling errors", "Detailed definitions"], "The main idea/gist"),
+            ("In IELTS Reading, 'Not Given' means what?", ["The statement contradicts the writer's view", "The statement agrees with the writer's view", "There is no information to verify the statement", "The text contains spelling mistakes"], "There is no information to verify the statement"),
+            ("Which type of question asks you to match paragraphs to headings?", ["Matching Headings", "True/False/Not Given", "Multiple Choice", "Sentence Completion"], "Matching Headings"),
+            ("When a synonym is used in a question instead of the exact word from the text, this is called:", ["Distraction", "Paraphrasing", "Skimming", "Coherence"], "Paraphrasing"),
+        ],
+        "Listening": [
+            ("What should you do during the time provided before a listening section starts?", ["Read the questions and predict answers", "Write down your final answers", "Listen to section 4 immediately", "Rest and close your eyes"], "Read the questions and predict answers"),
+            ("In dictation, what spelling is crucial for credit?", ["Correct spelling", "Approximate spelling", "Phonetic spelling", "Capitalized spelling only"], "Correct spelling"),
+            ("What are speakers likely to use to lead you to select the wrong option?", ["Distractors/corrections", "Clear accents", "Simple sentences", "Slow speech"], "Distractors/corrections"),
+            ("A question asks for a 'number only'. What is a valid answer?", ["Three", "3", "3 words", "Third"], "3"),
+            ("If a speaker says: 'I wanted to go on Tuesday, but then we decided on Friday.' What day did they agree on?", ["Tuesday", "Wednesday", "Friday", "Monday"], "Friday"),
+        ],
+        "Grammar": [
+            ("Choose the correct form: 'If I ___ you, I would study harder.'", ["am", "was", "were", "be"], "were"),
+            ("Identify the passive voice sentence:", ["She wrote a letter.", "A letter was written by her.", "She is writing a letter.", "She has written a letter."], "A letter was written by her."),
+            ("Complete the sentence: 'By next December, I ___ this course.'", ["will finish", "will have finished", "finish", "finished"], "will have finished"),
+            ("Which relative pronoun is used for non-defining clauses about things?", ["who", "which", "whom", "whose"], "which"),
+            ("Identify the correct conditional: 'If it rains, the ground ___ wet.'", ["gets", "would get", "got", "will got"], "gets"),
+        ],
+        "Collocation": [
+            ("Select the correct collocation: 'make a ___'", ["mistake", "error", "crime", "fault"], "mistake"),
+            ("Which verb collocates with 'homework'?", ["do", "make", "create", "write"], "do"),
+            ("Complete the collocation: 'bear in ___'", ["head", "brain", "mind", "thoughts"], "mind"),
+            ("Choose the natural combination:", ["fast food", "quick food", "rapid food", "swift food"], "fast food"),
+            ("Which word fits best: 'pay ___ to details'", ["attention", "focus", "notice", "regard"], "attention"),
+        ]
+    }
+    
+    # xp_threshold = RANK_MIN_XP of the target rank (ielts_xp_policy_rank_quest_spec.md §2.3)
+    transitions = [
+        ("F", "E", 862),
+        ("E", "D", 2460),
+        ("D", "C", 4604),
+        ("C", "B", 7212),
+        ("B", "A", 10234),
+        ("A", "S", 13279),
+    ]
+
+    for skill_name in mvp_skills:
+        skill = skill_by_name.get(skill_name)
+        if not skill:
+            continue
+        
+        for from_r, to_r, thresh in transitions:
+            # Check pool
+            pool = db.query(RankExamPool).filter(
+                RankExamPool.skill_id == skill.id,
+                RankExamPool.from_rank == from_r,
+                RankExamPool.to_rank == to_r
+            ).first()
+            
+            if not pool:
+                pool = RankExamPool(
+                    skill_id=skill.id,
+                    from_rank=from_r,
+                    to_rank=to_r,
+                    title=f"{skill_name} {from_r} to {to_r} Rank Boss Exam",
+                    description=f"Prove your {skill_name} competency to rank up from {from_r} to {to_r}.",
+                    pass_percent=80,
+                    default_time_limit_minutes=30,
+                    max_attempts_per_day=2,
+                    xp_threshold=thresh,
+                    is_active=True
+                )
+                db.add(pool)
+                db.flush()
+            else:
+                if pool.xp_threshold != thresh:
+                    pool.xp_threshold = thresh
+                    db.flush()
+                
+            # Seed version and questions only for F -> E transition
+            if from_r == "F" and to_r == "E":
+                # Check version
+                version = db.query(RankExamVersion).filter(
+                    RankExamVersion.pool_id == pool.id,
+                    RankExamVersion.version_code == "v1_mvp"
+                ).first()
+                
+                if not version:
+                    version = RankExamVersion(
+                        pool_id=pool.id,
+                        title=f"{skill_name} Foundational Quiz Version 1",
+                        version_code="v1_mvp",
+                        total_questions=5,
+                        total_points=5,
+                        difficulty="normal",
+                        time_limit_minutes=30,
+                        is_active=True
+                    )
+                    db.add(version)
+                    db.flush()
+                    
+                # Questions
+                q_list = questions_data[skill_name]
+                for idx, (prompt, options, correct) in enumerate(q_list):
+                    q_exists = db.query(RankExamQuestion).filter(
+                        RankExamQuestion.exam_version_id == version.id,
+                        RankExamQuestion.order_index == idx
+                    ).first()
+                    if not q_exists:
+                        db.add(
+                            RankExamQuestion(
+                                exam_version_id=version.id,
+                                question_type="multiple_choice",
+                                prompt=prompt,
+                                instruction="Choose the correct multiple-choice option.",
+                                options_json=options,
+                                correct_answer_json=correct,
+                                explanation=f"The correct answer is '{correct}' based on foundational {skill_name} rules.",
+                                points=1,
+                                order_index=idx
+                            )
+                        )
+    db.flush()
+
+
 def seed_database(db: Session, start_date: date) -> None:
     player = ensure_player(db, start_date)
     campaign = ensure_campaign(db, player, start_date)
     skill_by_name = ensure_skills(db)
     badges = ensure_badges(db)
     material_by_title = ensure_materials(db)
+    
+    # Run Phase 4 extensions
+    template = ensure_campaign_templates(db, skill_by_name)
+    ensure_account_and_profile(db, player)
+    ensure_campaign_settings_and_quotas(db, campaign, template, skill_by_name)
+    ensure_rank_exam_pools(db, skill_by_name)
+    
     phase_by_code = ensure_roadmap_phases(db, campaign)
     ensure_phase_materials(db, phase_by_code, material_by_title)
     week_by_no, study_plan_sessions = ensure_study_plan(db, campaign, phase_by_code)
@@ -1430,5 +1965,72 @@ def seed_database(db: Session, start_date: date) -> None:
     backfill_quest_phase_and_material(db, campaign, phase_by_code)
     ensure_weekly_missions(db, campaign)
     ensure_bosses(db, campaign, badges)
-    ensure_test_records(db, player, campaign)
     db.commit()
+
+
+def parse_start_date() -> date:
+    raw = os.getenv("APP_START_DATE", "2026-06-04")
+    return date.fromisoformat(raw)
+
+
+def activate_campaign_for_player(db: Session, player: Player, template_code: str = "ielts_18_month_foundation", start_date: date | None = None) -> Campaign:
+    skill_by_name = ensure_skills(db)
+    badges = ensure_badges(db)
+    material_by_title = ensure_materials(db)
+
+    template = db.query(CampaignTemplate).filter(CampaignTemplate.code == template_code).first()
+    if not template:
+        template = ensure_campaign_templates(db, skill_by_name)
+
+    if start_date is None:
+        start_date = parse_start_date()
+    end_date = campaign_end_date(start_date)
+    
+    # check if there is already an active campaign for this player (idempotence)
+    campaign = db.query(Campaign).filter(
+        Campaign.player_id == player.id,
+        Campaign.status == "active"
+    ).first()
+    
+    if not campaign:
+        campaign = Campaign(
+            player_id=player.id,
+            campaign_template_id=template.id,
+            start_date=start_date,
+            end_date=end_date,
+            status="active",
+            setup_completed=True,
+            setup_completed_at=datetime.utcnow()
+        )
+        db.add(campaign)
+        db.flush()
+        
+    player.active_campaign_id = campaign.id
+    player.setup_completed = True
+    player.start_date = start_date
+    # Only set target from template if player has no custom target yet
+    if template.target_band and not player.target_overall_band:
+        player.target_overall_band = template.target_band
+        player.target = f"IELTS Academic {template.target_band}"
+    db.flush()
+
+    ensure_campaign_settings_and_quotas(db, campaign, template, skill_by_name)
+    ensure_rank_exam_pools(db, skill_by_name)
+    
+    phase_by_code = ensure_roadmap_phases(db, campaign)
+    ensure_phase_materials(db, phase_by_code, material_by_title)
+    week_by_no, study_plan_sessions = ensure_study_plan(db, campaign, phase_by_code)
+    template_by_title = ensure_templates(db, skill_by_name, phase_by_code, material_by_title)
+    ensure_quest_instances(db, campaign, skill_by_name, template_by_title, phase_by_code)
+    ensure_main_quest_instances(db, campaign, skill_by_name, material_by_title, week_by_no, study_plan_sessions)
+    backfill_quest_phase_and_material(db, campaign, phase_by_code)
+    ensure_weekly_missions(db, campaign)
+    ensure_bosses(db, campaign, badges)
+
+    # ensure campaign skill states are created
+    from .services import ensure_campaign_skill_states
+    ensure_campaign_skill_states(db, campaign)
+    
+    db.flush()
+    return campaign
+

@@ -44,6 +44,7 @@ function AuxSection({ title, meta, open, onToggle, children }) {
 function StatusModal({
   open,
   onClose,
+  onLogout,
   player,
   activeCheckIn,
   checkInDraft,
@@ -251,6 +252,12 @@ function StatusModal({
             )}
           </div>
         </AuxSection>
+
+        <div className="status-logout-row">
+          <button className="status-logout-btn" type="button" onClick={onLogout}>
+            Đăng xuất
+          </button>
+        </div>
       </div>
     </OverlayFrame>
   )

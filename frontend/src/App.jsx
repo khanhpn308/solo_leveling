@@ -1,7 +1,14 @@
-import { lazy, Suspense, startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from './auth/AuthProvider'
+import { apiFetch } from './api/client'
+import { unlockRankExam, startRankExam } from './api/rankExam'
 import HomeTopBar from './components/HomeTopBar'
 import NavigationDrawer from './components/NavigationDrawer'
 import OverlayShellFallback from './components/OverlayShellFallback'
+import RankBossNotif from './components/RankBossNotif'
+import RankExamScreen from './components/RankExamScreen'
+import RankExamResultScreen from './components/RankExamResultScreen'
 import RoadmapHero from './components/RoadmapHero'
 import ToastRack from './components/ToastRack'
 import {
@@ -21,8 +28,7 @@ const StatusModal = lazy(() => import('./components/StatusModal'))
 const QuestOverlay = lazy(() => import('./components/QuestOverlay'))
 const CertificateOverlay = lazy(() => import('./components/CertificateOverlay'))
 const BossOverlay = lazy(() => import('./components/BossOverlay'))
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const VocabularyWorkspace = lazy(() => import('./components/VocabularyWorkspace'))
 
 const EMPTY_CHECKIN_DRAFT = {
   mood: 3,
@@ -32,19 +38,7 @@ const EMPTY_CHECKIN_DRAFT = {
   avatarPicker: false,
 }
 
-async function api(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
 
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || 'API error')
-  }
-
-  return response.json()
-}
 
 function formatHostDateTime(now) {
   return new Intl.DateTimeFormat('vi-VN', {
@@ -94,6 +88,8 @@ function App() {
   const [rankSuggestions, setRankSuggestions] = useState([])
   const [weaknessSuggestions, setWeaknessSuggestions] = useState([])
   const [testRecords, setTestRecords] = useState([])
+  const [vocabularyItems, setVocabularyItems] = useState([])
+  const [dueFlashcards, setDueFlashcards] = useState([])
 
   const [appLoading, setAppLoading] = useState(true)
   const [appError, setAppError] = useState('')
@@ -129,6 +125,39 @@ function App() {
   const [questOverlayReady, setQuestOverlayReady] = useState(false)
   const [certificateOverlayReady, setCertificateOverlayReady] = useState(false)
   const [bossOverlayReady, setBossOverlayReady] = useState(false)
+
+  const [currentView, setCurrentView] = useState('dashboard') // 'dashboard' | 'vocabulary'
+  const [vocabularyWorkspaceReady, setVocabularyWorkspaceReady] = useState(false)
+
+  const [examData, setExamData] = useState(null) // RankExamStartOut
+  const [examSkill, setExamSkill] = useState(null)
+  const [examResult, setExamResult] = useState(null)
+  const [isExamOpen, setIsExamOpen] = useState(false)
+  const [isExamResultOpen, setIsExamResultOpen] = useState(false)
+
+  const navigate = useNavigate()
+  const { logout } = useAuth()
+
+  const handleLogout = useCallback(async () => {
+    await logout()
+    navigate('/login')
+  }, [logout, navigate])
+
+  const api = useCallback(
+    async (path, options = {}) => {
+      try {
+        return await apiFetch(path, options)
+      } catch (err) {
+        if (err.status === 401) {
+          await logout()
+          navigate('/login')
+          return
+        }
+        throw err
+      }
+    },
+    [logout, navigate],
+  )
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -346,11 +375,13 @@ function App() {
         setAppError('')
       }
 
-      const [summaryData, profileData, questData, checkinData] = await Promise.all([
+      const [summaryData, profileData, questData, checkinData, vocabData, dueData] = await Promise.all([
         api('/summary'),
         api('/profile'),
         api('/quests'),
         api('/checkins'),
+        api('/vocabulary').catch(() => []),
+        api('/flashcards/due').catch(() => []),
       ])
 
       commitState(() => {
@@ -358,6 +389,8 @@ function App() {
         setProfile(profileData)
         setQuests(questData)
         setCheckins(checkinData)
+        setVocabularyItems(vocabData)
+        setDueFlashcards(dueData)
       }, transition)
     } catch (error) {
       if (silent) throw error
@@ -619,6 +652,46 @@ function App() {
     }
   }
 
+  async function handleUnlockBoss(skill) {
+    try {
+      await unlockRankExam(skill.id)
+      await loadInitialData({ transition: true, silent: true })
+      enqueueToast({ title: 'Boss unlocked', detail: `${skill.name} exam is now available`, tone: 'success' })
+    } catch (err) {
+      enqueueToast({ title: 'Unlock failed', detail: err.message, tone: 'danger' })
+    }
+  }
+
+  async function handleStartExam(skill) {
+    try {
+      const data = await startRankExam(skill.id)
+      setExamData(data)
+      setExamSkill(skill)
+      setExamResult(null)
+      setIsExamOpen(true)
+      setIsExamResultOpen(false)
+    } catch (err) {
+      enqueueToast({ title: 'Exam start failed', detail: err.message, tone: 'danger' })
+    }
+  }
+
+  function handleExamResult(result) {
+    setExamResult(result)
+    setIsExamOpen(false)
+    setIsExamResultOpen(true)
+    loadInitialData({ transition: true, silent: true })
+    loadSuggestions({ transition: true, silent: true })
+  }
+
+  function handleExamClose() {
+    setIsExamOpen(false)
+    setIsExamResultOpen(false)
+    setExamData(null)
+    setExamSkill(null)
+    setExamResult(null)
+    loadInitialData({ transition: true, silent: true })
+  }
+
   async function handleCreateCertificate(payload) {
     await api('/test-records', {
       method: 'POST',
@@ -685,6 +758,19 @@ function App() {
     })
   }
 
+  function openVocabulary() {
+    setVocabularyWorkspaceReady(true)
+    startTransition(() => {
+      setCurrentView('vocabulary')
+      setIsStatusOpen(false)
+      setIsQuestOpen(false)
+      setIsCertificateOpen(false)
+      setIsBossOpen(false)
+      setIsNavOpen(false)
+      setIsInboxOpen(false)
+    })
+  }
+
   if (appLoading && !summary) {
     return <div className="boot-screen">SYSTEM LOADING...</div>
   }
@@ -694,6 +780,27 @@ function App() {
   }
 
   if (!view || !playerSnapshot) return null
+
+  if (currentView === 'vocabulary' && vocabularyWorkspaceReady) {
+    return (
+      <main className="vocab-shell">
+        <div className="app-shell__texture" />
+        <Suspense fallback={<div className="boot-screen">LOADING WORKSPACE...</div>}>
+          <VocabularyWorkspace
+            onClose={() => {
+              setCurrentView('dashboard')
+              loadInitialData({ transition: true, silent: true })
+            }}
+            api={api}
+            vocabularyItems={vocabularyItems}
+            dueFlashcards={dueFlashcards}
+            onLoadData={() => loadInitialData({ transition: true, silent: true })}
+          />
+        </Suspense>
+        <ToastRack toasts={toastQueue} />
+      </main>
+    )
+  }
 
   const mainQuestCleared = mainQuests.filter((quest) => quest.completed).length
   const pendingDailyClaims = view.quests.filter((quest) => quest.completed && !quest.rewardClaimed).length
@@ -774,6 +881,21 @@ function App() {
           </article>
 
           <button
+            className="support-panel support-panel--button"
+            type="button"
+            onClick={openVocabulary}
+            aria-label="Open vocabulary support system"
+          >
+            <p>Vocabulary Today</p>
+            <strong>
+              {vocabularyItems.length} Words Codex
+            </strong>
+            <span>
+              {dueFlashcards.length > 0 ? `${dueFlashcards.length} flashcards due` : 'All memory gates secured'}
+            </span>
+          </button>
+
+          <button
             className={`support-panel support-panel--button ${weeklyPulseActive ? 'support-panel--reward-pulse' : ''}`}
             type="button"
             onClick={() => openQuest('weekly')}
@@ -804,6 +926,7 @@ function App() {
         onOpenQuestTab={openQuest}
         onOpenCertificates={openCertificates}
         onOpenBoss={openBoss}
+        onOpenVocabulary={openVocabulary}
       />
 
       {statusOverlayReady ? (
@@ -811,6 +934,7 @@ function App() {
           <StatusModal
             open={isStatusOpen}
             onClose={() => setIsStatusOpen(false)}
+            onLogout={handleLogout}
             player={playerSnapshot}
             activeCheckIn={view.commandDeck.activeCheckIn}
             checkInDraft={checkInDraft}
@@ -836,7 +960,6 @@ function App() {
             mainQuestLoading={mainQuestLoading}
             mainQuestError={mainQuestError}
             dailyQuests={view.todayQuests}
-            backlogQuests={view.backlogQuests}
             allQuests={view.quests}
             commandDeck={view.commandDeck}
             onQuestAction={handleQuestAction}
@@ -871,6 +994,30 @@ function App() {
           <BossOverlay open={isBossOpen} bossView={bossView} onClose={() => setIsBossOpen(false)} />
         </Suspense>
       ) : null}
+
+
+
+      <RankBossNotif
+        skills={view?.skills ?? []}
+        onUnlock={handleUnlockBoss}
+        onStartExam={handleStartExam}
+      />
+
+      <RankExamScreen
+        open={isExamOpen}
+        examData={examData}
+        skill={examSkill}
+        onClose={handleExamClose}
+        onResult={handleExamResult}
+      />
+
+      <RankExamResultScreen
+        open={isExamResultOpen}
+        result={examResult}
+        skill={examSkill}
+        onClose={handleExamClose}
+        onRetry={() => examSkill && handleStartExam(examSkill)}
+      />
 
       <ToastRack toasts={toastQueue} />
     </main>

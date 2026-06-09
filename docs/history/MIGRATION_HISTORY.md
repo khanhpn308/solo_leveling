@@ -72,10 +72,11 @@ Result:
 
 ## Deferred Cleanup
 
-Still deferred by design:
+Completed:
 
-- remove legacy tracker fields from `quests`
-- remove legacy source fields from `weakness_suggestions`
-- remove global mutable state fields from `skills`
-- remove global unlock-state fields from `badges`
-- add stricter typed-link check constraints
+- removed legacy tracker fields from `quests` (Alembic migration `75dc49c5ae91`)
+- removed legacy source fields from `weakness_suggestions` (Alembic migration `75dc49c5ae91`)
+- removed global mutable state fields from `skills` (Alembic migration `75dc49c5ae91`)
+- removed global unlock-state fields from `badges` (Alembic migration `75dc49c5ae91`)
+- added stricter typed-link check constraints (Alembic migration `089adadeddde`)
+

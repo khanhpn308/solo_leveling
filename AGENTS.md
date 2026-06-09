@@ -1,106 +1,86 @@
-# Repository Agent Guide
+# AGENTS.md
 
-## Purpose
+Root agent guide for `IELTS Quest Dashboard`.
 
-This file is the root agent entrypoint for `IELTS Quest Dashboard`.
+## Project
 
-Use it to:
+- Product: local gamified IELTS Academic dashboard.
+- Goal: help the user reach IELTS `7.0-7.5` over an 18-month campaign.
+- Stack: React + Vite, FastAPI, MySQL, Docker Compose.
+- Direction: game-style progression, quests, skills, levels, badges, and review loops.
 
-- understand the project quickly
-- load context in the correct order
-- follow repository-specific workflow and documentation rules
+## Source of Truth
 
-## Project Summary
+- `docs/current/` = current product, schema, business rules, prompts, and ADRs.
+- `docs/history/` = changelogs, test reports, migration notes, old plans, and session notes.
+- Do not treat history docs as current truth unless a canonical doc points to them.
 
-- Product: local gamified IELTS Academic dashboard
-- User goal: reach IELTS `7.0-7.5` over an 18-month campaign
-- Stack: React + Vite, FastAPI, MySQL, Docker Compose
-- Theme direction: game-style progression dashboard
+## Load Context
 
-## Session Context Load Order
+Read in this order:
 
-Read these first, in order:
+1. `AGENTS.md`
+2. `README.md`
+3. `TASKS.md`
+4. `DECISIONS.md`
+5. `docs/current/CONTEXT_INDEX.md`
 
-1. [AGENTS.md](AGENTS.md)
-2. [README.md](README.md)
-3. [TASKS.md](TASKS.md)
-4. [DECISIONS.md](DECISIONS.md)
-5. [docs/current/CONTEXT_INDEX.md](docs/current/CONTEXT_INDEX.md)
+Then read only task-specific canonical docs.
 
-After that, read only the task-specific canonical docs or history docs that matter.
+Stop loading context when these are clear:
 
-## Canonical vs History
+- task type
+- likely files to change
+- existing pattern to follow
+- goal, constraints, risks, and next steps
 
-Canonical docs live under `docs/current/`.
-They are the source of truth for current project understanding.
+## Workflow
 
-History docs live under `docs/history/`.
-They are for:
-
-- implementation logs
-- validation snapshots
-- migration history
-- superseded planning notes
-
-Do not treat history files as the primary source of current product truth unless the canonical docs point you there.
-
-## Root File Roles
-
-- [README.md](README.md): project overview, startup, docs map
-- [TASKS.md](TASKS.md): active tracker only
-- [DECISIONS.md](DECISIONS.md): concise decision ledger
-- [AGENTS.md](AGENTS.md): agent workflow and documentation rules
-
-## Current Canonical Docs
-
-- [docs/current/CONTEXT_INDEX.md](docs/current/CONTEXT_INDEX.md)
-- [docs/current/PROJECT_CONTEXT.md](docs/current/PROJECT_CONTEXT.md)
-- [docs/current/BUSINESS_RULES.md](docs/current/BUSINESS_RULES.md)
-- [docs/current/DATABASE_SCHEMA.md](docs/current/DATABASE_SCHEMA.md)
-- [docs/current/SCHEMA_SEMANTICS.md](docs/current/SCHEMA_SEMANTICS.md)
-- [docs/current/prompt-generic-en.md](docs/current/prompt-generic-en.md)
-- [docs/current/prompt-generic-vi.md](docs/current/prompt-generic-vi.md)
-- [docs/current/prompt-en.md](docs/current/prompt-en.md)
-- [docs/current/prompt-vi.md](docs/current/prompt-vi.md)
-- [docs/current/decisions/ADR-001-documentation-layout-and-context-loading.md](docs/current/decisions/ADR-001-documentation-layout-and-context-loading.md)
-
-## History Docs
-
-- [docs/history/changelogs.md](docs/history/changelogs.md)
-- [docs/history/TEST_REPORT.md](docs/history/TEST_REPORT.md)
-- [docs/history/AGENT_NOTES.md](docs/history/AGENT_NOTES.md)
-- [docs/history/MIGRATION_HISTORY.md](docs/history/MIGRATION_HISTORY.md)
-- [docs/history/FRONTEND_PLAN.md](docs/history/FRONTEND_PLAN.md)
+1. **Ground the repo**: understand current state before editing.
+2. **Lock the task contract**: define goal, done criteria, scope, constraints, and risks.
+3. **Plan only when needed**: plan first for multi-file, backend, schema, API, migration, or broad UI work.
+4. **Execute in small slices**: change only what is necessary; no unrelated cleanup.
+5. **Verify before done**: prefer syntax/type checks, focused smoke checks, changed-behavior tests, then review for risky work.
+6. **Update docs and close cleanly**: record what changed, what was validated, what remains open, what to read next, and move completed tasks from `TASKS.md` to `tasks-done.md`.
 
 ## Engineering Rules
 
 - Keep the app runnable with Docker Compose.
 - Do not remove existing features unless explicitly requested.
-- Prefer additive, low-risk changes for schema and API evolution.
-- Keep documentation in English.
+- Prefer additive, low-risk schema and API evolution.
 - Keep public API response shapes stable unless the user approves a contract change.
+- Keep repository documentation in English.
+- Follow existing repo patterns before introducing new ones.
 
 ## Documentation Rules
 
-- Update [docs/history/changelogs.md](docs/history/changelogs.md) after each implementation task.
-- Changelog entries must be **newest first**.
-- Update [TASKS.md](TASKS.md) immediately when a tracked task changes status.
-- Update [docs/history/TEST_REPORT.md](docs/history/TEST_REPORT.md) after meaningful validation.
-- Update [docs/history/AGENT_NOTES.md](docs/history/AGENT_NOTES.md) with short factual notes only.
-- Record enduring architecture or workflow decisions in [DECISIONS.md](DECISIONS.md) and, when needed, an ADR under `docs/current/decisions/`.
+Update only after meaningful changes:
 
-## Validation Expectations
+- `TASKS.md`: active task status.
+- `tasks-done.md`: archived completed tasks list.
+- `docs/history/changelogs.md`: newest entry first.
+- `docs/history/TEST_REPORT.md`: validation evidence.
+- `docs/history/AGENT_NOTES.md`: short factual notes only.
+- `DECISIONS.md` or `docs/current/decisions/ADR-*`: enduring architecture/workflow decisions.
 
-When code changes are made:
+## Skill Routing
 
-- run syntax checks when possible
-- run focused smoke tests when possible
-- explain any skipped validation clearly
+Use the smallest sufficient skill set:
 
-## Current Open Work Themes
+- Planning: `planning-and-task-breakdown`
+- Docs / ADR: `documentation-and-adrs`
+- Backend: `backend-development`, plus `fastapi-templates`, `api-and-interface-design`, `mysql` when needed
+- Frontend: `frontend-ui-engineering` or `frontend-design` or `ui-ux-pro-max`, plus `browser-testing-with-devtools` when visual verification matters
+- Debug: `debugging-and-error-recovery`, plus `test-driven-development` when behavior must be locked
+- Migration: `deprecation-and-migration`, plus `mysql`
+- Review: `code-review-and-quality`
+- Wrap-up: `documentation-and-adrs`
 
-- browser visual verification
-- automated backend tests for post-migration behavior
-- deferred cleanup of legacy database fields
+## Session Close Format
 
-See [TASKS.md](TASKS.md) for exact active items.
+End each coding session with:
+
+- Changed:
+- Validated:
+- Still open:
+- Next session should read:

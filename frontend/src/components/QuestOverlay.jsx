@@ -20,7 +20,6 @@ function QuestOverlay({
   mainQuestLoading,
   mainQuestError,
   dailyQuests,
-  backlogQuests,
   allQuests,
   commandDeck,
   onQuestAction,
@@ -131,7 +130,6 @@ function QuestOverlay({
       {activeTab === 'daily' ? (
         <DailyQuestPanel
           quests={dailyQuests}
-          backlog={backlogQuests}
           onQuestAction={onQuestAction}
           commandDeck={commandDeck}
           questPendingById={questPendingById}

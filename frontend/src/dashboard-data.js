@@ -1,14 +1,15 @@
 const PLAYER_RANK_THRESHOLDS = [
-  { minXp: 1800, rank: 'S' },
-  { minXp: 1350, rank: 'A' },
-  { minXp: 950, rank: 'B' },
-  { minXp: 620, rank: 'C' },
-  { minXp: 320, rank: 'D' },
-  { minXp: 120, rank: 'E' },
-  { minXp: 0, rank: 'F' },
+  { minXp: 10000, rank: 'S' },
+  { minXp: 7000,  rank: 'A' },
+  { minXp: 4500,  rank: 'B' },
+  { minXp: 2500,  rank: 'C' },
+  { minXp: 1200,  rank: 'D' },
+  { minXp: 500,   rank: 'E' },
+  { minXp: 0,     rank: 'F' },
 ]
 
-const SKILL_XP_THRESHOLDS = [0, 200, 500, 1000, 1700, 2500, 3500]
+// Sorted ascending: F=0, E=500, D=1200, C=2500, B=4500, A=7000, S=10000
+const SKILL_XP_THRESHOLDS = [0, 500, 1200, 2500, 4500, 7000, 10000]
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/
 
 export const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S']
@@ -111,7 +112,7 @@ const WEEKLY_MISSION_PATTERNS = [
     lines: [
       'Complete 4 core study sessions this week',
       'Submit 1 check-in with a clear study-status note',
-      'Finish 1 overdue Grammar or Vocabulary quest',
+      'Complete 1 Grammar or Vocabulary quest',
     ],
   },
   {
@@ -120,7 +121,7 @@ const WEEKLY_MISSION_PATTERNS = [
     lines: [
       'Complete 4 core study sessions this week',
       'Finish at least 1 Writing or Speaking quest',
-      'Keep overdue quests under 2 for the week',
+      'Keep expired quests under 2 for the week',
     ],
   },
 ]
@@ -205,7 +206,7 @@ export function splitSummaryItems(value) {
     .filter(Boolean)
 }
 
-function uniqueItems(items) {
+export function uniqueItems(items) {
   return [...new Set(items.filter(Boolean))]
 }
 
@@ -216,10 +217,6 @@ export function getMainQuestPhaseMeta(weekNo) {
 function getMainQuestStatusMeta(status) {
   if (status === 'completed') {
     return { label: 'Completed', tone: 'completed' }
-  }
-
-  if (status === 'overdue') {
-    return { label: 'Overdue', tone: 'overdue' }
   }
 
   if (status === 'expired') {
@@ -412,19 +409,15 @@ export function getQuestStatus(quest, todayIso = getTodayISO()) {
   const diffDays = getCalendarDayDiff(todayIso, quest.quest_date)
 
   if (diffDays <= 0) return 'pending'
-  if (diffDays <= 3) return 'overdue'
   return 'expired'
 }
 
-export function getCompletionMode(quest, todayIso = getTodayISO()) {
+export function getCompletionMode(quest) {
   if (!quest.completed) return null
-
-  return getCalendarDayDiff(todayIso, quest.quest_date) > 0 ? 'overdue' : 'on_time'
+  return 'on_time'
 }
 
-export function getQuestEarnedXp(quest, todayIso = getTodayISO()) {
-  const mode = getCompletionMode(quest, todayIso)
-  if (mode === 'overdue') return Math.ceil(quest.xp * 0.5)
+export function getQuestEarnedXp(quest) {
   return quest.xp
 }
 
@@ -524,22 +517,7 @@ function getTodayQuests(quests, currentWeekNo) {
     .slice(0, 3)
 }
 
-function getBacklogQuests(quests) {
-  return quests
-    .filter((quest) => ['overdue', 'expired'].includes(getQuestStatus(quest)))
-    .sort((a, b) => getCalendarDayOrdinal(a.quest_date) - getCalendarDayOrdinal(b.quest_date))
-    .slice(0, 6)
-}
-
-function buildWeaknessSuggestions(skills, quests) {
-  const overdueBySkill = new Map()
-  quests.forEach((quest) => {
-    const status = getQuestStatus(quest)
-    if (status === 'overdue' || status === 'expired') {
-      overdueBySkill.set(quest.skill_name, (overdueBySkill.get(quest.skill_name) ?? 0) + 1)
-    }
-  })
-
+function buildWeaknessSuggestions(skills) {
   return skills.flatMap((skill) => {
     const suggestions = []
     const staleDays = skill.last_practiced
@@ -566,16 +544,6 @@ function buildWeaknessSuggestions(skills, quests) {
       })
     }
 
-    if ((overdueBySkill.get(skill.name) ?? 0) >= 2) {
-      suggestions.push({
-        id: `${skill.name}-overdue`,
-        skill: skill.name,
-        title: 'Possible skill avoidance',
-        detail: `Multiple ${skill.name} quests are overdue or expired. Prioritize backlog recovery.`,
-        severity: 'high',
-      })
-    }
-
     return suggestions.slice(0, 2)
   })
 }
@@ -585,7 +553,6 @@ export function buildDashboardView(summary, quests, checkins) {
   const totalXp = player.total_xp ?? 0
   const currentWeekNo = getCurrentWeekNo(quests, player)
   const todayQuests = getTodayQuests(quests, currentWeekNo)
-  const backlogQuests = getBacklogQuests(quests)
   const weekQuests = quests.filter((quest) => quest.week_no === currentWeekNo)
   const weeklyPattern = getWeeklyPattern(currentWeekNo)
   const completedWeekQuests = weekQuests.filter((quest) => quest.completed).length
@@ -627,14 +594,6 @@ export function buildDashboardView(summary, quests, checkins) {
       rewardClaimed: isQuestRewardClaimed(quest),
       rewardClaimedAt: quest.reward_claimed_at ?? quest.rewardClaimedAt ?? null,
     })),
-    backlogQuests: backlogQuests.map((quest) => ({
-      ...quest,
-      status: getQuestStatus(quest),
-      completionMode: getCompletionMode(quest),
-      earnedXp: getQuestEarnedXp(quest),
-      rewardClaimed: isQuestRewardClaimed(quest),
-      rewardClaimedAt: quest.reward_claimed_at ?? quest.rewardClaimedAt ?? null,
-    })),
     weeklyMission: {
       ...weeklyPattern,
       progress: `${completedWeekQuests}/${Math.max(weekQuests.length, 1)}`,
@@ -645,7 +604,6 @@ export function buildDashboardView(summary, quests, checkins) {
     commandDeck: {
       completedToday,
       totalToday: todayQuests.length,
-      backlogCount: backlogQuests.length,
       activeCheckIn,
       recentCheckins: checkins.slice(0, 5),
     },
@@ -658,7 +616,7 @@ export function buildDashboardView(summary, quests, checkins) {
     },
     badges: summary?.badges ?? [],
     bosses: summary?.boss_battles ?? [],
-    suggestions: buildWeaknessSuggestions(summary?.skills ?? [], quests),
+    suggestions: buildWeaknessSuggestions(summary?.skills ?? []),
   }
 }
 
@@ -762,7 +720,7 @@ export function buildSuggestionInbox(rankSuggestions = [], weaknessSuggestions =
     type: 'rank',
     skillId: item.skill_id,
     skillName: skillNameById.get(item.skill_id) || `Skill ${item.skill_id}`,
-    title: `Update rank ${item.current_rank} -> ${item.suggested_rank}`,
+    title: `Rank ${item.current_rank} → ${item.suggested_rank}`,
     detail:
       item.direction === 'up'
         ? 'Suggested rank increase based on the latest test result.'
@@ -780,14 +738,24 @@ export function buildSuggestionInbox(rankSuggestions = [], weaknessSuggestions =
     skillName: skillNameById.get(item.skill_id) || `Skill ${item.skill_id}`,
     title: item.title,
     detail: item.detail,
+    sourceType: item.source_type,
     severity: item.severity || 'medium',
     createdAt: item.created_at,
     status: item.status,
   }))
 
-  return [...rankItems, ...weaknessItems]
+  const sorted = [...rankItems, ...weaknessItems]
     .filter((item) => item.status === 'pending')
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+
+  // Keep only the most recent suggestion per (skill, type)
+  const seen = new Set()
+  return sorted.filter((item) => {
+    const dedupKey = `${item.type}-${item.skillId}`
+    if (seen.has(dedupKey)) return false
+    seen.add(dedupKey)
+    return true
+  })
 }
 
 export function filterCertificateRecords(records = []) {

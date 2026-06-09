@@ -216,16 +216,16 @@ test('daily quest helpers classify pending, overdue, expired, and earned XP cons
   const completedLateQuest = { quest_date: '2026-04-13', completed: true, xp: 25 }
 
   assert.equal(getQuestStatus(pendingQuest, '2026-04-15'), 'pending')
-  assert.equal(getQuestStatus(overdueQuest, '2026-04-15'), 'overdue')
+  assert.equal(getQuestStatus(overdueQuest, '2026-04-15'), 'expired')
   assert.equal(getQuestStatus(expiredQuest, '2026-04-15'), 'expired')
   assert.equal(getQuestStatus(completedTodayQuest, '2026-04-15'), 'completed')
 
   assert.equal(getCompletionMode(pendingQuest, '2026-04-15'), null)
   assert.equal(getCompletionMode(completedTodayQuest, '2026-04-15'), 'on_time')
-  assert.equal(getCompletionMode(completedLateQuest, '2026-04-15'), 'overdue')
+  assert.equal(getCompletionMode(completedLateQuest, '2026-04-15'), 'on_time')
 
   assert.equal(getQuestEarnedXp(completedTodayQuest, '2026-04-15'), 25)
-  assert.equal(getQuestEarnedXp({ ...completedLateQuest, xp: 21 }, '2026-04-15'), 11)
+  assert.equal(getQuestEarnedXp({ ...completedLateQuest, xp: 21 }, '2026-04-15'), 21)
 })
 
 test('buildDashboardView derives currentWeekNo, daysUntilStart, and stale skill suggestions from calendar-safe dates', () => {
@@ -262,9 +262,7 @@ test('buildDashboardView derives currentWeekNo, daysUntilStart, and stale skill 
   assert.equal(view.player.hasStarted, false)
   assert.equal(view.todayQuests.length, 1)
   assert.equal(view.todayQuests[0].quest_date, '2026-04-14')
-  assert.equal(view.todayQuests[0].status, 'overdue')
-  assert.equal(view.backlogQuests.length, 1)
-  assert.equal(view.backlogQuests[0].status, 'overdue')
+  assert.equal(view.todayQuests[0].status, 'expired')
   assert.equal(view.commandDeck.activeCheckIn?.mood, 'steady')
 
   const staleSuggestion = view.suggestions.find((item) => item.id === 'Listening-stale')
@@ -305,8 +303,8 @@ test('date logic remains stable in America/Los_Angeles across the DST boundary',
     try {
       assert.equal(getTodayISO(), '2026-03-09');
       assert.equal(getCalendarDayDiff('2026-03-08', '2026-03-07'), 1);
-      assert.equal(getQuestStatus({ quest_date: '2026-03-08', completed: false, xp: 20 }), 'overdue');
-      assert.equal(getQuestStatus({ quest_date: '2026-03-07', completed: false, xp: 20 }), 'overdue');
+      assert.equal(getQuestStatus({ quest_date: '2026-03-08', completed: false, xp: 20 }), 'expired');
+      assert.equal(getQuestStatus({ quest_date: '2026-03-07', completed: false, xp: 20 }), 'expired');
       const view = buildDashboardView(
         {
           player: { total_xp: 0, start_date: '2026-03-02' },

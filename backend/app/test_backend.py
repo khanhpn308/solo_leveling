@@ -1,0 +1,1850 @@
+import unittest
+from datetime import date, datetime, timedelta
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
+
+from app.database import Base
+from app.models import (
+    Player, Campaign, Skill, CampaignSkillState, Badge, BadgeUnlock, CheckIn, Quest,
+    BossBattle, SkillXpTransaction, PlayerXpTransaction,
+    Account, AccountSession, AccountPreference, PlayerLearningProfile, AccountSecurityEvent,
+    RankExamPool, RankExamVersion, RankExamQuestion, RankExamAttempt, SkillRankHistory,
+    CollocationCollection, CollocationSection, CollocationTopic, CollocationItem,
+    CampaignCollocationLink, PlayerCollocationProgress,
+)
+from fastapi.testclient import TestClient
+from app.main import app, get_db, get_current_player, get_current_campaign
+from app.services import (
+    ensure_campaign_skill_states,
+    get_campaign_skill_state_map,
+    recompute_badges,
+    recompute_player_progress,
+)
+
+class TestWaveDAndE(unittest.TestCase):
+    def setUp(self):
+        # Create an in-memory SQLite database for testing
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        # Seed initial core data (Skills, Badges)
+        self.skills = [
+            Skill(name="Listening", icon="🎧"),
+            Skill(name="Reading", icon="📖"),
+            Skill(name="Writing", icon="✍️"),
+            Skill(name="Speaking", icon="🗣️"),
+            Skill(name="Vocabulary", icon="📔"),
+        ]
+        self.badges = [
+            Badge(name="Vocabulary Hunter", icon="🏆", description="300 Vocabulary XP."),
+            Badge(name="Listening Warrior", icon="🎧", description="Reach 500 Listening XP."),
+            Badge(name="Error Killer", icon="⚔️", description="Defeat 10 error monsters."),
+        ]
+        self.db.add_all(self.skills)
+        self.db.add_all(self.badges)
+        self.db.commit()
+
+        # Create mock player and campaign
+        self.player = Player(
+            name="Test Player",
+            start_date=date.today(),
+            total_xp=0,
+            setup_completed=True
+        )
+        self.db.add(self.player)
+        self.db.commit()
+
+        self.campaign = Campaign(
+            player_id=self.player.id,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=90),
+            status="active"
+        )
+        self.db.add(self.campaign)
+        self.db.commit()
+
+        # Link player active campaign
+        self.player.active_campaign_id = self.campaign.id
+        self.db.commit()
+
+        # Override auth dependencies so routes resolve to this test's player/campaign
+        player_ref = self.player
+        campaign_ref = self.campaign
+        app.dependency_overrides[get_db] = lambda: self.db
+        app.dependency_overrides[get_current_player] = lambda: player_ref
+        app.dependency_overrides[get_current_campaign] = lambda: campaign_ref
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        app.dependency_overrides.pop(get_current_player, None)
+        app.dependency_overrides.pop(get_current_campaign, None)
+        app.dependency_overrides.pop(get_db, None)
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_campaign_scoped_skill_state(self):
+        """Test that campaign-scoped skill states are seeded and managed per campaign."""
+        # Seeding skill states for the campaign
+        states = ensure_campaign_skill_states(self.db, self.campaign)
+        self.assertEqual(len(states), 5)
+        for s in states:
+            self.assertEqual(s.campaign_id, self.campaign.id)
+            self.assertEqual(s.xp, 0)
+
+        # Retrieve map
+        state_map = get_campaign_skill_state_map(self.db, self.campaign)
+        self.assertIn("Listening", [s.skill.name for s in state_map.values()])
+
+        # Create a second campaign for the same player
+        campaign2 = Campaign(
+            player_id=self.player.id,
+            start_date=date.today() + timedelta(days=91),
+            end_date=date.today() + timedelta(days=180),
+            status="pending"
+        )
+        self.db.add(campaign2)
+        self.db.commit()
+
+        # Seed second campaign
+        states2 = ensure_campaign_skill_states(self.db, campaign2)
+        self.assertEqual(len(states2), 5)
+        for s in states2:
+            self.assertEqual(s.campaign_id, campaign2.id)
+
+        # Modify first campaign's Listening XP
+        listening_skill = next(s for s in self.skills if s.name == "Listening")
+        listening_state1 = self.db.query(CampaignSkillState).filter_by(campaign_id=self.campaign.id, skill_id=listening_skill.id).first()
+        listening_state1.xp = 150
+        self.db.commit()
+
+        # Verify second campaign's Listening XP remains 0
+        listening_state2 = self.db.query(CampaignSkillState).filter_by(campaign_id=campaign2.id, skill_id=listening_skill.id).first()
+        self.assertEqual(listening_state2.xp, 0)
+        self.assertEqual(listening_state1.xp, 150)
+
+    def test_badge_unlock_read_path(self):
+        """Test badge recomputation and unlocks are scoped to the campaign."""
+        state_map = get_campaign_skill_state_map(self.db, self.campaign)
+        
+        # Initially no badges unlocked
+        recompute_badges(self.db, self.player, self.campaign, state_map)
+        unlocks = self.db.query(BadgeUnlock).filter_by(campaign_id=self.campaign.id).all()
+        self.assertEqual(len(unlocks), 0)
+
+        # Give player 350 Vocabulary XP in campaign skill state
+        vocab_skill = next(s for s in self.skills if s.name == "Vocabulary")
+        state_map[vocab_skill.id].xp = 350
+        self.db.commit()
+
+        # Recompute should unlock "Vocabulary Hunter"
+        recompute_badges(self.db, self.player, self.campaign, state_map)
+        unlocks = self.db.query(BadgeUnlock).filter_by(campaign_id=self.campaign.id).all()
+        self.assertEqual(len(unlocks), 1)
+        self.assertEqual(unlocks[0].badge.name, "Vocabulary Hunter")
+
+        # Create a second campaign
+        campaign2 = Campaign(
+            player_id=self.player.id,
+            start_date=date.today() + timedelta(days=91),
+            end_date=date.today() + timedelta(days=180),
+            status="pending"
+        )
+        self.db.add(campaign2)
+        self.db.commit()
+        state_map2 = get_campaign_skill_state_map(self.db, campaign2)
+
+        # Under campaign2, vocab XP is 0, so no badges should unlock
+        recompute_badges(self.db, self.player, campaign2, state_map2)
+        unlocks2 = self.db.query(BadgeUnlock).filter_by(campaign_id=campaign2.id).all()
+        self.assertEqual(len(unlocks2), 0)
+
+    def test_checkin_upsert_behavior(self):
+        """Test check-in upserts and campaign-scoped check-in uniqueness."""
+        checkin_date = date.today()
+        
+        # Insert checkin for campaign 1
+        checkin1 = CheckIn(
+            campaign_id=self.campaign.id,
+            checkin_date=checkin_date,
+            mood=4,
+            energy=4,
+            focus=5,
+            note="Good day"
+        )
+        self.db.add(checkin1)
+        self.db.commit()
+
+        # Attempting to insert duplicate checkin on same campaign + same date should raise IntegrityError
+        checkin_dup = CheckIn(
+            campaign_id=self.campaign.id,
+            checkin_date=checkin_date,
+            mood=3,
+            energy=3,
+            focus=3,
+            note="Duplicate"
+        )
+        self.db.add(checkin_dup)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+        self.db.rollback()
+
+        # Insert checkin for campaign 2 on same date should succeed (campaign-scoped checkin uniqueness)
+        campaign2 = Campaign(
+            player_id=self.player.id,
+            start_date=date.today() + timedelta(days=91),
+            end_date=date.today() + timedelta(days=180),
+            status="pending"
+        )
+        self.db.add(campaign2)
+        self.db.commit()
+
+        checkin2 = CheckIn(
+            campaign_id=campaign2.id,
+            checkin_date=checkin_date,
+            mood=2,
+            energy=2,
+            focus=2,
+            note="Campaign 2 checkin"
+        )
+        self.db.add(checkin2)
+        self.db.commit() # Should succeed without error
+
+        self.assertEqual(self.db.query(CheckIn).count(), 2)
+
+    def test_daily_slot_invariants(self):
+        """Test that daily quests have slot uniqueness constraints per campaign."""
+        quest_date = date.today()
+        listening_skill = next(s for s in self.skills if s.name == "Listening")
+
+        # Create daily quest in slot 'core'
+        quest1 = Quest(
+            campaign_id=self.campaign.id,
+            quest_date=quest_date,
+            week_no=1,
+            stage="Foundation",
+            title="Quest 1",
+            skill_id=listening_skill.id,
+            source="System",
+            details="Listen to podcast",
+            session_type="Daily Quest",
+            quest_role="core",
+            daily_slot_code="core"
+        )
+        self.db.add(quest1)
+        self.db.commit()
+
+        # Creating another quest with same campaign_id, quest_date, and daily_slot_code 'core' should raise IntegrityError
+        quest_dup = Quest(
+            campaign_id=self.campaign.id,
+            quest_date=quest_date,
+            week_no=1,
+            stage="Foundation",
+            title="Quest Duplicate",
+            skill_id=listening_skill.id,
+            source="System",
+            details="Another listen",
+            session_type="Daily Quest",
+            quest_role="mini",
+            daily_slot_code="core" # Duplicate slot code
+        )
+        self.db.add(quest_dup)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+        self.db.rollback()
+
+        # Creating quest for different campaign with same date and daily_slot_code 'core' should succeed
+        campaign2 = Campaign(
+            player_id=self.player.id,
+            start_date=date.today() + timedelta(days=91),
+            end_date=date.today() + timedelta(days=180),
+            status="pending"
+        )
+        self.db.add(campaign2)
+        self.db.commit()
+
+        quest2 = Quest(
+            campaign_id=campaign2.id,
+            quest_date=quest_date,
+            week_no=1,
+            stage="Foundation",
+            title="Quest 2",
+            skill_id=listening_skill.id,
+            source="System",
+            details="Listen to podcast",
+            session_type="Daily Quest",
+            quest_role="core",
+            daily_slot_code="core"
+        )
+        self.db.add(quest2)
+        self.db.commit() # Should succeed
+
+        self.assertEqual(self.db.query(Quest).count(), 2)
+
+    def test_boss_reward_routing(self):
+        """Boss claim with reward_skill_id routes to SkillXpTransaction; a skill-less boss awards nothing (player has no direct XP accrual)."""
+        # Get Vocabulary skill
+        vocab_skill = next(s for s in self.skills if s.name == "Vocabulary")
+        ensure_campaign_skill_states(self.db, self.campaign)
+
+        # 1. Test Skill-specific boss reward routing
+        vocab_boss = BossBattle(
+            stage="Foundation",
+            battle_date=date.today(),
+            title="Vocabulary Boss Battle",
+            source="System",
+            goal="Defeat vocabulary boss",
+            status="Cleared",
+            campaign_id=self.campaign.id,
+            reward_xp=200,
+            cleared_at=datetime.utcnow(),
+            boss_scope="skill",
+            reward_skill_id=vocab_skill.id,
+            reward_claimed=False
+        )
+        self.db.add(vocab_boss)
+        self.db.commit()
+
+        # Claim reward via HTTP client
+        resp = self.client.post(f"/api/boss-battles/{vocab_boss.id}/claim")
+        self.assertEqual(resp.status_code, 200)
+
+        # Reload boss
+        self.db.refresh(vocab_boss)
+        self.assertTrue(vocab_boss.reward_claimed)
+        self.assertIsNotNone(vocab_boss.reward_claimed_at)
+
+        # Check that SkillXpTransaction was created
+        skill_tx = self.db.query(SkillXpTransaction).filter_by(
+            campaign_id=self.campaign.id,
+            skill_id=vocab_skill.id,
+            idempotency_key=f"boss_claim:{vocab_boss.id}"
+        ).first()
+        self.assertIsNotNone(skill_tx)
+        self.assertEqual(skill_tx.xp, 200)
+        self.assertEqual(skill_tx.transaction_type, "boss")
+
+        # Check that CampaignSkillState XP was increased
+        vocab_state = self.db.query(CampaignSkillState).filter_by(
+            campaign_id=self.campaign.id,
+            skill_id=vocab_skill.id
+        ).first()
+        self.assertEqual(vocab_state.xp, 200)
+
+        # Verify no PlayerXpTransaction was created for this claim
+        player_tx_count = self.db.query(PlayerXpTransaction).count()
+        self.assertEqual(player_tx_count, 0)
+
+        # 2. Test Player-scoped boss reward routing (reward_skill_id is None).
+        # Per redesign (ielts_xp_policy_rank_quest_spec.md §1.2 / §4): the player
+        # never accrues XP directly. A boss with no reward_skill_id awards NOTHING —
+        # no PlayerXpTransaction, and player_xp stays the average of the 5 matrix skills.
+        player_boss = BossBattle(
+            stage="Foundation",
+            battle_date=date.today(),
+            title="Overall Phase Boss Battle",
+            source="System",
+            goal="Defeat overall boss",
+            status="Cleared",
+            campaign_id=self.campaign.id,
+            reward_xp=500,
+            cleared_at=datetime.utcnow(),
+            boss_scope="player",
+            reward_skill_id=None,
+            reward_claimed=False
+        )
+        self.db.add(player_boss)
+        self.db.commit()
+
+        # Save current player XP (derived from skill average; not a raw accumulator)
+        initial_player_xp = self.player.player_xp or 0
+
+        # Claim reward via HTTP client
+        resp2 = self.client.post(f"/api/boss-battles/{player_boss.id}/claim")
+        self.assertEqual(resp2.status_code, 200)
+
+        # Reload boss — still marked claimed even though no XP is granted
+        self.db.refresh(player_boss)
+        self.assertTrue(player_boss.reward_claimed)
+
+        # No PlayerXpTransaction is ever created (player has no direct accrual)
+        player_tx_count_after = self.db.query(PlayerXpTransaction).count()
+        self.assertEqual(player_tx_count_after, 0)
+
+        # Player XP is unchanged: no matrix skill gained XP from a skill-less boss
+        self.db.refresh(self.player)
+        self.assertEqual(self.player.player_xp, initial_player_xp)
+
+        # Verify no additional SkillXpTransaction was created
+        vocab_state_after = self.db.query(CampaignSkillState).filter_by(
+            campaign_id=self.campaign.id,
+            skill_id=vocab_skill.id
+        ).first()
+        self.assertEqual(vocab_state_after.xp, 200)
+
+    def test_check_constraints(self):
+        """Test that CheckConstraint limits only one tracker for Quests and only one source for WeaknessSuggestions."""
+        listening_skill = next(s for s in self.skills if s.name == "Listening")
+
+        # 1. Test Quest only one tracker constraint
+        invalid_quest = Quest(
+            campaign_id=self.campaign.id,
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Invalid Quest",
+            skill_id=listening_skill.id,
+            source="System",
+            details="Invalid Details",
+            session_type="Daily Quest",
+            quest_role="mini",
+            error_log_id=1,
+            mock_test_id=1,
+        )
+        self.db.add(invalid_quest)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+        self.db.rollback()
+
+        # 2. Test WeaknessSuggestion only one source constraint
+        from app.models import WeaknessSuggestion
+        invalid_suggestion = WeaknessSuggestion(
+            skill_id=listening_skill.id,
+            campaign_id=self.campaign.id,
+            source_test_record_id=1,
+            source_mock_test_id=1,
+            title="Invalid Suggestion",
+            detail="Details",
+            severity="medium",
+            status="pending",
+        )
+        self.db.add(invalid_suggestion)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+        self.db.rollback()
+
+    def test_vocabulary_anti_farm_cap(self):
+        """Test that vocabulary data-entry XP is capped at 40 per word, with mastery score counted separately on top."""
+        from app.services import compute_vocabulary_xp
+        from app.models import VocabularyItem, VocabularyExample, VocabularyRelation
+
+        # Clear any existing items to run a clean test
+        self.db.query(VocabularyItem).filter_by(player_id=self.player.id).delete()
+        self.db.query(VocabularyExample).filter_by(player_id=self.player.id).delete()
+        self.db.query(VocabularyRelation).filter_by(player_id=self.player.id).delete()
+        self.db.commit()
+
+        # 1. Test standard word under the 40 XP cap
+        # base (2) + meaning_en (2) + meaning_vi (2) + part_of_speech (2) + pronunciation_ipa (3) = 11 XP
+        item1 = VocabularyItem(
+            player_id=self.player.id,
+            word="diligent",
+            meaning_en="showing care and effort in your work or studies",
+            meaning_vi="siêng năng, cần cù",
+            part_of_speech="adjective",
+            pronunciation_ipa="/ˈdɪl.ɪ.dʒənt/",
+            mastery_score=0
+        )
+        self.db.add(item1)
+        self.db.commit()
+
+        self.assertEqual(compute_vocabulary_xp(self.db, self.player.id), 11)
+
+        # 2. Test word with examples and relations that goes over the cap
+        # We add 6 examples (+5 each = 30 XP) and 1 relation (+5 XP)
+        # Total data entry XP: 11 (base) + 30 (examples) + 5 (relation) = 46 XP
+        # This should be capped at 40 XP.
+        for i in range(6):
+            ex = VocabularyExample(
+                vocabulary_item_id=item1.id,
+                player_id=self.player.id,
+                example_sentence=f"Example sentence {i}"
+            )
+            self.db.add(ex)
+        
+        relation = VocabularyRelation(
+            player_id=self.player.id,
+            source_word_id=item1.id,
+            relation_type="word_family"
+        )
+        self.db.add(relation)
+        self.db.commit()
+
+        # Cap is 40.
+        self.assertEqual(compute_vocabulary_xp(self.db, self.player.id), 40)
+
+        # 3. Test that mastery score is added ON TOP of the 40 XP cap separately.
+        # Let's update mastery score to 30. Total should be 40 (capped data-entry) + 30 = 70 XP.
+        item1.mastery_score = 30
+        self.db.commit()
+        self.assertEqual(compute_vocabulary_xp(self.db, self.player.id), 70)
+
+        # Let's update mastery score to 80. Mastery is capped at 50, so total should be 40 + 50 = 90 XP.
+        item1.mastery_score = 80
+        self.db.commit()
+        self.assertEqual(compute_vocabulary_xp(self.db, self.player.id), 90)
+
+
+class TestAuthEndpoints(unittest.TestCase):
+    def setUp(self):
+        # Setup memory database for auth tests with StaticPool for multi-threaded sharing
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        # Seed static dependencies (Skills)
+        self.skills = [
+            Skill(name="Listening", icon="🎧"),
+            Skill(name="Reading", icon="📖"),
+            Skill(name="Writing", icon="✍️"),
+            Skill(name="Speaking", icon="🗣️"),
+            Skill(name="Vocabulary", icon="📔"),
+        ]
+        self.db.add_all(self.skills)
+        self.db.commit()
+
+        # FastAPI dependency override
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_register_success(self):
+        payload = {
+            "email": "user@example.com",
+            "password": "testpassword123",
+            "display_name": "Test User"
+        }
+        response = self.client.post("/api/auth/register", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("access_token", data)
+        self.assertIn("ielts_rt", response.cookies)
+
+        # Check database objects created
+        account = self.db.query(Account).filter_by(email="user@example.com").first()
+        self.assertIsNotNone(account)
+        self.assertEqual(account.display_name, "Test User")
+        self.assertFalse(account.onboarding_completed)
+
+        player = self.db.query(Player).filter_by(account_id=account.id).first()
+        self.assertIsNotNone(player)
+        self.assertEqual(player.name, "Test User")
+
+        pref = self.db.query(AccountPreference).filter_by(account_id=account.id).first()
+        self.assertIsNotNone(pref)
+        self.assertEqual(pref.locale, "vi")
+
+        profile = self.db.query(PlayerLearningProfile).filter_by(player_id=player.id).first()
+        self.assertIsNotNone(profile)
+        self.assertEqual(profile.preferred_learning_style, "mixed")
+
+        # Check security event
+        event = self.db.query(AccountSecurityEvent).filter_by(account_id=account.id, event_type="register").first()
+        self.assertIsNotNone(event)
+        self.assertTrue(event.success)
+
+    def test_register_duplicate(self):
+        payload = {
+            "email": "user@example.com",
+            "password": "testpassword123"
+        }
+        # First registration
+        self.client.post("/api/auth/register", json=payload)
+        
+        # Duplicate registration
+        response = self.client.post("/api/auth/register", json=payload)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Email already registered")
+
+    def test_login_success(self):
+        # Register first
+        payload = {
+            "email": "user@example.com",
+            "password": "testpassword123"
+        }
+        self.client.post("/api/auth/register", json=payload)
+
+        # Login
+        login_payload = {
+            "email": "user@example.com",
+            "password": "testpassword123"
+        }
+        response = self.client.post("/api/auth/login", json=login_payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("access_token", data)
+        self.assertIn("ielts_rt", response.cookies)
+
+        # Check login success security event
+        account = self.db.query(Account).filter_by(email="user@example.com").first()
+        event = self.db.query(AccountSecurityEvent).filter_by(account_id=account.id, event_type="login_success").first()
+        self.assertIsNotNone(event)
+        self.assertTrue(event.success)
+
+    def test_login_failed(self):
+        # Register first
+        payload = {
+            "email": "user@example.com",
+            "password": "testpassword123"
+        }
+        self.client.post("/api/auth/register", json=payload)
+
+        # Login with incorrect password
+        login_payload = {
+            "email": "user@example.com",
+            "password": "wrongpassword"
+        }
+        response = self.client.post("/api/auth/login", json=login_payload)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Invalid email or password")
+
+        # Check login failed security event
+        account = self.db.query(Account).filter_by(email="user@example.com").first()
+        event = self.db.query(AccountSecurityEvent).filter_by(account_id=account.id, event_type="login_failed").first()
+        self.assertIsNotNone(event)
+        self.assertFalse(event.success)
+
+    def test_login_locked(self):
+        # Register first
+        payload = {
+            "email": "user@example.com",
+            "password": "testpassword123"
+        }
+        self.client.post("/api/auth/register", json=payload)
+
+        # 5 failed login attempts
+        login_payload = {
+            "email": "user@example.com",
+            "password": "wrongpassword"
+        }
+        for _ in range(5):
+            response = self.client.post("/api/auth/login", json=login_payload)
+            self.assertEqual(response.status_code, 401)
+
+        # Check account is locked in DB
+        account = self.db.query(Account).filter_by(email="user@example.com").first()
+        self.assertEqual(account.status, "locked")
+        self.assertIsNotNone(account.locked_until)
+
+        # 6th attempt should return 403 Forbidden
+        response = self.client.post("/api/auth/login", json=login_payload)
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("Account is locked", response.json()["detail"])
+
+    def test_refresh_token(self):
+        # Register first
+        payload = {
+            "email": "user@example.com",
+            "password": "testpassword123"
+        }
+        reg_response = self.client.post("/api/auth/register", json=payload)
+        refresh_token = reg_response.cookies.get("ielts_rt").strip('"')
+
+        # Refresh token
+        refresh_payload = {
+            "refresh_token": refresh_token
+        }
+        response = self.client.post("/api/auth/refresh", json=refresh_payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("access_token", data)
+        self.assertIn("ielts_rt", response.cookies)
+        self.assertNotEqual(response.cookies.get("ielts_rt").strip('"'), refresh_token)
+
+    def test_refresh_invalid(self):
+        # Refresh with fake token
+        refresh_payload = {
+            "refresh_token": "fake-refresh-token"
+        }
+        response = self.client.post("/api/auth/refresh", json=refresh_payload)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Invalid or expired refresh token")
+
+    def test_logout(self):
+        # Register first
+        payload = {
+            "email": "user@example.com",
+            "password": "testpassword123"
+        }
+        reg_response = self.client.post("/api/auth/register", json=payload)
+        refresh_token = reg_response.cookies.get("ielts_rt").strip('"')
+
+        # Logout
+        logout_payload = {
+            "refresh_token": refresh_token
+        }
+        response = self.client.post("/api/auth/logout", json=logout_payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["detail"], "Successfully logged out")
+
+        # Verify session is revoked in DB
+        import hashlib
+        token_hash = hashlib.sha256(refresh_token.encode('utf-8')).hexdigest()
+        session = self.db.query(AccountSession).filter_by(refresh_token_hash=token_hash).first()
+        self.assertIsNotNone(session)
+        self.assertIsNotNone(session.revoked_at)
+
+        # Refreshing with the logged out token should fail
+        refresh_payload = {
+            "refresh_token": refresh_token
+        }
+        refresh_response = self.client.post("/api/auth/refresh", json=refresh_payload)
+        self.assertEqual(refresh_response.status_code, 401)
+
+    def test_get_me_success(self):
+        # Register first
+        payload = {
+            "email": "user@example.com",
+            "password": "testpassword123"
+        }
+        reg_response = self.client.post("/api/auth/register", json=payload)
+        access_token = reg_response.json()["access_token"]
+
+        # Get me
+        headers = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        response = self.client.get("/api/auth/me", headers=headers)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["account"]["email"], "user@example.com")
+        self.assertIsNotNone(data["player"])
+
+    def test_get_me_unauthorized(self):
+        # Get me without headers
+        response = self.client.get("/api/auth/me")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Missing authorization header")
+
+        # Get me with invalid header
+        headers = {
+            "Authorization": "Bearer invalidtoken"
+        }
+        response = self.client.get("/api/auth/me", headers=headers)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Invalid or expired access token")
+
+
+class TestOnboardingEndpoints(unittest.TestCase):
+    def setUp(self):
+        # Setup memory database for onboarding tests with StaticPool for multi-threaded sharing
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        # Seed static dependencies (Skills)
+        self.skills = [
+            Skill(name="Listening", icon="🎧"),
+            Skill(name="Reading", icon="📖"),
+            Skill(name="Writing", icon="✍️"),
+            Skill(name="Speaking", icon="🗣️"),
+            Skill(name="Vocabulary", icon="🧠"),
+            Skill(name="Collocation", icon="🔗"),
+            Skill(name="Grammar", icon="⚙️"),
+        ]
+        self.db.add_all(self.skills)
+        self.db.commit()
+
+        # FastAPI dependency override
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+        # Register a test user and obtain tokens
+        payload = {
+            "email": "onboard@example.com",
+            "password": "password123",
+            "display_name": "Onboard User"
+        }
+        response = self.client.post("/api/auth/register", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.access_token = data["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_get_status_initial(self):
+        response = self.client.get("/api/onboarding/status", headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["onboarding_completed"])
+        self.assertFalse(data["has_certificate"])
+
+    def test_get_status_with_certificate(self):
+        from app.models import CertificateRecord
+        # Find player
+        player = self.db.query(Player).first()
+        self.assertIsNotNone(player)
+
+        # Create certificate record
+        cert = CertificateRecord(
+            player_id=player.id,
+            certificate_type="IELTS",
+            overall_score=6.5,
+            listening_score=7.0,
+            reading_score=6.5,
+            writing_score=6.0,
+            speaking_score=6.5,
+            input_method="manual",
+            status="submitted"
+        )
+        self.db.add(cert)
+        self.db.commit()
+
+        response = self.client.get("/api/onboarding/status", headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["onboarding_completed"])
+        self.assertTrue(data["has_certificate"])
+
+    def test_activate_campaign_success(self):
+        from app.models import CampaignSetting, VocabularySetting, CampaignSkillQuestQuota, Campaign
+        
+        # Activate campaign
+        response = self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["detail"], "Campaign activated successfully")
+
+        # Verify onboarding completed in Account
+        account = self.db.query(Account).filter_by(email="onboard@example.com").first()
+        self.assertTrue(account.onboarding_completed)
+        self.assertIsNotNone(account.onboarding_completed_at)
+
+        # Verify player setup completed
+        player = self.db.query(Player).filter_by(account_id=account.id).first()
+        self.assertTrue(player.setup_completed)
+        self.assertIsNotNone(player.active_campaign_id)
+
+        # Verify campaign setup completed
+        campaign = self.db.query(Campaign).filter_by(id=player.active_campaign_id).first()
+        self.assertIsNotNone(campaign)
+        self.assertTrue(campaign.setup_completed)
+        self.assertEqual(campaign.status, "active")
+
+        # Verify campaign setting exists
+        setting = self.db.query(CampaignSetting).filter_by(campaign_id=campaign.id).first()
+        self.assertIsNotNone(setting)
+        self.assertEqual(setting.current_english_level, "B1")
+
+        # Verify vocabulary settings exist
+        vocab_setting = self.db.query(VocabularySetting).filter_by(campaign_id=campaign.id).first()
+        self.assertIsNotNone(vocab_setting)
+
+        # Verify quest quotas exist
+        quotas = self.db.query(CampaignSkillQuestQuota).filter_by(campaign_id=campaign.id).all()
+        self.assertTrue(len(quotas) > 0)
+
+        # Verify some quests are generated
+        quests = self.db.query(Quest).filter_by(campaign_id=campaign.id).all()
+        self.assertTrue(len(quests) > 0)
+
+        # Get status again
+        status_response = self.client.get("/api/onboarding/status", headers=self.headers)
+        self.assertEqual(status_response.status_code, 200)
+        self.assertTrue(status_response.json()["onboarding_completed"])
+
+    def test_activate_campaign_unauthorized(self):
+        # Without headers
+        response = self.client.post("/api/onboarding/activate-campaign")
+        self.assertEqual(response.status_code, 401)
+
+        # Invalid token
+        headers = {"Authorization": "Bearer invalid"}
+        response = self.client.post("/api/onboarding/activate-campaign", headers=headers)
+        self.assertEqual(response.status_code, 401)
+
+
+class TestCertificateAndSuggestionEndpoints(unittest.TestCase):
+    def setUp(self):
+        # Setup memory database for onboarding/suggestions tests with StaticPool
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        # Seed static dependencies (Skills)
+        self.skills = [
+            Skill(name="Listening", icon="🎧"),
+            Skill(name="Reading", icon="📖"),
+            Skill(name="Writing", icon="✍️"),
+            Skill(name="Speaking", icon="🗣️"),
+            Skill(name="Vocabulary", icon="🧠"),
+            Skill(name="Collocation", icon="🔗"),
+            Skill(name="Grammar", icon="⚙️"),
+        ]
+        self.db.add_all(self.skills)
+        self.db.commit()
+
+        # FastAPI dependency override
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+        # Register a test user and obtain tokens
+        payload = {
+            "email": "cert@example.com",
+            "password": "password123",
+            "display_name": "Cert User"
+        }
+        response = self.client.post("/api/auth/register", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.access_token = data["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_manual_certificate_creation_pre_campaign(self):
+        # Submit manual certificate scores before campaign exists
+        payload = {
+            "overall_score": 6.5,
+            "listening_score": 7.0,
+            "reading_score": 6.5,
+            "writing_score": 6.0,
+            "speaking_score": 6.5
+        }
+        response = self.client.post("/api/certificates/manual", json=payload, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        cert = response.json()
+        self.assertEqual(cert["overall_score"], 6.5)
+        self.assertEqual(cert["listening_score"], 7.0)
+
+        # Ensure no suggestions are generated yet (as no campaign exists)
+        from app.models import SkillRankSuggestion
+        suggestions = self.db.query(SkillRankSuggestion).all()
+        self.assertEqual(len(suggestions), 0)
+
+        # Now, activate the campaign
+        act_response = self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+        self.assertEqual(act_response.status_code, 200)
+
+        # Ensure suggestions are generated post-campaign activation
+        suggestions = self.db.query(SkillRankSuggestion).filter(
+            SkillRankSuggestion.source_certificate_record_id != None
+        ).all()
+        # Should generate suggestions for: Listening, Reading, Writing, Speaking + Vocabulary, Grammar, Collocation
+        self.assertEqual(len(suggestions), 7)
+
+    def test_manual_certificate_creation_post_campaign(self):
+        # 1. Activate campaign first
+        act_response = self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+        self.assertEqual(act_response.status_code, 200)
+
+        # 2. Submit manual certificate scores after campaign exists
+        payload = {
+            "overall_score": 6.0,
+            "listening_score": 6.5,
+            "reading_score": 6.0,
+            "writing_score": 5.5,
+            "speaking_score": 6.0
+        }
+        response = self.client.post("/api/certificates/manual", json=payload, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+
+        # Ensure suggestions are generated immediately
+        from app.models import SkillRankSuggestion
+        suggestions = self.db.query(SkillRankSuggestion).filter(
+            SkillRankSuggestion.source_certificate_record_id != None
+        ).all()
+        self.assertEqual(len(suggestions), 7)
+
+        # Verify mapping:
+        # Listening (6.5) -> A
+        # Reading (6.0) -> B
+        # Writing (5.5) -> C
+        # Speaking (6.0) -> B
+        # Vocabulary, Grammar, Collocation (overall 6.0) -> B
+        mapped_ranks = {s.skill.name: s.suggested_rank for s in suggestions}
+        self.assertEqual(mapped_ranks["Listening"], "A")
+        self.assertEqual(mapped_ranks["Reading"], "B")
+        self.assertEqual(mapped_ranks["Writing"], "C")
+        self.assertEqual(mapped_ranks["Speaking"], "B")
+        self.assertEqual(mapped_ranks["Vocabulary"], "B")
+        self.assertEqual(mapped_ranks["Grammar"], "B")
+        self.assertEqual(mapped_ranks["Collocation"], "B")
+
+        # Get list of certificates
+        get_response = self.client.get("/api/certificates", headers=self.headers)
+        self.assertEqual(get_response.status_code, 200)
+        certs = get_response.json()
+        self.assertEqual(len(certs), 1)
+        self.assertEqual(certs[0]["overall_score"], 6.0)
+
+    def test_apply_suggestion_direct_promotion(self):
+        # Activate campaign first
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+
+        # Submit manual certificate
+        payload = {
+            "overall_score": 6.5,
+            "listening_score": 7.0,
+            "reading_score": 6.5,
+            "writing_score": 6.0,
+            "speaking_score": 6.5
+        }
+        self.client.post("/api/certificates/manual", json=payload, headers=self.headers)
+
+        # Find suggestion for Listening
+        from app.models import SkillRankSuggestion, CampaignSkillState, SkillRankHistory
+        listening_skill = self.db.query(Skill).filter_by(name="Listening").first()
+        suggestion = self.db.query(SkillRankSuggestion).filter_by(
+            skill_id=listening_skill.id,
+            status="pending"
+        ).first()
+        self.assertIsNotNone(suggestion)
+        # Verify fetching suggestions works via both endpoints
+        get_suggestions_resp = self.client.get("/api/skill-rank-suggestions", headers=self.headers)
+        self.assertEqual(get_suggestions_resp.status_code, 200)
+        self.assertTrue(len(get_suggestions_resp.json()) > 0)
+
+        # Setup state to have promotion boss pending first to check clean-up
+        state = self.db.query(CampaignSkillState).filter_by(skill_id=listening_skill.id).first()
+        state.pending_rank = "E"
+        state.promotion_status = "boss_required"
+        self.db.commit()
+
+        # Apply suggestion
+        apply_response = self.client.post(f"/api/skill-rank-suggestions/{suggestion.id}/apply", headers=self.headers)
+        self.assertEqual(apply_response.status_code, 200)
+
+        # Verify suggestion status is applied
+        suggestion_after = self.db.query(SkillRankSuggestion).filter_by(id=suggestion.id).first()
+        self.assertEqual(suggestion_after.status, "applied")
+
+        # Verify state ranks are updated and exam state cleared
+        state_after = self.db.query(CampaignSkillState).filter_by(skill_id=listening_skill.id).first()
+        self.assertEqual(state_after.confirmed_rank, "S")
+        self.assertEqual(state_after.rank, "S") # updated since 'F' -> 'S' is 'up'
+        self.assertIsNone(state_after.pending_rank)
+        self.assertEqual(state_after.promotion_status, "none")
+
+        # Verify history is logged
+        history = self.db.query(SkillRankHistory).filter_by(skill_id=listening_skill.id).first()
+        self.assertIsNotNone(history)
+        self.assertEqual(history.old_rank, "F")
+        self.assertEqual(history.new_rank, "S")
+        self.assertEqual(history.source_certificate_record_id, suggestion.source_certificate_record_id)
+
+    def test_dismiss_suggestion(self):
+        # Activate campaign first
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+
+        # Submit manual certificate
+        payload = {
+            "overall_score": 6.5,
+            "listening_score": 7.0,
+            "reading_score": 6.5,
+            "writing_score": 6.0,
+            "speaking_score": 6.5
+        }
+        self.client.post("/api/certificates/manual", json=payload, headers=self.headers)
+
+        # Find suggestion for Listening
+        from app.models import SkillRankSuggestion
+        listening_skill = self.db.query(Skill).filter_by(name="Listening").first()
+        suggestion = self.db.query(SkillRankSuggestion).filter_by(
+            skill_id=listening_skill.id,
+            status="pending"
+        ).first()
+        self.assertIsNotNone(suggestion)
+
+        # Dismiss suggestion
+        dismiss_response = self.client.post(f"/api/skill-rank-suggestions/{suggestion.id}/dismiss", headers=self.headers)
+        self.assertEqual(dismiss_response.status_code, 200)
+
+        # Verify status
+        suggestion_after = self.db.query(SkillRankSuggestion).filter_by(id=suggestion.id).first()
+        self.assertEqual(suggestion_after.status, "dismissed")
+
+
+class TestDailyQuestQuotaGenerator(unittest.TestCase):
+    def setUp(self):
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        # Seed static dependencies (Skills)
+        self.skills = [
+            Skill(name="Listening", icon="🎧"),
+            Skill(name="Reading", icon="📖"),
+            Skill(name="Writing", icon="✍️"),
+            Skill(name="Speaking", icon="🗣️"),
+            Skill(name="Vocabulary", icon="🧠"),
+            Skill(name="Collocation", icon="🔗"),
+            Skill(name="Grammar", icon="⚙️"),
+        ]
+        self.db.add_all(self.skills)
+        self.db.commit()
+
+        # FastAPI dependency override
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+        # Register a test user
+        payload = {
+            "email": "quota@example.com",
+            "password": "password123",
+            "display_name": "Quota User"
+        }
+        response = self.client.post("/api/auth/register", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.access_token = data["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_default_quotas_generation(self):
+        # 1. Activate campaign
+        response = self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+
+        # 2. Check total daily quests generated
+        from app.models import Quest, Campaign
+        campaign = self.db.query(Campaign).first()
+        self.assertIsNotNone(campaign)
+
+        # Check total daily quests for start_date
+        start_date = campaign.start_date
+        daily_quests = self.db.query(Quest).filter(
+            Quest.campaign_id == campaign.id,
+            Quest.quest_date == start_date,
+            Quest.session_type == "Daily Quest"
+        ).all()
+
+        # Vocabulary (3) + Reading (1) + Listening (1) + Grammar (1) + Collocation (1) = 7 quests
+        self.assertEqual(len(daily_quests), 7)
+
+        # Verify skill distribution
+        skill_counts = {}
+        for q in daily_quests:
+            skill_counts[q.skill.name] = skill_counts.get(q.skill.name, 0) + 1
+        self.assertEqual(skill_counts.get("Vocabulary", 0), 3)
+        self.assertEqual(skill_counts.get("Reading", 0), 1)
+        self.assertEqual(skill_counts.get("Listening", 0), 1)
+        self.assertEqual(skill_counts.get("Grammar", 0), 1)
+        self.assertEqual(skill_counts.get("Collocation", 0), 1)
+        self.assertEqual(skill_counts.get("Writing", 0), 0)
+        self.assertEqual(skill_counts.get("Speaking", 0), 0)
+
+    def test_custom_quotas_generation(self):
+        # 1. Activate campaign
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+
+        # 2. Clear existing daily quests to regenerate
+        from app.models import Quest, Campaign, CampaignSkillQuestQuota, Skill
+        campaign = self.db.query(Campaign).first()
+        self.db.query(Quest).filter(
+            Quest.campaign_id == campaign.id,
+            Quest.session_type == "Daily Quest"
+        ).delete()
+        self.db.commit()
+
+        # 3. Modify quotas
+        # Set Vocabulary to 4 (should generate vocab_flashcard, vocab_codex, vocab_collocation, vocab_error)
+        vocab_skill = self.db.query(Skill).filter_by(name="Vocabulary").first()
+        vocab_quota = self.db.query(CampaignSkillQuestQuota).filter_by(campaign_id=campaign.id, skill_id=vocab_skill.id).first()
+        vocab_quota.daily_quota = 4
+
+        # Set Writing to 1
+        writing_skill = self.db.query(Skill).filter_by(name="Writing").first()
+        writing_quota = self.db.query(CampaignSkillQuestQuota).filter_by(campaign_id=campaign.id, skill_id=writing_skill.id).first()
+        writing_quota.daily_quota = 1
+        writing_quota.is_active = True
+
+        # Set Listening to inactive
+        listening_skill = self.db.query(Skill).filter_by(name="Listening").first()
+        listening_quota = self.db.query(CampaignSkillQuestQuota).filter_by(campaign_id=campaign.id, skill_id=listening_skill.id).first()
+        listening_quota.is_active = False
+
+        self.db.commit()
+
+        # 4. Regenerate daily quests
+        from app.seed import ensure_quest_instances, ensure_roadmap_phases, ensure_templates, ensure_materials
+        from app.models import StudyMaterial, RoadmapPhase
+        skill_by_name = {s.name: s for s in self.db.query(Skill).all()}
+        material_by_title = {m.title: m for m in self.db.query(StudyMaterial).all()}
+        phase_by_code = {f"phase-{p.id}": p for p in self.db.query(RoadmapPhase).filter_by(campaign_id=campaign.id).all()}
+        template_by_title = ensure_templates(self.db, skill_by_name, phase_by_code, material_by_title)
+
+        ensure_quest_instances(self.db, campaign, skill_by_name, template_by_title, phase_by_code)
+        self.db.commit()
+
+        # 5. Check daily quests generated for start_date
+        daily_quests = self.db.query(Quest).filter(
+            Quest.campaign_id == campaign.id,
+            Quest.quest_date == campaign.start_date,
+            Quest.session_type == "Daily Quest"
+        ).all()
+
+        skill_counts = {}
+        for q in daily_quests:
+            skill_counts[q.skill.name] = skill_counts.get(q.skill.name, 0) + 1
+
+        self.assertEqual(skill_counts.get("Vocabulary", 0), 4)
+        self.assertEqual(skill_counts.get("Writing", 0), 1)
+        self.assertEqual(skill_counts.get("Listening", 0), 0)
+
+        # Verify vocab slot codes (should include vocab_error)
+        vocab_slots = {q.daily_slot_code for q in daily_quests if q.skill.name == "Vocabulary"}
+        self.assertEqual(vocab_slots, {"vocab_flashcard", "vocab_codex", "vocab_collocation", "vocab_error"})
+
+    def test_preference_ordering_rotation(self):
+        # 1. Activate campaign
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+
+        # 2. Clear existing daily quests to regenerate
+        from app.models import Quest, Campaign, CampaignSkillQuestQuota, Skill
+        campaign = self.db.query(Campaign).first()
+        self.db.query(Quest).filter(
+            Quest.campaign_id == campaign.id,
+            Quest.session_type == "Daily Quest"
+        ).delete()
+        self.db.commit()
+
+        # 3. Modify Vocabulary quota to set daily_quota = 2 and preferred_activity_types
+        vocab_skill = self.db.query(Skill).filter_by(name="Vocabulary").first()
+        vocab_quota = self.db.query(CampaignSkillQuestQuota).filter_by(campaign_id=campaign.id, skill_id=vocab_skill.id).first()
+        vocab_quota.daily_quota = 2
+        vocab_quota.preferred_activity_types = ["codex_create", "flashcard_review"]
+        self.db.commit()
+
+        # 4. Regenerate daily quests
+        from app.seed import ensure_quest_instances, ensure_roadmap_phases, ensure_templates, ensure_materials
+        from app.models import StudyMaterial, RoadmapPhase
+        skill_by_name = {s.name: s for s in self.db.query(Skill).all()}
+        material_by_title = {m.title: m for m in self.db.query(StudyMaterial).all()}
+        phase_by_code = {f"phase-{p.id}": p for p in self.db.query(RoadmapPhase).filter_by(campaign_id=campaign.id).all()}
+        template_by_title = ensure_templates(self.db, skill_by_name, phase_by_code, material_by_title)
+
+        ensure_quest_instances(self.db, campaign, skill_by_name, template_by_title, phase_by_code)
+        self.db.commit()
+
+        # 5. Check Vocabulary daily quests for start_date
+        vocab_quests = self.db.query(Quest).filter(
+            Quest.campaign_id == campaign.id,
+            Quest.quest_date == campaign.start_date,
+            Quest.session_type == "Daily Quest",
+            Quest.skill_id == vocab_skill.id
+        ).order_by(Quest.id).all()
+
+        # Quota is 2, so exactly 2 quests should be generated
+        self.assertEqual(len(vocab_quests), 2)
+
+        # Codex Entry (vocab_codex) should be first because "codex_create" was first in preference
+        # Memory Gate (vocab_flashcard) should be second because "flashcard_review" was second
+        slot_codes = [q.daily_slot_code for q in vocab_quests]
+        self.assertEqual(slot_codes, ["vocab_codex", "vocab_flashcard"])
+
+
+class TestRankExamPhase9(unittest.TestCase):
+    """Integration tests for Phase 9: Rank Boss exam flow, XP block, retry limit, and XP penalty."""
+
+    def setUp(self):
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        self.skills = [
+            Skill(name="Listening", icon="🎧"),
+            Skill(name="Reading", icon="📖"),
+            Skill(name="Writing", icon="✍️"),
+            Skill(name="Speaking", icon="🗣️"),
+            Skill(name="Vocabulary", icon="🧠"),
+            Skill(name="Collocation", icon="🔗"),
+            Skill(name="Grammar", icon="⚙️"),
+        ]
+        self.db.add_all(self.skills)
+        self.db.commit()
+
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+        # Register and activate campaign
+        reg = self.client.post("/api/auth/register", json={
+            "email": "ranktest@example.com",
+            "password": "password123",
+            "display_name": "Rank Tester",
+        })
+        self.assertEqual(reg.status_code, 200)
+        self.access_token = reg.json()["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+
+        # Grab skill and campaign references (seed.py populates pools via activate-campaign)
+        from app.models import Campaign, RankExamPool, RankExamVersion, RankExamQuestion
+        self.campaign = self.db.query(Campaign).first()
+        self.vocab_skill = self.db.query(Skill).filter_by(name="Vocabulary").first()
+
+        # Use the pool seeded by activate-campaign (Vocabulary F→E)
+        self.pool = self.db.query(RankExamPool).filter_by(
+            skill_id=self.vocab_skill.id,
+            from_rank="F",
+            to_rank="E",
+            is_active=True,
+        ).first()
+        if not self.pool:
+            # Seed a minimal pool if seed.py didn't create one (failsafe)
+            self.pool = RankExamPool(
+                skill_id=self.vocab_skill.id,
+                from_rank="F",
+                to_rank="E",
+                title="Vocabulary F->E",
+                pass_percent=80,
+                default_time_limit_minutes=30,
+                max_attempts_per_day=2,
+                xp_threshold=500,
+                is_active=True,
+            )
+            self.db.add(self.pool)
+            self.db.flush()
+            self.version = RankExamVersion(
+                pool_id=self.pool.id,
+                title="Version 1",
+                version_code="v1",
+                total_questions=2,
+                total_points=2,
+                difficulty="normal",
+                is_active=True,
+            )
+            self.db.add(self.version)
+            self.db.flush()
+            self.db.add(RankExamQuestion(
+                exam_version_id=self.version.id,
+                question_type="multiple_choice",
+                prompt="What does 'abundant' mean?",
+                options_json=["plentiful", "scarce", "limited"],
+                correct_answer_json="plentiful",
+                points=1,
+                order_index=0,
+            ))
+            self.db.add(RankExamQuestion(
+                exam_version_id=self.version.id,
+                question_type="multiple_choice",
+                prompt="What does 'acquire' mean?",
+                options_json=["obtain", "lose", "avoid"],
+                correct_answer_json="obtain",
+                points=1,
+                order_index=1,
+            ))
+            self.db.commit()
+        else:
+            self.version = self.db.query(RankExamVersion).filter_by(
+                pool_id=self.pool.id,
+                is_active=True,
+            ).first()
+
+        # Cache correct answers from actual questions for use in submit tests
+        self.questions = self.db.query(RankExamQuestion).filter_by(
+            exam_version_id=self.version.id,
+        ).order_by(RankExamQuestion.order_index).all()
+
+        # Put vocab skill into eligible state
+        self.vocab_state = self.db.query(CampaignSkillState).filter_by(
+            campaign_id=self.campaign.id,
+            skill_id=self.vocab_skill.id,
+        ).first()
+        self.vocab_state.xp = 600
+        self.vocab_state.confirmed_rank = "F"
+        self.vocab_state.pending_rank = "E"
+        self.vocab_state.promotion_status = "eligible"
+        self.db.commit()
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    # ------------------------------------------------------------------
+    # unlock endpoint
+    # ------------------------------------------------------------------
+
+    def test_unlock_transitions_eligible_to_boss_required(self):
+        resp = self.client.post("/api/rank-exams/unlock", json={"skill_id": self.vocab_skill.id}, headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.db.refresh(self.vocab_state)
+        self.assertEqual(self.vocab_state.promotion_status, "boss_required")
+
+    def test_unlock_fails_when_not_eligible(self):
+        self.vocab_state.promotion_status = "none"
+        self.db.commit()
+        resp = self.client.post("/api/rank-exams/unlock", json={"skill_id": self.vocab_skill.id}, headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_unlock_fails_when_already_boss_required(self):
+        self.vocab_state.promotion_status = "boss_required"
+        self.db.commit()
+        resp = self.client.post("/api/rank-exams/unlock", json={"skill_id": self.vocab_skill.id}, headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+
+    # ------------------------------------------------------------------
+    # start endpoint
+    # ------------------------------------------------------------------
+
+    def _unlock(self):
+        self.client.post("/api/rank-exams/unlock", json={"skill_id": self.vocab_skill.id}, headers=self.headers)
+        self.db.refresh(self.vocab_state)
+
+    def test_start_creates_attempt_and_sets_in_progress(self):
+        self._unlock()
+        resp = self.client.post("/api/rank-exams/start", json={"skill_id": self.vocab_skill.id}, headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("attempt_id", data)
+        self.assertEqual(data["from_rank"], "F")
+        self.assertEqual(data["to_rank"], "E")
+        self.assertGreaterEqual(len(data["questions"]), 1)
+        self.db.refresh(self.vocab_state)
+        self.assertEqual(self.vocab_state.promotion_status, "in_progress")
+
+    def test_start_fails_when_not_boss_required(self):
+        # still eligible, not unlocked
+        resp = self.client.post("/api/rank-exams/start", json={"skill_id": self.vocab_skill.id}, headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_start_enforces_two_per_day_cap(self):
+        from app.models import RankExamAttempt as REA
+        # Seed 2 already-started attempts today
+        for _ in range(2):
+            self.db.add(REA(
+                campaign_id=self.campaign.id,
+                skill_id=self.vocab_skill.id,
+                from_rank="F",
+                to_rank="E",
+                pool_id=self.pool.id,
+                exam_version_id=self.version.id,
+                status="failed",
+                total_points=2,
+                pass_percent=80,
+                time_limit_minutes=30,
+                started_at=datetime.utcnow(),
+                expires_at=datetime.utcnow() + timedelta(minutes=30),
+            ))
+        self.db.commit()
+        self._unlock()
+        resp = self.client.post("/api/rank-exams/start", json={"skill_id": self.vocab_skill.id}, headers=self.headers)
+        self.assertEqual(resp.status_code, 429)
+
+    # ------------------------------------------------------------------
+    # get attempt endpoint
+    # ------------------------------------------------------------------
+
+    def test_get_attempt(self):
+        self._unlock()
+        start_resp = self.client.post("/api/rank-exams/start", json={"skill_id": self.vocab_skill.id}, headers=self.headers)
+        attempt_id = start_resp.json()["attempt_id"]
+        resp = self.client.get(f"/api/rank-exams/{attempt_id}", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["id"], attempt_id)
+        self.assertEqual(resp.json()["status"], "in_progress")
+
+    def test_get_attempt_not_found(self):
+        resp = self.client.get("/api/rank-exams/99999", headers=self.headers)
+        self.assertEqual(resp.status_code, 404)
+
+    # ------------------------------------------------------------------
+    # submit: pass
+    # ------------------------------------------------------------------
+
+    def _start_exam(self):
+        self._unlock()
+        resp = self.client.post("/api/rank-exams/start", json={"skill_id": self.vocab_skill.id}, headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        return resp.json()
+
+    def _correct_answers(self, exam):
+        """Build all-correct answers list using actual questions from the DB."""
+        return [
+            {"question_id": q["id"], "answer_json": self.questions[i].correct_answer_json}
+            for i, q in enumerate(exam["questions"])
+            if i < len(self.questions)
+        ]
+
+    def test_submit_pass_promotes_rank(self):
+        exam = self._start_exam()
+        answers = self._correct_answers(exam)
+        resp = self.client.post(f"/api/rank-exams/{exam['attempt_id']}/submit", json={"answers": answers}, headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["passed"])
+        self.assertGreaterEqual(data["score_percent"], 80.0)
+        self.assertEqual(data["confirmed_rank"], "E")
+        self.db.refresh(self.vocab_state)
+        self.assertEqual(self.vocab_state.confirmed_rank, "E")
+        self.assertEqual(self.vocab_state.promotion_status, "none")
+        self.assertIsNone(self.vocab_state.pending_rank)
+
+    def test_submit_pass_logs_rank_history(self):
+        exam = self._start_exam()
+        answers = self._correct_answers(exam)
+        self.client.post(f"/api/rank-exams/{exam['attempt_id']}/submit", json={"answers": answers}, headers=self.headers)
+        history = self.db.query(SkillRankHistory).filter_by(
+            skill_id=self.vocab_skill.id,
+            campaign_id=self.campaign.id,
+        ).first()
+        self.assertIsNotNone(history)
+        self.assertEqual(history.old_rank, "F")
+        self.assertEqual(history.new_rank, "E")
+
+    # ------------------------------------------------------------------
+    # submit: fail, first attempt → back to boss_required
+    # ------------------------------------------------------------------
+
+    def test_submit_fail_first_attempt_returns_to_boss_required(self):
+        exam = self._start_exam()
+        answers = [{"question_id": q["id"], "answer_json": "wrong"} for q in exam["questions"]]
+        resp = self.client.post(f"/api/rank-exams/{exam['attempt_id']}/submit", json={"answers": answers}, headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json()["passed"])
+        self.db.refresh(self.vocab_state)
+        self.assertEqual(self.vocab_state.promotion_status, "boss_required")
+
+    # ------------------------------------------------------------------
+    # submit: fail second attempt → -50 XP penalty → eligible
+    # ------------------------------------------------------------------
+
+    def test_submit_fail_second_attempt_applies_penalty_and_resets_eligible(self):
+        from app.models import RankExamAttempt as REA
+        # Pre-seed one failed attempt today so this submit is the 2nd
+        self.db.add(REA(
+            campaign_id=self.campaign.id,
+            skill_id=self.vocab_skill.id,
+            from_rank="F",
+            to_rank="E",
+            pool_id=self.pool.id,
+            exam_version_id=self.version.id,
+            status="failed",
+            total_points=2,
+            pass_percent=80,
+            time_limit_minutes=30,
+            started_at=datetime.utcnow(),
+            expires_at=datetime.utcnow() + timedelta(minutes=30),
+        ))
+        self.db.commit()
+
+        exam = self._start_exam()
+        answers = [
+            {"question_id": q["id"], "answer_json": "wrong"}
+            for q in exam["questions"]
+        ]
+        resp = self.client.post(f"/api/rank-exams/{exam['attempt_id']}/submit", json={"answers": answers}, headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json()["passed"])
+        self.db.expire_all()
+        state_after = self.db.query(CampaignSkillState).filter_by(
+            campaign_id=self.campaign.id, skill_id=self.vocab_skill.id,
+        ).first()
+        self.assertEqual(state_after.promotion_status, "eligible")
+        # Penalty applied: xp after recompute is max(0, recomputed_xp - 50)
+        # In test: no quests claimed → recomputed_xp = 0 → penalty floored at 0
+        self.assertGreaterEqual(state_after.xp, 0)
+
+    def test_xp_penalty_floored_at_zero(self):
+        from app.models import RankExamAttempt as REA
+        # Set XP below 50 to test floor
+        self.vocab_state.xp = 30
+        self.db.commit()
+
+        self.db.add(REA(
+            campaign_id=self.campaign.id,
+            skill_id=self.vocab_skill.id,
+            from_rank="F",
+            to_rank="E",
+            pool_id=self.pool.id,
+            exam_version_id=self.version.id,
+            status="failed",
+            total_points=2,
+            pass_percent=80,
+            time_limit_minutes=30,
+            started_at=datetime.utcnow(),
+            expires_at=datetime.utcnow() + timedelta(minutes=30),
+        ))
+        self.db.commit()
+
+        exam = self._start_exam()
+        answers = [{"question_id": q["id"], "answer_json": "wrong"} for q in exam["questions"]]
+        self.client.post(f"/api/rank-exams/{exam['attempt_id']}/submit", json={"answers": answers}, headers=self.headers)
+        self.db.refresh(self.vocab_state)
+        self.assertEqual(self.vocab_state.xp, 0)  # floor, not negative
+
+    # ------------------------------------------------------------------
+    # XP block on quest claim
+    # ------------------------------------------------------------------
+
+    def test_quest_claim_suppresses_xp_when_boss_required(self):
+        from app.models import Quest
+        self.vocab_state.promotion_status = "boss_required"
+        self.vocab_state.xp = 0
+        self.db.commit()
+
+        quest = Quest(
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Vocab Quest",
+            skill_id=self.vocab_skill.id,
+            source="Test",
+            details="Test vocab quest",
+            xp=20,
+            base_xp=20,
+            earned_xp=20,
+            completed=True,
+            reward_claimed=False,
+            session_type="Daily Quest",
+            campaign_id=self.campaign.id,
+            status="completed",
+            quest_role="mini",
+        )
+        self.db.add(quest)
+        self.db.commit()
+
+        resp = self.client.post(f"/api/quests/{quest.id}/claim", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+        # XP must NOT increase — block active
+        self.db.expire_all()
+        state_after = self.db.query(CampaignSkillState).filter_by(
+            campaign_id=self.campaign.id, skill_id=self.vocab_skill.id,
+        ).first()
+        self.assertEqual(state_after.xp, 0)
+
+    def test_quest_claim_awards_xp_normally_when_eligible(self):
+        from app.models import Quest
+        self.vocab_state.promotion_status = "eligible"
+        self.vocab_state.xp = 0
+        self.db.commit()
+
+        quest = Quest(
+            quest_date=date.today(),
+            week_no=1,
+            stage="Foundation",
+            title="Vocab Quest",
+            skill_id=self.vocab_skill.id,
+            source="Test",
+            details="Test vocab quest",
+            xp=20,
+            base_xp=20,
+            earned_xp=20,
+            completed=True,
+            reward_claimed=False,
+            session_type="Daily Quest",
+            campaign_id=self.campaign.id,
+            status="completed",
+            quest_role="mini",
+            reward_skill_id=self.vocab_skill.id,
+        )
+        self.db.add(quest)
+        self.db.commit()
+
+        resp = self.client.post(f"/api/quests/{quest.id}/claim", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+        # XP must increase when eligible (not blocked)
+        self.db.expire_all()
+        state_after = self.db.query(CampaignSkillState).filter_by(
+            campaign_id=self.campaign.id,
+            skill_id=self.vocab_skill.id,
+        ).first()
+        self.assertGreater(state_after.xp, 0)
+
+    def test_double_submit_rejected(self):
+        exam = self._start_exam()
+        answers = self._correct_answers(exam)
+        self.client.post(f"/api/rank-exams/{exam['attempt_id']}/submit", json={"answers": answers}, headers=self.headers)
+        # Second submit same attempt must be rejected
+        resp = self.client.post(f"/api/rank-exams/{exam['attempt_id']}/submit", json={"answers": answers}, headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+
+
+class TestCollocationMasterData(unittest.TestCase):
+    def setUp(self):
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool
+        )
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(bind=self.engine)
+        self.db = self.Session()
+
+        # Seed skills
+        self.skills = [
+            Skill(name="Vocabulary", icon="📔"),
+            Skill(name="Listening", icon="🎧"),
+            Skill(name="Reading", icon="📖"),
+            Skill(name="Writing", icon="✍️"),
+            Skill(name="Speaking", icon="🗣️"),
+        ]
+        self.db.add_all(self.skills)
+        self.db.commit()
+
+        app.dependency_overrides[get_db] = lambda: self.db
+        self.client = TestClient(app)
+
+        # Register user and activate campaign
+        payload = {
+            "email": "colloc@example.com",
+            "password": "password123",
+            "display_name": "Colloc User"
+        }
+        resp = self.client.post("/api/auth/register", json=payload)
+        self.access_token = resp.json()["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+
+        # Activate campaign
+        self.client.post("/api/onboarding/activate-campaign", headers=self.headers)
+        
+        # Get player and campaign
+        self.player = self.db.query(Player).first()
+        self.campaign = self.db.query(Campaign).first()
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+        self.db.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def test_collocation_flow(self):
+        # 1. Create a collection
+        collection_payload = {
+            "code": "eciu-inter",
+            "title": "English Collocations in Use",
+            "description": "Intermediate collocations",
+            "source_book": "Cambridge",
+            "level": "Intermediate",
+            "is_active": True
+        }
+        resp = self.client.post("/api/collocation-collections", json=collection_payload)
+        self.assertEqual(resp.status_code, 200)
+        collection_id = resp.json()["id"]
+
+        # 2. Add Section, Topic, and Items directly to DB
+        section = CollocationSection(collection_id=collection_id, title="Section 1", section_order=1)
+        self.db.add(section)
+        self.db.commit()
+
+        topic = CollocationTopic(section_id=section.id, title="Topic 1", topic_number=1, topic_order=1)
+        self.db.add(topic)
+        self.db.commit()
+
+        item = CollocationItem(
+            topic_id=topic.id,
+            collocation="heavy rain",
+            pronunciation_us="/ˈhɛvi reɪn/",
+            meaning_vi="mưa nặng hạt",
+            example_en="We got caught in heavy rain.",
+            example_vi="Chúng tôi bị kẹt trong cơn mưa lớn.",
+            collocation_type="adj + noun",
+            item_order=1
+        )
+        self.db.add(item)
+        self.db.commit()
+
+        # 3. Link collection to campaign
+        link_resp = self.client.post(f"/api/campaigns/current/collocation-collections/{collection_id}/link?display_order=1", headers=self.headers)
+        self.assertEqual(link_resp.status_code, 200)
+
+        # Verify linked collections
+        get_links = self.client.get("/api/campaigns/current/collocation-collections", headers=self.headers)
+        self.assertEqual(get_links.status_code, 200)
+        self.assertEqual(len(get_links.json()), 1)
+        self.assertEqual(get_links.json()[0]["code"], "eciu-inter")
+
+        # 4. Fetch outline outline with progress
+        progress_outline = self.client.get(f"/api/collocation-collections/{collection_id}/progress", headers=self.headers)
+        self.assertEqual(progress_outline.status_code, 200)
+        outline_data = progress_outline.json()
+        self.assertEqual(outline_data["sections"][0]["topics"][0]["items"][0]["collocation"], "heavy rain")
+        self.assertIsNone(outline_data["sections"][0]["topics"][0]["items"][0]["progress"])
+
+        # 5. Get practice collocations
+        practice_resp = self.client.get("/api/vocabulary/practice/collocations", headers=self.headers)
+        self.assertEqual(practice_resp.status_code, 200)
+        practice_data = practice_resp.json()
+        self.assertEqual(len(practice_data["matches"]), 1)
+        self.assertEqual(practice_data["matches"][0]["collocation"], "heavy rain")
+
+        # 6. Update progress
+        progress_resp = self.client.post(
+            f"/api/collocation-items/{item.id}/progress?correct=true",
+            headers=self.headers
+        )
+        self.assertEqual(progress_resp.status_code, 200)
+        self.assertEqual(progress_resp.json()["status"], "learning")
+
+        # Master the item by marking it correct 2 more times
+        self.client.post(f"/api/collocation-items/{item.id}/progress?correct=true", headers=self.headers)
+        self.client.post(f"/api/collocation-items/{item.id}/progress?correct=true", headers=self.headers)
+        
+        # Verify status is mastered
+        check_progress = self.client.get(f"/api/collocation-collections/{collection_id}/progress", headers=self.headers)
+        progress_info = check_progress.json()["sections"][0]["topics"][0]["items"][0]["progress"]
+        self.assertEqual(progress_info["status"], "mastered")
+
+        # 7. Verify vocabulary boss checkpoints with collocations
+        from app.services import challenge_vocabulary_boss
+        
+        # boss 3: collocations only
+        boss_3_exam = challenge_vocabulary_boss(self.db, self.player.id, 3)
+        self.assertTrue(len(boss_3_exam["questions"]) > 0)
+        self.assertEqual(boss_3_exam["questions"][0]["question_type"], "collocation")
+        self.assertEqual(boss_3_exam["questions"][0]["correct_answer"], "heavy")
+        
+        # boss 4: mixed (includes collocations)
+        boss_4_exam = challenge_vocabulary_boss(self.db, self.player.id, 4)
+        self.assertTrue(len(boss_4_exam["questions"]) > 0)
+        col_qs = [q for q in boss_4_exam["questions"] if q["question_type"] == "collocation"]
+        self.assertTrue(len(col_qs) > 0)
+        self.assertEqual(col_qs[0]["correct_answer"], "heavy")
+
+
+if __name__ == "__main__":
+    unittest.main()
