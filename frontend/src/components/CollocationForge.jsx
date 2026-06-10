@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import LevelBlock from './LevelBlock'
 
 // Familiarity → neon CSS class
 function neonClass(familiarity) {
@@ -67,21 +68,53 @@ function TopicProgressBox({ topic, isActive, onSelect }) {
   )
 }
 
+// Compute section-level completion from topics list (topics now carry section_id)
+function buildSectionStats(topics) {
+  const map = new Map()
+  for (const t of topics) {
+    const sid = t.section_id || t.section_order
+    if (!map.has(sid)) {
+      map.set(sid, { completed: 0, total: 0 })
+    }
+    const s = map.get(sid)
+    s.completed += t.completed_count || 0
+    s.total += t.item_count || 0
+  }
+  return map
+}
+
 function CollocationForge({ api }) {
+  const [levels, setLevels] = useState([])
+  const [selectedLevel, setSelectedLevel] = useState(null)
+  const [loadingLevels, setLoadingLevels] = useState(true)
+
   const [topics, setTopics] = useState([])
   const [selectedTopic, setSelectedTopic] = useState(null)
   const [items, setItems] = useState([])
-  const [loadingTopics, setLoadingTopics] = useState(true)
+  const [loadingTopics, setLoadingTopics] = useState(false)
   const [loadingItems, setLoadingItems] = useState(false)
   const [error, setError] = useState('')
   const [actionLoading, setActionLoading] = useState({})
   const [expandedSections, setExpandedSections] = useState(() => new Set())
 
   useEffect(() => {
-    loadTopics()
+    loadLevels()
   }, [])
 
   const sections = useMemo(() => groupBySection(topics), [topics])
+  const sectionStats = useMemo(() => buildSectionStats(topics), [topics])
+
+  async function loadLevels() {
+    try {
+      setLoadingLevels(true)
+      const data = await api('/collocations/levels')
+      setLevels(data)
+    } catch (err) {
+      setError(err.message || 'Failed to load levels')
+    } finally {
+      setLoadingLevels(false)
+    }
+  }
 
   async function loadTopics() {
     try {
@@ -100,6 +133,21 @@ function CollocationForge({ api }) {
     } finally {
       setLoadingTopics(false)
     }
+  }
+
+  function handleSelectLevel(level) {
+    setSelectedLevel(level)
+    setSelectedTopic(null)
+    setItems([])
+    setExpandedSections(new Set())
+    loadTopics()
+  }
+
+  function handleBackToLevels() {
+    setSelectedLevel(null)
+    setSelectedTopic(null)
+    setItems([])
+    setExpandedSections(new Set())
   }
 
   async function loadItems(topic) {
@@ -160,12 +208,51 @@ function CollocationForge({ api }) {
     }
   }
 
+  // ── Level entry screen ──
+  if (!selectedLevel) {
+    return (
+      <div className="coll-browser">
+        <div className="coll-browser__header">
+          <h3 className="coll-browser__title">
+            <span className="coll-browser__icon">📚</span>
+            Collocation Browser
+          </h3>
+          <p className="coll-browser__subtitle">
+            Choose a level to start browsing collocations.
+          </p>
+        </div>
+        {error && <div className="vocab-error-banner" role="alert">{error}</div>}
+        {loadingLevels
+          ? <div className="coll-topic-list__loading">Loading levels…</div>
+          : (
+            <div className="level-block-grid">
+              {levels.map(lv => (
+                <LevelBlock
+                  key={lv.id}
+                  level={lv}
+                  onSelect={handleSelectLevel}
+                  isActive={false}
+                />
+              ))}
+            </div>
+          )
+        }
+      </div>
+    )
+  }
+
   return (
     <div className="coll-browser">
       <div className="coll-browser__header">
         <h3 className="coll-browser__title">
-          <span className="coll-browser__icon">📚</span>
-          Collocation Browser
+          <button
+            type="button"
+            className="coll-back-btn"
+            onClick={handleBackToLevels}
+            aria-label="Back to levels"
+          >← Levels</button>
+          <span className="coll-browser__icon">{selectedLevel.icon}</span>
+          {selectedLevel.name}
         </h3>
         <p className="coll-browser__subtitle">
           Pick a section, open a topic, and add collocations to your flashcard deck.
@@ -184,6 +271,12 @@ function CollocationForge({ api }) {
 
           {sections.map(section => {
             const isOpen = expandedSections.has(section.section_order)
+            // Section-level completion stats (weighted from topics)
+            const statKey = section.topics[0]?.section_id || section.section_order
+            const stat = sectionStats.get(statKey) || { completed: 0, total: 0 }
+            const secPct = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : 0
+            const secRatio = secPct / 100
+
             return (
               <div key={section.section_order} className="coll-section-group">
                 <button
@@ -191,11 +284,13 @@ function CollocationForge({ api }) {
                   className={`coll-section-btn ${isOpen ? 'is-open' : ''}`}
                   onClick={() => toggleSection(section.section_order)}
                   aria-expanded={isOpen}
+                  style={{ '--coll-ratio': secRatio }}
                 >
                   <span className="coll-section-btn__chevron" aria-hidden="true">
                     {isOpen ? '▾' : '▸'}
                   </span>
                   <span className="coll-section-btn__title">{section.section_title}</span>
+                  <span className="coll-section-btn__pct">{secPct}%</span>
                   <span className="coll-section-btn__count">{section.topics.length}</span>
                 </button>
 

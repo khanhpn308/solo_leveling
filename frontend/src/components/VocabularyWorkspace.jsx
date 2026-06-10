@@ -6,6 +6,7 @@ import WordFamilyEvolution from './WordFamilyEvolution'
 import EchoChamber from './EchoChamber'
 import ErrorDungeon from './ErrorDungeon'
 import VocabularyBoss from './VocabularyBoss'
+import VocabularyLibrary from './VocabularyLibrary'
 
 const INITIAL_FORM = {
   word: '',
@@ -234,6 +235,13 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
   const [collFlashSelectedTopic, setCollFlashSelectedTopic] = useState(null)
   const [collFlashLoading, setCollFlashLoading] = useState(false)
 
+  // Vocab Library flashcard review state
+  const [vlFlashCards, setVlFlashCards] = useState([])
+  const [vlFlashLoading, setVlFlashLoading] = useState(false)
+  const [vlFlashCardIndex, setVlFlashCardIndex] = useState(0)
+  const [vlFlashShowAnswer, setVlFlashShowAnswer] = useState(false)
+  const [vlFlashCompleted, setVlFlashCompleted] = useState(false)
+
   // Error dungeon and boss states
   const [activeErrors, setActiveErrors] = useState([])
   const [bossStatus, setBossStatus] = useState(null)
@@ -411,6 +419,40 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
     }
   }
 
+  async function loadVlFlashCards() {
+    try {
+      setVlFlashLoading(true)
+      const data = await api('/vocab-library/flashcards/due')
+      setVlFlashCards(data)
+      setVlFlashCardIndex(0)
+      setVlFlashShowAnswer(false)
+      setVlFlashCompleted(false)
+    } catch (err) {
+      console.error('Failed to load vocab library flashcards', err)
+    } finally {
+      setVlFlashLoading(false)
+    }
+  }
+
+  async function handleVlReview(result) {
+    const card = vlFlashCards[vlFlashCardIndex]
+    try {
+      await api(`/vocab-library/words/${card.id}/flashcard/review`, {
+        method: 'POST',
+        body: JSON.stringify({ result }),
+      })
+    } catch (err) {
+      console.error('Failed to review vocab library flashcard', err)
+    }
+    const next = vlFlashCardIndex + 1
+    if (next >= vlFlashCards.length) {
+      setVlFlashCompleted(true)
+    } else {
+      setVlFlashCardIndex(next)
+      setVlFlashShowAnswer(false)
+    }
+  }
+
   const filteredItems = vocabularyItems.filter((item) => {
     const q = searchQuery.toLowerCase()
     return (
@@ -478,6 +520,13 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
             onClick={() => { setActiveTab('forge'); setIsFormOpen(false); }}
           >
             <span className="vocab-nav-icon">📚</span> Collocations
+          </button>
+          <button
+            className={`vocab-nav-btn ${activeTab === 'library' ? 'is-active' : ''}`}
+            type="button"
+            onClick={() => { setActiveTab('library'); setIsFormOpen(false); }}
+          >
+            <span className="vocab-nav-icon">📕</span> Vocabulary Library
           </button>
           <button
             className={`vocab-nav-btn ${activeTab === 'shadow-duel' ? 'is-active' : ''}`}
@@ -751,6 +800,13 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                   if (collFlashTopics.length === 0) loadCollFlashTopics()
                 }}
               >📚 Collocation</button>
+              <button
+                className={`flashcard-subtab-btn ${flashSubTab === 'vocab-library' ? 'is-active' : ''}`}
+                onClick={() => {
+                  setFlashSubTab('vocab-library')
+                  if (vlFlashCards.length === 0 && !vlFlashCompleted) loadVlFlashCards()
+                }}
+              >📕 Vocab Library</button>
             </div>
 
             {/* Vocabulary sub-tab (unchanged) */}
@@ -950,6 +1006,74 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                 setLoading={setCollFlashLoading}
               />
             )}
+
+            {/* Vocab Library flashcard sub-tab */}
+            {flashSubTab === 'vocab-library' && (
+              <div className="flashcard-gate-active">
+                {vlFlashLoading && <div className="vocab-loader">Loading Vocab Library cards…</div>}
+                {!vlFlashLoading && vlFlashCards.length === 0 && !vlFlashCompleted && (
+                  <div className="flashcard-gate-empty">
+                    <div className="gate-icon">📕</div>
+                    <h4>No vocab library cards due</h4>
+                    <p>Add words from <strong>Vocabulary Library</strong> to start reviewing.</p>
+                  </div>
+                )}
+                {!vlFlashLoading && vlFlashCompleted && (
+                  <div className="gate-victory-screen">
+                    <div className="victory-badge">SESSION DONE</div>
+                    <h4>All Vocab Library cards reviewed!</h4>
+                    <button className="system-button system-button--primary gate-exit-btn" onClick={() => {
+                      setVlFlashCompleted(false)
+                      loadVlFlashCards()
+                    }}>Review Again</button>
+                  </div>
+                )}
+                {!vlFlashLoading && vlFlashCards.length > 0 && !vlFlashCompleted && (() => {
+                  const card = vlFlashCards[vlFlashCardIndex]
+                  return (
+                    <div className="card-arena">
+                      <div className="arena-header">
+                        <span>VOCAB LIBRARY REVIEW</span>
+                        <span>Card {vlFlashCardIndex + 1} of {vlFlashCards.length}</span>
+                      </div>
+                      <div
+                        className={`flip-card ${vlFlashShowAnswer ? 'is-flipped' : ''}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={vlFlashShowAnswer}
+                        onClick={() => setVlFlashShowAnswer(s => !s)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVlFlashShowAnswer(s => !s) } }}
+                      >
+                        <div className="flip-card-inner">
+                          <div className="flip-card-front">
+                            <div className="card-title">Vocabulary Library</div>
+                            <h2 className="card-vocab-word">{card.word}</h2>
+                            {card.part_of_speech && <span className="card-pos-badge" style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', background: '#3b82f6', color: '#fff' }}>{card.part_of_speech}</span>}
+                            {card.pronunciation_us && <p className="card-pronunciation" style={{ fontStyle: 'italic', color: '#9ca3af' }}>/{card.pronunciation_us}/</p>}
+                            <p style={{ marginTop: '12px', color: 'rgba(230,237,243,0.5)', fontSize: '0.8rem' }}>Tap to reveal meaning</p>
+                          </div>
+                          <div className="flip-card-back">
+                            <div className="card-title">Meaning</div>
+                            {card.meaning_vi && <p className="card-meaning-vi" style={{ fontSize: '1.1rem', marginBottom: '8px' }}>{card.meaning_vi}</p>}
+                            {card.example_en && <p className="card-example" style={{ fontStyle: 'italic', color: '#9ca3af', fontSize: '0.85rem' }}>"{card.example_en}"</p>}
+                            {card.level_name && <p style={{ fontSize: '0.75rem', color: 'rgba(230,237,243,0.4)', marginTop: '8px' }}>{card.level_name} · {card.section_title}</p>}
+                          </div>
+                        </div>
+                      </div>
+                      {vlFlashShowAnswer && (
+                        <div className="review-buttons">
+                          {['again', 'hard', 'good', 'easy'].map(r => (
+                            <button key={r} className={`review-btn review-btn--${r}`} onClick={() => handleVlReview(r)}>
+                              {r.charAt(0).toUpperCase() + r.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
           </div>
         )}
 
@@ -1003,6 +1127,10 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
             api={api}
             onRefresh={loadData}
           />
+        )}
+
+        {activeTab === 'library' && (
+          <VocabularyLibrary api={api} />
         )}
       </main>
     </div>

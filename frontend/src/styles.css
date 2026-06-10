@@ -5342,11 +5342,58 @@ select:focus-visible {
 .target-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .target-save-msg { margin: 4px 0 0; font-size: 0.8125rem; color: var(--cyan, #7af0dd); }
 
+/* ── Level Block (shared: CollocationForge + VocabularyLibrary) ── */
+.level-block-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 16px 0; }
+
+.level-block {
+  width: 100%; padding: 14px 16px; border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(122,240,221, calc(0.08 + 0.45 * var(--level-ratio, 0)));
+  box-shadow:
+    0 0 calc(6px + 16px * var(--level-ratio, 0)) rgba(122,240,221, calc(0.10 + 0.40 * var(--level-ratio, 0))),
+    0 0 calc(12px + 32px * var(--level-ratio, 0)) rgba(122,240,221, calc(0.04 + 0.20 * var(--level-ratio, 0)));
+  cursor: pointer; text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.level-block:hover:not(:disabled) { transform: translateY(-2px); border-color: rgba(122,240,221,0.55); }
+.level-block.is-active {
+  border-color: var(--cyan, #7af0dd);
+  box-shadow: 0 0 18px rgba(122,240,221,0.65), 0 0 40px rgba(122,240,221,0.30);
+}
+.level-block.is-locked { opacity: 0.45; cursor: not-allowed; }
+
+.level-block__top { display: flex; align-items: center; gap: 8px; }
+.level-block__icon { font-size: 1.3rem; flex-shrink: 0; }
+.level-block__name { flex: 1; font-size: 0.9rem; font-weight: 700; color: var(--text, #e6edf3); }
+.level-block__pct { font-size: 0.85rem; font-weight: 800; color: var(--cyan, #7af0dd); }
+.level-block__lock { font-size: 0.9rem; }
+
+.level-block__bar {
+  height: 5px; border-radius: 3px;
+  background: rgba(255,255,255,0.08); overflow: hidden;
+}
+.level-block__bar-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(to right, rgba(88,166,255,0.7), var(--cyan, #7af0dd));
+  transition: width 0.4s cubic-bezier(0.22,1,0.36,1);
+}
+.level-block__stats { font-size: 0.7rem; color: var(--text-muted, rgba(230,237,243,0.45)); }
+
 /* ── Collocation Browser (CollocationForge) ── */
 .coll-browser { display: flex; flex-direction: column; gap: 0; height: 100%; }
 .coll-browser__header { padding: 16px 0 12px; border-bottom: 1px solid var(--line, rgba(255,255,255,0.07)); margin-bottom: 0; }
 .coll-browser__title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 1.05rem; font-weight: 700; color: var(--text, #e6edf3); }
 .coll-browser__icon { font-size: 1.1rem; }
+
+/* Back button in level-drill header */
+.coll-back-btn {
+  background: transparent; border: 1px solid rgba(122,240,221,0.25); border-radius: 6px;
+  color: var(--cyan, #7af0dd); font-size: 0.8rem; font-weight: 600;
+  padding: 3px 10px; cursor: pointer; flex-shrink: 0;
+  transition: background 0.1s, border-color 0.1s;
+}
+.coll-back-btn:hover { background: rgba(122,240,221,0.08); border-color: rgba(122,240,221,0.55); }
 .coll-browser__subtitle { margin: 0; font-size: 0.8125rem; color: var(--text-muted, rgba(230,237,243,0.5)); }
 
 .coll-browser__body { display: flex; gap: 0; flex: 1; min-height: 0; overflow: hidden; margin-top: 0; }
@@ -5361,14 +5408,23 @@ select:focus-visible {
 .coll-section-btn {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 9px 10px; background: transparent;
-  border: 1px solid transparent; border-radius: 8px;
-  cursor: pointer; text-align: left;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  border: 1px solid rgba(122,240,221, calc(0.04 + 0.20 * var(--coll-ratio, 0)));
+  border-radius: 8px; cursor: pointer; text-align: left;
+  box-shadow: 0 0 calc(4px + 10px * var(--coll-ratio, 0)) rgba(122,240,221, calc(0.05 + 0.25 * var(--coll-ratio, 0)));
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .coll-section-btn:hover { background: rgba(255,255,255,0.04); }
-.coll-section-btn.is-open { background: rgba(122,240,221,0.06); border-color: rgba(122,240,221,0.18); }
+.coll-section-btn.is-open {
+  background: rgba(122,240,221,0.06);
+  border-color: rgba(122,240,221, calc(0.18 + 0.30 * var(--coll-ratio, 0)));
+  box-shadow: 0 0 calc(6px + 14px * var(--coll-ratio, 0)) rgba(122,240,221, calc(0.10 + 0.30 * var(--coll-ratio, 0)));
+}
 .coll-section-btn__chevron { font-size: 0.7rem; color: var(--cyan, #7af0dd); width: 12px; flex-shrink: 0; }
 .coll-section-btn__title { flex: 1; font-size: 0.875rem; font-weight: 700; color: var(--text, #e6edf3); line-height: 1.25; }
+.coll-section-btn__pct {
+  font-size: 0.72rem; font-weight: 700; color: var(--cyan, #7af0dd); flex-shrink: 0;
+  min-width: 32px; text-align: right;
+}
 .coll-section-btn__count {
   font-size: 0.7rem; font-weight: 600; color: var(--text-muted, rgba(230,237,243,0.45));
   background: rgba(255,255,255,0.05); border-radius: 10px; padding: 1px 8px; flex-shrink: 0;
@@ -5497,3 +5553,26 @@ select:focus-visible {
 
 /* ── Flip-back button ── */
 .coll-flip-back-btn { background: transparent !important; border: 1px solid rgba(255,255,255,0.15) !important; color: var(--text-muted, rgba(230,237,243,0.5)) !important; }
+
+
+/* ── Vocabulary Library (VocabularyLibrary.jsx) ── */
+.vl-shell { display: flex; flex-direction: column; gap: 12px; height: 100%; overflow-y: auto; padding: 4px 0; }
+
+.vl-nav { padding: 4px 0 8px; border-bottom: 1px solid var(--line, rgba(255,255,255,0.07)); }
+
+.vl-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: 0.8rem; color: var(--text-muted, rgba(230,237,243,0.5)); }
+.vl-breadcrumb__link { background: transparent; border: none; color: var(--cyan, #7af0dd); font-size: 0.8rem; cursor: pointer; padding: 0; text-decoration: underline; }
+.vl-breadcrumb__link:hover { opacity: 0.8; }
+.vl-breadcrumb__current { color: var(--text, #e6edf3); font-weight: 600; }
+.vl-breadcrumb__sep { opacity: 0.4; }
+
+/* Vocabulary Library drill grid — larger boxes than 2-col collocation grid */
+.coll-topic-box-grid.vl-drill-grid {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.vl-drill-grid .coll-topic-box { min-height: 90px; }
+.vl-drill-grid .coll-topic-box__content { min-height: 90px; padding: 10px 12px; }
+.vl-drill-grid .coll-topic-box__title { font-size: 0.85rem; -webkit-line-clamp: 3; }
+.vl-drill-grid .coll-topic-box__pct { font-size: 1.05rem; }
+.vl-drill-grid .coll-topic-box__frac { font-size: 0.72rem; }

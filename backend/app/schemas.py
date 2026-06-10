@@ -1093,11 +1093,28 @@ class RankExamStatusOut(BaseModel):
 # I4-2: Collocation flashcard browser + review schemas
 # ---------------------------------------------------------------------------
 
+class CollocationLevelOut(BaseModel):
+    """A collocation difficulty level, returned by GET /api/collocations/levels."""
+    id: int
+    name: str
+    difficulty_order: int
+    icon: str
+    collection_count: int = 0
+    total_words: int = 0
+    completed_words: int = 0
+    pct: float = 0.0
+    locked: bool = True
+
+    class Config:
+        from_attributes = True
+
+
 class CollocationBrowseTopicOut(BaseModel):
     """A topic with its section context, returned by GET /api/collocations/topics."""
     id: int
     title: str
     topic_order: int
+    section_id: int = 0
     section_title: str
     section_order: int
     item_count: int = 0
@@ -1164,3 +1181,90 @@ class CollocationReviewIn(BaseModel):
 
 
 
+
+
+# ── Vocabulary Library schemas ──────────────────────────────────────────────
+
+class VocabLevelOut(BaseModel):
+    id: int
+    name: str
+    difficulty_order: int
+    icon: str
+    total_words: int = 0
+    completed_words: int = 0
+    pct: float = 0.0
+    locked: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+class VocabTopicOut(BaseModel):
+    id: int
+    level_id: int
+    title: str
+    topic_order: int
+    total_words: int = 0
+    completed_words: int = 0
+    pct: float = 0.0
+
+    class Config:
+        from_attributes = True
+
+
+class VocabUnitOut(BaseModel):
+    id: int
+    topic_id: int
+    title: str
+    unit_number: int | None = None
+    unit_order: int
+    total_words: int = 0
+    completed_words: int = 0
+    pct: float = 0.0
+
+    class Config:
+        from_attributes = True
+
+
+class VocabSectionOut(BaseModel):
+    id: int
+    unit_id: int
+    title: str
+    section_letter: str | None = None
+    section_order: int
+    total_words: int = 0
+    completed_words: int = 0
+    pct: float = 0.0
+
+    class Config:
+        from_attributes = True
+
+
+class VocabWordOut(BaseModel):
+    id: int
+    section_id: int
+    word: str
+    part_of_speech: str | None = None
+    pronunciation_us: str | None = None
+    meaning_vi: str | None = None
+    example_en: str | None = None
+    example_vi: str | None = None
+    item_order: int = 0
+    effective_familiarity: str = "again"
+    is_added: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class VocabReviewIn(BaseModel):
+    result: str  # again | hard | good | easy
+
+
+class VocabFlashcardDueOut(VocabWordOut):
+    """A vocab library flashcard that is due for review."""
+    familiarity: str = "again"
+    familiarity_set_at: datetime | None = None
+    section_title: str = ""
+    unit_title: str = ""
+    level_name: str = ""

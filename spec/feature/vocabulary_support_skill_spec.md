@@ -248,21 +248,122 @@ Full multi-type card support (`reverse_recall`, `sentence_gap`, etc.) is **not y
 
 **Browser UI (`CollocationForge.jsx`):**
 - Layer 1: Section accordion (click to expand, chevron, topic count badge)
-- Layer 2: Topic progress box grid (2 columns) — each box shows title, `%`, `done/total`, bottom-up fill animation, neon halo scaling with `--coll-ratio` (0→1), `cursor: pointer`
+- Layer 2: Topic progress box grid (2 columns) — each box shows title, `%`, `done/total`, bottom-up fill animation, neon halo scaling with `--coll-ratio` (0→1)
 - Layer 3: Collocation item cards (neon color = `effective_familiarity`), Add/Remove flashcard buttons
 - Post-mutation refresh: both item list and topic progress counts update live
+
+**Topic box neon system (`.coll-topic-box`):**
+
+Each topic box carries two CSS custom properties set inline by `TopicProgressBox`:
+
+| Property | Value | Purpose |
+|---|---|---|
+| `--coll-ratio` | `completed_count / item_count` (0.0 → 1.0) | Scales neon intensity |
+| `--coll-pct` | `"${pct}%"` string | Drives the bottom-up fill span width |
+
+The neon border and glow are computed entirely in CSS via `calc()` — no JavaScript animation:
+
+```css
+/* Border opacity: 0.10 at 0% → 0.55 at 100% */
+border: 1px solid rgba(122,240,221, calc(0.10 + 0.45 * var(--coll-ratio, 0)));
+
+/* Inner glow: blur 8px→26px, opacity 0.12→0.57 */
+/* Outer glow: blur 16px→56px, opacity 0.05→0.30 */
+box-shadow:
+  0 0 calc(8px  + 18px * var(--coll-ratio, 0)) rgba(122,240,221, calc(0.12 + 0.45 * var(--coll-ratio, 0))),
+  0 0 calc(16px + 40px * var(--coll-ratio, 0)) rgba(122,240,221, calc(0.05 + 0.25 * var(--coll-ratio, 0)));
+```
+
+State overrides:
+
+| State | CSS class | Border | Box-shadow |
+|---|---|---|---|
+| Default (0–100%) | — | scales with `--coll-ratio` | scales with `--coll-ratio` |
+| Hover | `:hover` | `rgba(122,240,221,0.55)` fixed | inherits ratio glow + translateY(-1px) |
+| Active/selected | `.is-active` | `var(--cyan)` full | 14px + 34px + 64px fixed cyan glow |
+
+The fill span (`.coll-topic-box__fill`) is absolutely positioned, bottom-anchored, height = `--coll-pct`, background gradient cyan→blue — provides the liquid fill visual separate from the neon border.
+
+**Data model — `CollocationItem` fields (actual columns):**
+
+| Field | Type | Notes |
+|---|---|---|
+| `collocation` | `String(255)` | The phrase (e.g. "make a decision") |
+| `pronunciation_us` | `String(255)` nullable | IPA for US pronunciation |
+| `meaning_vi` | `Text` nullable | Vietnamese meaning |
+| `example_en` | `Text` nullable | English example sentence |
+| `example_vi` | `Text` nullable | Vietnamese translation of example |
+| `collocation_type` | `String(100)` nullable | Grammatical pattern (e.g. "verb + noun") |
+| `item_order` | `Integer` | Order within topic |
+
+**Flashcard state — `CollocationFlashcard` fields:**
+
+| Field | Type | Notes |
+|---|---|---|
+| `player_id` | FK → `players` | Scoped to player |
+| `campaign_id` | FK → `campaigns` | Scoped to campaign |
+| `collocation_item_id` | FK → `collocation_items` | Unique per player+campaign+item |
+| `familiarity` | `String(10)` | `"again"` / `"hard"` / `"good"` / `"easy"` |
+| `familiarity_set_at` | `DateTime` nullable | `None` until first review; set on each grade |
+
+**Add/remove flashcard rules:**
+- Add: creates row with `familiarity = "again"`, `familiarity_set_at = None`. Idempotent — if already exists, no-op (unless `easy` → resets to `"again"`).
+- Re-add graduated (`easy`) card: resets `familiarity = "again"`, `familiarity_set_at = None`.
+- Remove: hard-deletes the `CollocationFlashcard` row; item remains browsable in Forge.
+- Guard: `familiarity == "easy"` items show no "Remove" button in UI — must re-add to reset.
+
+**Completion % computation (backend, not frontend):**
+
+`GET /api/collocations/topics` applies `effective_familiarity()` lazy decay per row on read:
+```python
+completed_count = count of rows where effective_familiarity(fam, set_at, now) in ("hard", "good", "easy")
+```
+This means a card that decayed from `good` back to `again` no longer counts toward `%` — the % can go *down* without any explicit player action.
+
+**Collocation flashcard review flow (card arena in Flashcard Gate → Collocation sub-tab):**
+
+1. Player picks a topic from topic picker (shows topics with ≥1 non-graduated card).
+2. Cards loaded: `GET /api/collocations/flashcard/topics/{id}` — only non-graduated (`familiarity != "easy"`) cards, effective decay applied.
+3. Flip card (tap anywhere) → see `collocation`, pronunciation, `collocation_type` on front; `meaning_vi`, `example_en`, `example_vi` on back.
+4. Grade button → `POST /api/collocations/{item_id}/flashcard/review` with `{ result: "again"|"hard"|"good"|"easy" }`.
+5. Backend sets `familiarity = result`, `familiarity_set_at = utcnow()`, then calls `try_autocomplete_collocation_forge()`.
+6. If 5 distinct items reviewed today → quest `daily_slot_code = "vocab_collocation"` auto-completed.
+7. Frontend advances to next card. After last card → "SESSION COMPLETE" screen.
 
 **API endpoints (actual):**
 
 ```text
-GET    /api/collocations/topics                       — all topics with item_count + completed_count
-GET    /api/collocations/topics/{id}/items            — items with effective_familiarity + is_added
-POST   /api/collocations/{item_id}/flashcard          — add to deck (familiarity_set_at=None)
-DELETE /api/collocations/{item_id}/flashcard          — remove from deck
-POST   /api/collocations/{item_id}/flashcard/review   — grade (again/hard/good/easy) + autocomplete check
-GET    /api/collocations/flashcard/topics             — topics with non-graduated cards (for review picker)
-GET    /api/collocations/flashcard/topics/{id}        — cards for a topic (non-graduated only)
+GET    /api/collocations/topics                       — all topics for campaign, with item_count + completed_count (decay-aware)
+GET    /api/collocations/topics/{id}/items            — items in topic, with effective_familiarity + is_added
+POST   /api/collocations/{item_id}/flashcard          — add to deck (familiarity=again, familiarity_set_at=None)
+DELETE /api/collocations/{item_id}/flashcard          — remove from deck (hard-delete row)
+POST   /api/collocations/{item_id}/flashcard/review   — grade (again/hard/good/easy), set familiarity_set_at, trigger autocomplete
+GET    /api/collocations/flashcard/topics             — topics with ≥1 non-graduated card (for review picker)
+GET    /api/collocations/flashcard/topics/{id}        — non-graduated cards in topic, effective decay applied
 ```
+
+**Current browse terminology vs UI label:** the code hierarchy is `Collection → Section → Topic → Item`. In the sidebar, the accordion buttons (e.g. "Work and study") are **Sections** (`coll-section-btn`); the neon `--coll-ratio` boxes inside them are **Topics** (`TopicProgressBox`). When the user says "topic Work and Study", they mean the **Section** accordion row.
+
+#### 3.3.x. Planned additions to Collocation Forge 🔵 PLANNED
+
+> **Status:** Specified, not yet built. Two changes bring Collocation Forge to parity with the planned Vocabulary Library (§3.11).
+
+**A. Add a Level (difficulty band) layer above Collection.**
+
+- New top layer: **Level** (bí kíp / difficulty band), same concept as Vocabulary Library §3.11.1.
+- The current seed (`Campaign 1–3 Month 3–6`, collection) is assigned to Level **Intermediate**.
+- When the user opens Collocation Forge, the entry screen shows Level blocks first — a book/manual ("bí kíp võ công") card with a **horizontal progress bar** at the bottom (Level% = weighted completed items / total items), identical styling to Vocabulary Library §3.11.7.
+- Clicking a Level drills into its Collections/Sections as today.
+- New hierarchy: `Level → Collection → Section → Topic → Item`.
+
+**B. Add neon progress wrapper to the Section accordion row.**
+
+- Today the Section accordion button (`.coll-section-btn`, e.g. "Work and study") shows only title + topic-count badge — **no % and no neon**.
+- Add a completion % and neon halo to the Section row, reusing the `--coll-ratio` neon system (§3.3 topic-box neon).
+- Section% = weighted `completed_items / total_items` across all its topics (decay-aware, computed backend-side like topic %).
+- The existing Topic boxes inside keep their current neon — this only adds the missing wrapper at the Section level.
+
+**Completion % is weighted at every level** (completed items / total items counted at the Item leaf), consistent with §3.11.6 — never an average of child percentages.
 
 ---
 
@@ -362,6 +463,139 @@ GET    /api/collocations/flashcard/topics/{id}        — cards for a topic (non
 ### 3.10. Context Hunt ❌ NOT STARTED
 
 Planned future feature. No DB table, no component, no API. Low priority.
+
+---
+
+### 3.11. Vocabulary Library (Codex Archive reorganization) 🔵 PLANNED
+
+> **Status:** Specified, not yet built. This is the next planned change — reorganize Codex Archive into a multi-level curriculum browser that mirrors the Collocation Forge pattern. Confirmed business rules below.
+
+**Motivation:** Today the Codex Archive only holds user-entered words (free-form CRUD). We are adding a **curriculum-seeded vocabulary library** sourced from leveled textbooks, browsable through a fixed hierarchy and reviewable with the same flashcard/familiarity engine as Collocation Forge.
+
+#### 3.11.1. The 5-level hierarchy
+
+Vocabulary content is organized into **5 nested levels** (one more level than Collocation's 3):
+
+```text
+Level (difficulty band)          e.g. Elementary, pre-intermediate_intermediate, Upper Intermediate, Advanced
+└── Topic                        e.g. "The World Around Us", "People"
+    └── Unit                     e.g. "Unit 5: Country, nationality and language"
+        └── Section              e.g. "A. Who speaks what where?"
+            └── Word (vocab item)  ← vocabulary entries live ONLY at the Section leaf
+```
+
+- **Level** = difficulty band. When the user opens Codex Archive, they first see the list of vocabulary sets ordered by ascending difficulty: `Elementary → pre-intermediate_intermediate → Upper Intermediate → Advanced`.
+- Clicking a Level reveals its Topics; clicking a Topic reveals its Units; clicking a Unit reveals its Sections; clicking a Section reveals the vocabulary words.
+- **Words are displayed only at the deepest Section node** — never at Level/Topic/Unit nodes.
+- Example navigation path: `pre-intermediate_intermediate` → Topic `The World Around Us` → Unit `Country, nationality and language` → Section `A. Who speaks what where?` → word list.
+
+(Compare: Collocation Forge is `Collection → Section → Topic → Item`, 3 browse levels with items at the leaf. Vocabulary is `Level → Topic → Unit → Section → Word`, 4 browse levels with words at the leaf.)
+
+#### 3.11.2. Seed source format
+
+Source file (first set): `material/vocabularies/pre-intermediate_intermediate/vocab.md`.
+
+Markdown parsing rules (derived from the actual file):
+
+| Markdown pattern | Maps to |
+|---|---|
+| `# Topic: <name>` or `# Vocabulary Topic: <name>` | Topic |
+| `## Unit N: <name>` | Unit |
+| `### <Letter>. <name>` (e.g. `### A. Who speaks what where?`) | Section |
+| Pipe table with header `collocation / từ vựng \| từ loại \| phiên âm (US) \| nghĩa \| ví dụ \| nghĩa tiếng việt của ví dụ` | One vocabulary Word per row |
+
+The Level is **not** in the file body — it is inferred from the folder name (`pre-intermediate_intermediate`), assigned at seed time.
+
+**Word row → fields:**
+
+| Table column (the standard table) | Source |
+|---|---|
+| `word` / collocation phrase | `collocation / từ vựng` |
+| `part_of_speech` | `từ loại` (e.g. noun, verb, adjective, noun phrase, phrasal verb) |
+| `pronunciation` (US IPA) | `phiên âm (US)` |
+| `meaning_vi` | `nghĩa` |
+| `example_en` | `ví dụ` |
+| `example_vi` | `nghĩa tiếng việt của ví dụ` |
+
+#### 3.11.3. Special-table handling decision
+
+Some sections (e.g. `A. Who speaks what where?`) contain a **second, non-standard table** with columns `Country / Nationality / Language` (3 paired phonetic columns). **Decision: skip these special tables.** Only parse tables that match the standard 6-column shape above. The Country/Nationality/Language reference table is ignored at seed time.
+
+#### 3.11.4. Seed vs user-CRUD separation
+
+**Decision: curriculum-seeded vocabulary and user-entered words are separate sources** — mirroring how Collocation Forge keeps the seeded `collocation_items` browse catalog separate from review state.
+
+- The seeded library is a **fixed browse catalog** (read-only reference content shared across players, like `collocation_collections`).
+- User browses the library and **adds words to their flashcard deck** (per-player/campaign review state, like `collocation_flashcards`).
+- Free-form user-entered words (existing Codex CRUD) remain a **separate area** — seed content does NOT pour into each user's `vocabulary_items`. This keeps curriculum updatable centrally without touching user data.
+
+#### 3.11.5. Learning mechanics — identical to Collocation Forge
+
+**Decision: reuse the Collocation Forge engine wholesale.** The vocabulary library gets the exact same review mechanics:
+
+- Per-word flashcard with `familiarity` ∈ {`again`, `hard`, `good`, `easy`}.
+- `effective_familiarity()` lazy decay — 1 tier per 7 days, `easy` never decays, `easy` graduates.
+- A word "counts as 1 point" toward completion when its **effective** familiarity ∈ {hard, good, easy} — i.e. any state other than `again` and not-yet-added.
+- Neon progress boxes with `--coll-ratio`-style scaling (see §3.3 neon system).
+- Add/remove flashcard, re-add graduated resets to `again`.
+- Same tap-to-flip card UI.
+
+**Implication for new schema:** new tables paralleling the Collocation set will be needed (e.g. `vocab_levels`, `vocab_topics`, `vocab_units`, `vocab_sections`, `vocab_library_items`, `vocab_library_flashcards`) — final names TBD at planning time. These are distinct from the existing `vocabulary_*` tables (which back the user-CRUD Codex and the network/family/error features). See Open Decision #6.
+
+#### 3.11.6. Completion % shown at every level (weighted count, not average)
+
+Every node at every level (Level, Topic, Unit, Section) displays its own completion %. The % is **always computed by counting words at the leaf** — never by averaging child percentages.
+
+**Decision: weighted (total completed words / total words), consistent with Collocation Forge.**
+
+For any node, regardless of depth:
+```
+node_completion_% = (count of words under node with effective_familiarity ∈ {hard, good, easy})
+                  / (total count of words under node)
+```
+
+- **Section%** = completed words in section / total words in section.
+- **Unit%** = completed words across ALL its sections / total words across ALL its sections.
+- **Topic%** = completed words across ALL its units / total words across ALL its units.
+- **Level%** = completed words across ALL its topics / total words across ALL its topics.
+
+This is weighted, not a simple average of children — a section with 8 words influences its Unit% four times more than a section with 2 words. Example: Section A = 2/2 (100%) + Section B = 2/8 (25%) → Unit% = 4/10 = **40%** (not the 62.5% a naive average of percentages would give).
+
+**Implementation note:** backend computes all level %s from a single decay-aware count over leaf flashcards (same approach as `GET /api/collocations/topics`), aggregated by the hierarchy — there is no stored "% per node".
+
+#### 3.11.7. Difficulty-band selection UI (Level blocks)
+
+When the user opens Codex Archive, the entry screen shows the difficulty bands as a row/grid of **blocks**, ordered by ascending difficulty:
+
+```text
+Elementary  →  pre-intermediate_intermediate  →  Upper Intermediate  →  Advanced
+```
+
+Each Level block is a "martial-arts manual" (bí kíp võ công) card:
+
+| Element | Spec |
+|---|---|
+| Icon | A book/tome icon (📖 / 📕) — themed as a secret-technique manual |
+| Title | Level name |
+| Progress bar | A **horizontal progress bar** at the bottom of the block, filling left→right to Level% (weighted per §3.11.6). This is a flat horizontal bar — NOT the vertical bottom-up neon fill used by Collocation topic boxes. |
+| State | Locked/dim if the level has no linked content yet; active if seeded |
+
+Clicking a Level block drills into its Topics.
+
+#### 3.11.8. Drill-level UI (Topic / Unit / Section) — reuse Collocation neon boxes
+
+Below the Level blocks, the Topic → Unit → Section drill levels reuse the **Collocation Forge neon box pattern** (§3.3 neon system), NOT the horizontal bar:
+
+- Each Topic / Unit / Section is a neon box with vertical bottom-up fill (`--coll-pct`) and neon halo scaling with `--coll-ratio`.
+- Each box shows its title, weighted completion %, and `done/total` word count.
+- Clicking drills one level deeper; the Section leaf reveals the word list (with add-to-flashcard + tap-to-flip review).
+
+**Summary of the two visual styles:**
+
+| Level | Visual |
+|---|---|
+| Level (difficulty band) | Book/manual block + **horizontal progress bar** |
+| Topic / Unit / Section | Collocation-style **neon box, vertical bottom-up fill** |
 
 ---
 
@@ -650,3 +884,5 @@ Risks:
 | 3 | Should Context Hunt be a standalone tab or part of Codex? | Open |
 | 4 | Should Lexical Checkpoint Boss requirements be computed live or cached/snapshotted? | Open — currently stub; real data needed |
 | 5 | Should `compute_vocabulary_xp` eventually be replaced with event-driven XP transactions? | Open — current recompute model is simple but may drift from intent as features grow |
+| 6 | New table names for the Vocabulary Library (§3.11) — reuse/extend existing `vocabulary_topics` or create a fresh `vocab_*` table family? | Open — recommend fresh family to avoid colliding with Word Network Tree's `vocabulary_topics`; decide at planning |
+| 7 | Does the seeded Vocabulary Library award XP on review (like the recompute model), or stay XP-neutral like collocation review? | Open — collocation review awards no direct XP; library should likely match |

@@ -1,6 +1,6 @@
 # IELTS Quest Dashboard Tasks
 
-Last updated: `2026-06-10` (session 8l-C — **C-1 + C-2 COMPLETE + gap-checked**. Parser rewritten: `_Section:_` → CollocationSection (10), `## N.` → CollocationTopic (60, topic_number=N). Global dedup. Volume mount added. Suite: **68/0/1 BE**. Parser smoke: 10 sections / 60 topics / 1409 unique items.)
+Last updated: `2026-06-10` (session 8n+3 — **planned: Vocab Library 5-layer + Collocation Level/Section upgrade** (7 tasks B1–B3, A1–A4). Open Decision #6/#7 locked. See plan block below. Previously: session 8l-C — **C-1 + C-2 COMPLETE + gap-checked**. Parser rewritten: `_Section:_` → CollocationSection (10), `## N.` → CollocationTopic (60, topic_number=N). Global dedup. Volume mount added. Suite: **68/0/1 BE**. Parser smoke: 10 sections / 60 topics / 1409 unique items.)
 
 ## Session Resume
 
@@ -36,7 +36,7 @@ All completed tasks have been archived and moved to [tasks-done.md](tasks-done.m
 
 ## Planned (not yet implemented)
 
-*(none — all current tasks complete)*
+- **Vocabulary Library (5-layer) + Collocation Forge Level/Section upgrade** — planned session 8n+3. Full task breakdown below (`Implementation Plan: Vocab Library + Collocation Level/Section`). Order: **B (Collocation) first → A (Vocab)**. 7 tasks: B1–B3, A1–A4. Plan file: `~/.claude/plans/s-d-ng-codegraph-glittery-finch.md`.
 
 ---
 
@@ -1131,6 +1131,130 @@ Root cause: `seed.py:ensure_player()` used `Player.first()` — nondeterministic
 > - **#4 re-add:** re-adding a graduated (`easy`) card resets familiarity to `again`.
 > - **#4 XP / quest link:** reviewing collocation flashcards is **not** direct XP. Instead, reviewing **5 distinct collocations in a day** auto-`complete`s the "Collocation Forge" daily quest (Task I4-7); the user still Claims for +5 Vocabulary XP. (This makes Collocation Forge the only evidence-backed quest; all others stay honor-system.)
 > - **#4 card/flashcard UX:** own table `collocation_flashcards`, add-to-flashcard, neon decay 1 tier/7d, easy-graduates, 2-way flip.
+
+---
+
+# Implementation Plan: Vocab Library (5-layer) + Collocation Level/Section (2026-06-10)
+
+**Owner:** khanhpn308 · **Grilled + locked:** session 8n+3 · **Type:** Backend (Alembic + API + seed) + Frontend (new components + CSS)
+**Order:** **TASK B first (Collocation upgrade) → TASK A (Vocab Library)** — B yields a reusable `LevelBlock` component (FE) + weighted-% completion helper (BE) that A reuses.
+**Source of truth:** `spec/feature/vocabulary_support_skill_spec.md` §3.3, §3.3.x, §3.11, §11. Full plan: `~/.claude/plans/s-d-ng-codegraph-glittery-finch.md`.
+
+## Locked Decisions
+
+| # | Decision | Chốt |
+|---|---|---|
+| **Open Decision #6** (vocab table names) | New `vocab_*` family, separate from `vocabulary_*` (Word Network) | `vocab_levels`, `vocab_topics`, `vocab_units`, `vocab_sections`, `vocab_library_items`, `vocab_library_flashcards` |
+| **Open Decision #7** (library review XP) | **XP-neutral** — review only updates `familiarity`/`familiarity_set_at`; does NOT touch `compute_vocabulary_xp` | same as Collocation |
+| Level layer for Collocation | New entity table **`collocation_levels`** (id, name, difficulty_order, icon) + `collocation_collections.level_id` FK | existing collection → Level "Intermediate" |
+| Flashcard table (A) | Separate **`vocab_library_flashcards`** (FK → `vocab_library_items`), scope `player_id`+`campaign_id` | mirrors `collocation_flashcards` |
+| Library UI position | **New tab "Vocabulary Library"** in `VocabularyWorkspace.jsx`; existing `codex` user-CRUD tab UNCHANGED | §3.11.4 separation |
+| Target component | **ONLY `VocabularyWorkspace.jsx`** (real entry point §2.2). `VocabularyOverlay.jsx` = legacy, do NOT touch | |
+| Quest trigger (A) | Library review does **NOT** trigger any daily quest | out of §3.11 scope |
+
+## Key facts (verified via codegraph)
+
+- `effective_familiarity()` (`services.py:869`) is a **pure fn** — reuse for both collocation & vocab, no copy.
+- Volume mount **already present**: `./material/vocabularies:/app/material/vocabularies:ro` (docker-compose.yml:40) — do NOT edit compose.
+- Only `material/vocabularies/pre-intermediate_intermediate/vocab.md` exists; Elementary/Upper Intermediate/Advanced have no file → render **locked/dim**.
+- `vocab.md` Section A contains a 2nd "Country / Nationality / Language" table that MUST be skipped (§3.11.3) — detect by header row (1st col ≠ `collocation / từ vựng`).
+- Next migrations: `20260610_21_*`, `20260610_22_*` (latest on disk: `20260609_20`).
+- % is **weighted at every layer** (count completed words / total words at the leaf), NEVER an average of child %s (§3.11.6). Example: Sec A 2/2 + Sec B 2/8 → Unit 4/10 = 40%.
+
+---
+
+## TASK B — Collocation Forge upgrade (DO FIRST)
+
+### Task B1: Migration + model `collocation_levels` + FK `collocation_collections.level_id` ✅ DONE
+**Goal:** Add a Level entity layer above Collection.
+**Scope (S, ~3 files):** `backend/alembic/versions/20260610_21_add_collocation_levels.py`, `backend/app/models.py`, `backend/app/seed.py`.
+**Done criteria:**
+- [x] Table `collocation_levels`: `id`, `name`(unique), `difficulty_order`(int), `icon`(String default "📕"), `created_at`. `upgrade()`+`downgrade()`.
+- [x] `collocation_collections` adds nullable FK `level_id` → `collocation_levels.id`. Keep old `level:String(20)` column as-is (do not drop).
+- [x] Model `CollocationLevel` + relationship `collections`; `CollocationCollection.level_id` + `.coll_level`.
+- [x] Seed `ensure_collocation_levels(db)` creates 4 levels (Elementary=1, Intermediate=2, Upper Intermediate=3, Advanced=4); `ensure_collocations` assigns existing collection (`code="intermediate-collocations"`) to "Intermediate". Idempotent (get-or-create).
+**Verified:** `alembic upgrade head` → head=`20260610_21`; `POST /api/dev/reset` ×2 sạch; DB: 4 rows `collocation_levels`; models import OK.
+**Gap check:** [x] Migration downgrade() drop FK before table; old `level` String(20) giữ nguyên; seed guard get_or_create; no existing test broken.
+
+### Task B2: Backend — weighted-% helper + Level list + Section% field ✅ DONE
+**Goal:** API returns Level list (with Level%) and adds Section% to browse.
+**Scope (M, ~3 files):** `backend/app/services.py` (helper), `backend/app/main.py` (`/api/collocations/*`), `backend/app/schemas.py`.
+**Done criteria:**
+- [x] Shared helper `compute_collocation_completion(db, player_id, campaign_id, collection_ids, now)` in `services.py`: 2 queries (total items + flashcard rows), applies `effective_familiarity()`, returns grains by topic/section/collection/level. No N+1.
+- [x] `GET /api/collocations/levels` → `[{id, name, difficulty_order, icon, collection_count, completed_words, total_words, pct, locked}]` (pct weighted; locked when total_words=0).
+- [x] `GET /api/collocations/topics` (existing) refactored to use helper; adds `section_id` field (additive — all old fields preserved).
+- [x] Schemas: `CollocationLevelOut` (new); `CollocationBrowseTopicOut` extended with `section_id` (default 0, additive).
+**Verified:** imports OK; `/api/collocations/levels` returns 4 levels locked=True (no file mounted); `/api/collocations/topics` returns [] (no data) — shape intact.
+**Gap check:** [x] Old fields in CollocationBrowseTopicOut all preserved; helper uses shared `effective_familiarity`; level lock logic correct (total_words==0 → locked).
+
+### Checkpoint B-backend
+- [ ] pytest pass · seed reset clean · both endpoints return correct weighted % (level total == Σ topic).
+
+### Task B3: Frontend — `LevelBlock` component + Level entry screen + Section neon ✅ DONE
+**Goal:** Collocation entry shows Level blocks (bí kíp + horizontal bar); Section accordion gets % + neon.
+**Scope (M, ~3 files):** `frontend/src/components/LevelBlock.jsx` (NEW, reusable), `frontend/src/components/CollocationForge.jsx`, `frontend/src/styles.css`.
+**Done criteria:**
+- [x] `LevelBlock.jsx` reusable: props `{ level, onSelect, isActive }` → icon + name + flat horizontal bar fill left→right. CSS `.level-block`, `.level-block__bar`, `.level-block__bar-fill`. Locked = disabled + opacity 0.45.
+- [x] `CollocationForge`: `selectedLevel` state; default shows `LevelBlock` grid (fetch `/collocations/levels`); click non-locked → drill into Section→Topic sidebar; `← Levels` back button.
+- [x] `.coll-section-btn` has inline `--coll-ratio` + `.coll-section-btn__pct` span; CSS neon halo via `calc()` on `--coll-ratio`. Inner Topic boxes UNCHANGED.
+- [x] Section% computed via `buildSectionStats(topics)` from topics list (uses `section_id` from B2).
+**Verified:** `npm run build` → 223 modules, 0 errors. Level entry screen + drill + Section neon CSS all present.
+**Gap check:** [x] Accordion expand/collapse unchanged; locked levels disabled; TopicProgressBox untouched; review flow (handleAddFlashcard/handleRemoveFlashcard) unchanged.
+
+### Checkpoint B-complete ✅
+- [x] Build pass (223 modules, 0 errors) · Level block entry screen · drill into section/topic · Section neon halo+% · Topic boxes unchanged · review flow intact.
+
+---
+
+## TASK A — Vocabulary Library 5-layer (DO AFTER B)
+
+### Task A1: Migration + models `vocab_*` family ✅ DONE
+**Goal:** 5-layer schema + dedicated flashcard table.
+**Scope (M, ~3 files):** `backend/alembic/versions/20260610_22_add_vocab_library.py`, `backend/app/models.py`.
+**Done criteria:**
+- [x] `vocab_levels`, `vocab_topics`, `vocab_units`, `vocab_sections`, `vocab_library_items` — all created with correct FK chain, indexes.
+- [x] `vocab_library_flashcards` — UniqueConstraint(player_id, campaign_id, vocab_library_item_id); mirrors CollocationFlashcard.
+- [x] `campaign_vocab_links` — UniqueConstraint(campaign_id, vocab_level_id). `upgrade()`+`downgrade()` drop in FK order.
+**Verified:** `alembic upgrade head` → head=`20260610_22`; 7 new tables in DB; no collision with `vocabulary_*`; `POST /api/dev/reset` ×2 sạch.
+**Gap check:** [x] Tablename collision check: `vocab_topics` ≠ `vocabulary_topics` (NONE overlap). FK order in downgrade: campaign_vocab_links → flashcards → items → sections → units → topics → levels. All indexes named.
+
+### Task A2: Seed parser `vocab.md` ✅ DONE
+**Goal:** Parse `material/vocabularies/<level>/vocab.md`; Level = folder name.
+**Scope (M, ~2 files):** `backend/app/seed.py`.
+**Done criteria:**
+- [x] `parse_vocab_file(filepath, level_name)`: regex Topic/Unit/Section headings; 6-col pipe tables.
+- [x] SKIP non-standard tables (Country/Nationality — first col ≠ `collocation / từ vựng`). `in_standard_table` flag resets per section.
+- [x] `ensure_vocab_library(db, campaign)`: scan subfolders → level mapping; idempotent get-or-create tree; dedup word within section; all 4 levels always linked to campaign (empty = locked). Called in `seed_database()` + `activate_campaign_for_player()`.
+**Verified:** parser: 1949 items parsed; `Australia` absent (0 rows); first item Unit5 SecA = `first language`. DB after reset: 4 levels / 15 topics / 88 units / 187 sections / 1844 items / 8 campaign_vocab_links. Reset ×2 idempotent (count stable 1844).
+**Gap check:** [x] Country table skipped by `in_standard_table` flag reset per section; dedup within section; all 4 canonical levels created even without file; activate_campaign path also calls ensure_vocab_library.
+
+### Checkpoint A-data ✅
+- [x] Seed clean · Country table skipped (0 Australia rows) · 4 levels / 15 topics / 88 units / 187 sections / 1844 items · idempotent ×2.
+
+### Task A3: Backend API browse + flashcard (mirror Collocation) ✅ DONE
+**Goal:** Per-layer endpoints + add/remove/review, weighted % at every layer.
+**Scope (M, ~3 files):** `backend/app/services.py` (helper), `backend/app/main.py`, `backend/app/schemas.py`.
+**Done criteria:**
+- [x] `compute_vocab_completion()` in services.py: 2 queries (total items + flashcards), decay-aware, grains by section/unit/topic/level.
+- [x] `GET /api/vocab-library/levels` → 4 levels (1 unlocked=1844 words, 3 locked). `.../levels/{id}/topics` / `.../topics/{id}/units` / `.../units/{id}/sections` / `.../sections/{id}/words` all return % weighted.
+- [x] `POST/DELETE /api/vocab-library/words/{id}/flashcard` (add idempotent; re-add easy→again; remove hard-delete). `POST .../review` → familiarity+set_at only, **no XP, no quest**.
+- [x] Schemas: `VocabLevelOut, VocabTopicOut, VocabUnitOut, VocabSectionOut, VocabWordOut, VocabReviewIn`.
+**Verified:** add word 1 → fam=again; review result=good → fam=good; section A pct=14.3% (1/7). Weighted % correct.
+**Gap check:** [x] No XP logic in review; no quest trigger; effective_familiarity decay applied; re-add easy→again; weighted grain counts leaf words not averages.
+
+### Task A4: Frontend — `VocabularyLibrary.jsx` new tab ✅ DONE
+**Goal:** Library tab: Level block → Topic → Unit → Section → word list + review.
+**Scope (L, ~3 files):** `frontend/src/components/VocabularyLibrary.jsx` (NEW), `frontend/src/components/VocabularyWorkspace.jsx` (nav-btn + tab), `frontend/src/styles.css`.
+**Done criteria:**
+- [x] New sidebar nav-btn "📕 Vocabulary Library" (after Boss Battles); `activeTab === 'library'` renders `VocabularyLibrary`.
+- [x] `VocabularyLibrary`: stack-based nav (levels→topics→units→sections→words). Entry = `LevelBlock` grid (reuse B3 component). Drill = `DrillBox` neon (reuse `.coll-topic-box`). Breadcrumb with back navigation.
+- [x] Section leaf: `WordCard` with neon by `effective_familiarity`, add/remove flashcard via A3 API. % updates live after mutation.
+- [x] `codex` user-CRUD tab UNCHANGED.
+**Verified:** `npm run build` → 224 modules, 0 errors. Nav-btn present; VocabularyLibrary renders levels; drill pattern and word add/remove wired to API.
+**Gap check:** [x] Codex tab untouched; LevelBlock reused from B3; `.coll-topic-box` CSS reused; no new neon CSS needed (reuse collocation system).
+
+### Checkpoint A-complete ✅
+- [x] Build pass (224 modules, 0 errors) · 5-layer browse API working · Level block + drill via neon boxes · word add/remove/review XP-neutral · Codex CRUD tab intact.
 
 ---
 

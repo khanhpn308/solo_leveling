@@ -1007,6 +1007,18 @@ class VocabularyExample(Base):
 
 
 
+class CollocationLevel(Base):
+    __tablename__ = "collocation_levels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    difficulty_order: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    icon: Mapped[str] = mapped_column(String(10), nullable=False, default="📕")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    collections: Mapped[list["CollocationCollection"]] = relationship(back_populates="coll_level")
+
+
 class CollocationCollection(Base):
     __tablename__ = "collocation_collections"
 
@@ -1016,9 +1028,11 @@ class CollocationCollection(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_book: Mapped[str | None] = mapped_column(String(255), nullable=True)
     level: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    level_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("collocation_levels.id", name="fk_colcol_level_id"), nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
+    coll_level: Mapped["CollocationLevel | None"] = relationship(back_populates="collections")
     sections: Mapped[list["CollocationSection"]] = relationship(back_populates="collection", cascade="all, delete-orphan")
     campaign_links: Mapped[list["CampaignCollocationLink"]] = relationship(back_populates="collection", cascade="all, delete-orphan")
 
@@ -1420,4 +1434,126 @@ class CollocationFlashcard(Base):
     player: Mapped["Player"] = relationship(foreign_keys=[player_id])
     campaign: Mapped["Campaign"] = relationship(foreign_keys=[campaign_id])
     collocation_item: Mapped["CollocationItem"] = relationship(back_populates="flashcards")
+
+
+# ── Vocabulary Library (5-layer: Level → Topic → Unit → Section → Item) ──
+
+class VocabLevel(Base):
+    __tablename__ = "vocab_levels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    difficulty_order: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    icon: Mapped[str] = mapped_column(String(10), nullable=False, default="📗")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    topics: Mapped[list["VocabTopic"]] = relationship(back_populates="level", cascade="all, delete-orphan")
+    campaign_links: Mapped[list["CampaignVocabLink"]] = relationship(back_populates="level", cascade="all, delete-orphan")
+
+
+class VocabTopic(Base):
+    __tablename__ = "vocab_topics"
+    __table_args__ = (
+        Index("ix_vocab_topics_level_order", "level_id", "topic_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    level_id: Mapped[int] = mapped_column(ForeignKey("vocab_levels.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    topic_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    level: Mapped[VocabLevel] = relationship(back_populates="topics")
+    units: Mapped[list["VocabUnit"]] = relationship(back_populates="topic", cascade="all, delete-orphan")
+
+
+class VocabUnit(Base):
+    __tablename__ = "vocab_units"
+    __table_args__ = (
+        Index("ix_vocab_units_topic_order", "topic_id", "unit_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    topic_id: Mapped[int] = mapped_column(ForeignKey("vocab_topics.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    unit_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    unit_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    topic: Mapped[VocabTopic] = relationship(back_populates="units")
+    sections: Mapped[list["VocabSection"]] = relationship(back_populates="unit", cascade="all, delete-orphan")
+
+
+class VocabSection(Base):
+    __tablename__ = "vocab_sections"
+    __table_args__ = (
+        Index("ix_vocab_sections_unit_order", "unit_id", "section_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    unit_id: Mapped[int] = mapped_column(ForeignKey("vocab_units.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    section_letter: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    section_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    unit: Mapped[VocabUnit] = relationship(back_populates="sections")
+    items: Mapped[list["VocabLibraryItem"]] = relationship(back_populates="section", cascade="all, delete-orphan")
+
+
+class VocabLibraryItem(Base):
+    __tablename__ = "vocab_library_items"
+    __table_args__ = (
+        Index("ix_vocab_library_items_section_order", "section_id", "item_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    section_id: Mapped[int] = mapped_column(ForeignKey("vocab_sections.id"), nullable=False, index=True)
+    word: Mapped[str] = mapped_column(String(255), nullable=False)
+    part_of_speech: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    pronunciation_us: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    meaning_vi: Mapped[str | None] = mapped_column(Text, nullable=True)
+    example_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    example_vi: Mapped[str | None] = mapped_column(Text, nullable=True)
+    item_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    section: Mapped[VocabSection] = relationship(back_populates="items")
+    flashcards: Mapped[list["VocabLibraryFlashcard"]] = relationship(back_populates="item", cascade="all, delete-orphan")
+
+
+class VocabLibraryFlashcard(Base):
+    __tablename__ = "vocab_library_flashcards"
+    __table_args__ = (
+        UniqueConstraint("player_id", "campaign_id", "vocab_library_item_id", name="uq_vocab_library_flashcard"),
+        Index("ix_vocab_library_flashcards_player_campaign", "player_id", "campaign_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), nullable=False, index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False, index=True)
+    vocab_library_item_id: Mapped[int] = mapped_column(ForeignKey("vocab_library_items.id"), nullable=False, index=True)
+    familiarity: Mapped[str] = mapped_column(String(10), nullable=False, default="again")
+    familiarity_set_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    player: Mapped["Player"] = relationship(foreign_keys=[player_id])
+    campaign: Mapped["Campaign"] = relationship(foreign_keys=[campaign_id])
+    item: Mapped["VocabLibraryItem"] = relationship(back_populates="flashcards")
+
+
+class CampaignVocabLink(Base):
+    __tablename__ = "campaign_vocab_links"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "vocab_level_id", name="uq_campaign_vocab_link"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False, index=True)
+    vocab_level_id: Mapped[int] = mapped_column(ForeignKey("vocab_levels.id"), nullable=False, index=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    campaign: Mapped["Campaign"] = relationship(foreign_keys=[campaign_id])
+    level: Mapped[VocabLevel] = relationship(back_populates="campaign_links")
 

@@ -35,6 +35,7 @@ from .models import (
     VocabularyNode,
     VocabularyEdge,
     VocabularyError,
+    CollocationLevel,
     CollocationCollection,
     CollocationSection,
     CollocationTopic,
@@ -892,6 +893,205 @@ def effective_familiarity(
     current_index = _FAMILIARITY_DECAY_ORDER.index(stored)
     decayed_index = max(0, current_index - tiers_dropped)
     return _FAMILIARITY_DECAY_ORDER[decayed_index]
+
+
+def compute_collocation_completion(
+    db: Session,
+    player_id: int,
+    campaign_id: int,
+    collection_ids: list[int],
+    now: datetime | None = None,
+) -> dict:
+    """One-query weighted-% aggregator for collocation browse.
+
+    Returns a dict with keys:
+        topic: dict[topic_id, (completed, total)]    — topic grain
+        section: dict[section_id, (completed, total)]
+        collection: dict[collection_id, (completed, total)]
+        level: dict[level_id, (completed, total)]
+
+    Only flashcards with effective_familiarity in {hard, good, easy} count as completed.
+    'total' = all items under that node (from DB item count query + collection→section→topic join).
+    """
+    if now is None:
+        now = datetime.utcnow()
+
+    # --- Total items per topic (no player scope) ---
+    item_total_rows = (
+        db.query(
+            CollocationItem.topic_id,
+            CollocationTopic.section_id,
+            CollocationSection.collection_id,
+        )
+        .join(CollocationTopic, CollocationTopic.id == CollocationItem.topic_id)
+        .join(CollocationSection, CollocationSection.id == CollocationTopic.section_id)
+        .filter(CollocationSection.collection_id.in_(collection_ids))
+        .all()
+    )
+
+    # Build total counts per grain
+    total_by_topic: dict[int, int] = {}
+    total_by_section: dict[int, int] = {}
+    total_by_collection: dict[int, int] = {}
+    # Need level mapping: collection_id → level_id
+    coll_level_map = dict(
+        db.query(CollocationCollection.id, CollocationCollection.level_id)
+        .filter(CollocationCollection.id.in_(collection_ids))
+        .all()
+    )
+    total_by_level: dict[int, int] = {}
+
+    for topic_id, section_id, collection_id in item_total_rows:
+        total_by_topic[topic_id] = total_by_topic.get(topic_id, 0) + 1
+        total_by_section[section_id] = total_by_section.get(section_id, 0) + 1
+        total_by_collection[collection_id] = total_by_collection.get(collection_id, 0) + 1
+        level_id = coll_level_map.get(collection_id)
+        if level_id is not None:
+            total_by_level[level_id] = total_by_level.get(level_id, 0) + 1
+
+    # --- Completed items (player+campaign scoped, decay-aware) ---
+    fc_rows = (
+        db.query(
+            CollocationItem.topic_id,
+            CollocationTopic.section_id,
+            CollocationSection.collection_id,
+            CollocationFlashcard.familiarity,
+            CollocationFlashcard.familiarity_set_at,
+        )
+        .join(CollocationItem, CollocationItem.id == CollocationFlashcard.collocation_item_id)
+        .join(CollocationTopic, CollocationTopic.id == CollocationItem.topic_id)
+        .join(CollocationSection, CollocationSection.id == CollocationTopic.section_id)
+        .filter(
+            CollocationSection.collection_id.in_(collection_ids),
+            CollocationFlashcard.player_id == player_id,
+            CollocationFlashcard.campaign_id == campaign_id,
+        )
+        .all()
+    )
+
+    done_by_topic: dict[int, int] = {}
+    done_by_section: dict[int, int] = {}
+    done_by_collection: dict[int, int] = {}
+    done_by_level: dict[int, int] = {}
+
+    for topic_id, section_id, collection_id, fam, set_at in fc_rows:
+        eff = effective_familiarity(fam, set_at, now)
+        if eff not in ("hard", "good", "easy"):
+            continue
+        done_by_topic[topic_id] = done_by_topic.get(topic_id, 0) + 1
+        done_by_section[section_id] = done_by_section.get(section_id, 0) + 1
+        done_by_collection[collection_id] = done_by_collection.get(collection_id, 0) + 1
+        level_id = coll_level_map.get(collection_id)
+        if level_id is not None:
+            done_by_level[level_id] = done_by_level.get(level_id, 0) + 1
+
+    def make_grain(total_map: dict[int, int], done_map: dict[int, int]) -> dict[int, tuple[int, int]]:
+        keys = set(total_map) | set(done_map)
+        return {k: (done_map.get(k, 0), total_map.get(k, 0)) for k in keys}
+
+    return {
+        "topic": make_grain(total_by_topic, done_by_topic),
+        "section": make_grain(total_by_section, done_by_section),
+        "collection": make_grain(total_by_collection, done_by_collection),
+        "level": make_grain(total_by_level, done_by_level),
+    }
+
+
+def compute_vocab_completion(
+    db: Session,
+    player_id: int,
+    campaign_id: int,
+    level_ids: list[int],
+    now: datetime | None = None,
+) -> dict:
+    """One-query weighted-% aggregator for vocab library browse.
+
+    Returns:
+        section: dict[section_id, (completed, total)]
+        unit: dict[unit_id, (completed, total)]
+        topic: dict[topic_id, (completed, total)]
+        level: dict[level_id, (completed, total)]
+
+    Counts at leaf (item) level — never averages child %.
+    """
+    from .models import VocabLibraryItem, VocabSection, VocabUnit, VocabTopic, VocabLibraryFlashcard
+
+    if now is None:
+        now = datetime.utcnow()
+
+    # --- Total items per grain (no player scope) ---
+    item_rows = (
+        db.query(
+            VocabLibraryItem.id,
+            VocabLibraryItem.section_id,
+            VocabSection.unit_id,
+            VocabUnit.topic_id,
+            VocabTopic.level_id,
+        )
+        .join(VocabSection, VocabSection.id == VocabLibraryItem.section_id)
+        .join(VocabUnit, VocabUnit.id == VocabSection.unit_id)
+        .join(VocabTopic, VocabTopic.id == VocabUnit.topic_id)
+        .filter(VocabTopic.level_id.in_(level_ids))
+        .all()
+    )
+
+    total_by_sec: dict[int, int] = {}
+    total_by_unit: dict[int, int] = {}
+    total_by_topic: dict[int, int] = {}
+    total_by_level: dict[int, int] = {}
+
+    for _, sec_id, unit_id, topic_id, level_id in item_rows:
+        total_by_sec[sec_id]   = total_by_sec.get(sec_id, 0) + 1
+        total_by_unit[unit_id] = total_by_unit.get(unit_id, 0) + 1
+        total_by_topic[topic_id] = total_by_topic.get(topic_id, 0) + 1
+        total_by_level[level_id] = total_by_level.get(level_id, 0) + 1
+
+    # --- Completed items (player+campaign, decay-aware) ---
+    fc_rows = (
+        db.query(
+            VocabLibraryFlashcard.vocab_library_item_id,
+            VocabLibraryItem.section_id,
+            VocabSection.unit_id,
+            VocabUnit.topic_id,
+            VocabTopic.level_id,
+            VocabLibraryFlashcard.familiarity,
+            VocabLibraryFlashcard.familiarity_set_at,
+        )
+        .join(VocabLibraryItem, VocabLibraryItem.id == VocabLibraryFlashcard.vocab_library_item_id)
+        .join(VocabSection, VocabSection.id == VocabLibraryItem.section_id)
+        .join(VocabUnit, VocabUnit.id == VocabSection.unit_id)
+        .join(VocabTopic, VocabTopic.id == VocabUnit.topic_id)
+        .filter(
+            VocabTopic.level_id.in_(level_ids),
+            VocabLibraryFlashcard.player_id == player_id,
+            VocabLibraryFlashcard.campaign_id == campaign_id,
+        )
+        .all()
+    )
+
+    done_by_sec: dict[int, int] = {}
+    done_by_unit: dict[int, int] = {}
+    done_by_topic: dict[int, int] = {}
+    done_by_level: dict[int, int] = {}
+
+    for _, sec_id, unit_id, topic_id, level_id, fam, set_at in fc_rows:
+        eff = effective_familiarity(fam, set_at, now)
+        if eff not in ("hard", "good", "easy"):
+            continue
+        done_by_sec[sec_id]   = done_by_sec.get(sec_id, 0) + 1
+        done_by_unit[unit_id] = done_by_unit.get(unit_id, 0) + 1
+        done_by_topic[topic_id] = done_by_topic.get(topic_id, 0) + 1
+        done_by_level[level_id] = done_by_level.get(level_id, 0) + 1
+
+    def make_grain(total_map, done_map):
+        return {k: (done_map.get(k, 0), total_map.get(k, 0)) for k in set(total_map) | set(done_map)}
+
+    return {
+        "section": make_grain(total_by_sec, done_by_sec),
+        "unit":    make_grain(total_by_unit, done_by_unit),
+        "topic":   make_grain(total_by_topic, done_by_topic),
+        "level":   make_grain(total_by_level, done_by_level),
+    }
 
 
 def try_autocomplete_collocation_forge(

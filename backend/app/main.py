@@ -62,6 +62,7 @@ from .models import (
     VocabularyNode,
     VocabularyEdge,
     VocabularyError,
+    CollocationLevel,
     CollocationCollection,
     CollocationSection,
     CollocationTopic,
@@ -69,6 +70,13 @@ from .models import (
     CampaignCollocationLink,
     PlayerCollocationProgress,
     CollocationFlashcard,
+    VocabLevel,
+    VocabTopic,
+    VocabUnit,
+    VocabSection,
+    VocabLibraryItem,
+    VocabLibraryFlashcard,
+    CampaignVocabLink,
     RankXpThreshold,
     QuestXpPolicy,
     WeeklyMissionXpPolicy,
@@ -159,11 +167,19 @@ from .schemas import (
     RankExamAttemptOut,
     RankExamStatusOut,
     SupportBreakdownItem,
+    CollocationLevelOut,
     CollocationBrowseTopicOut,
     CollocationBrowseItemOut,
     CollocationFlashcardTopicOut,
     CollocationFlashcardItemOut,
     CollocationReviewIn,
+    VocabLevelOut,
+    VocabTopicOut,
+    VocabUnitOut,
+    VocabSectionOut,
+    VocabWordOut,
+    VocabReviewIn,
+    VocabFlashcardDueOut,
 )
 from .seed import activate_campaign_for_player, ensure_quest_instances, ensure_roadmap_phases, ensure_skills, ensure_templates, parse_start_date, seed_database
 from .services import (
@@ -2228,14 +2244,82 @@ def submit_vocabulary_boss_endpoint(boss_id: int, payload: VocabularyBossSubmitI
 # I4-2: Collocation browser + flashcard endpoints
 # ---------------------------------------------------------------------------
 
+@app.get("/api/collocations/levels", response_model=list[CollocationLevelOut])
+def get_collocation_levels(
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Browse: all collocation levels with weighted completion % for current player/campaign."""
+    from datetime import datetime as _dt
+    from sqlalchemy import func as sqlfunc
+
+    levels = db.query(CollocationLevel).order_by(CollocationLevel.difficulty_order).all()
+    if not levels:
+        return []
+
+    # collection_ids linked to campaign, grouped by level_id
+    link_rows = (
+        db.query(CampaignCollocationLink.collection_id, CollocationCollection.level_id)
+        .join(CollocationCollection, CollocationCollection.id == CampaignCollocationLink.collection_id)
+        .filter(CampaignCollocationLink.campaign_id == campaign.id)
+        .all()
+    )
+    linked_ids = [r.collection_id for r in link_rows]
+    collections_by_level: dict[int, list[int]] = {}
+    for r in link_rows:
+        if r.level_id is not None:
+            collections_by_level.setdefault(r.level_id, []).append(r.collection_id)
+
+    # Collection count per level
+    coll_count_by_level: dict[int, int] = {k: len(v) for k, v in collections_by_level.items()}
+
+    # Weighted completion via shared helper (only if there are linked collections)
+    grains = services.compute_collocation_completion(
+        db, player.id, campaign.id, linked_ids, _dt.utcnow()
+    ) if linked_ids else {"level": {}}
+    level_grain: dict[int, tuple[int, int]] = grains["level"]
+
+    result = []
+    for lv in levels:
+        done, total = level_grain.get(lv.id, (0, 0))
+        # Also count unlinked collections under this level for total_words
+        if lv.id not in collections_by_level:
+            # Level has no linked collections — find all collections under this level for total count
+            unlinked_ids = [
+                r.id for r in db.query(CollocationCollection.id)
+                .filter(CollocationCollection.level_id == lv.id)
+                .all()
+            ]
+            if unlinked_ids:
+                item_total = db.query(sqlfunc.count(CollocationItem.id)).join(
+                    CollocationTopic, CollocationTopic.id == CollocationItem.topic_id
+                ).join(
+                    CollocationSection, CollocationSection.id == CollocationTopic.section_id
+                ).filter(CollocationSection.collection_id.in_(unlinked_ids)).scalar() or 0
+                total = item_total
+        pct = round(done / total * 100, 1) if total > 0 else 0.0
+        result.append(CollocationLevelOut(
+            id=lv.id,
+            name=lv.name,
+            difficulty_order=lv.difficulty_order,
+            icon=lv.icon,
+            collection_count=coll_count_by_level.get(lv.id, 0),
+            total_words=total,
+            completed_words=done,
+            pct=pct,
+            locked=(total == 0),
+        ))
+    return result
+
+
 @app.get("/api/collocations/topics", response_model=list[CollocationBrowseTopicOut])
 def get_collocation_browse_topics(
     player: Player = Depends(get_current_player),
     campaign: Campaign = Depends(get_current_campaign),
     db: Session = Depends(get_db),
 ):
-    """Browse: all topics in the campaign-linked collections, enriched with item_count."""
-    from sqlalchemy import func as sqlfunc
+    """Browse: all topics in the campaign-linked collections, enriched with item_count + section_id."""
     # Get collection IDs linked to this campaign
     link_ids = [
         row.collection_id
@@ -2246,41 +2330,12 @@ def get_collocation_browse_topics(
     if not link_ids:
         return []
 
-    # Item counts per topic
-    item_counts = dict(
-        db.query(CollocationItem.topic_id, sqlfunc.count(CollocationItem.id))
-        .join(CollocationTopic, CollocationTopic.id == CollocationItem.topic_id)
-        .join(CollocationSection, CollocationSection.id == CollocationTopic.section_id)
-        .filter(CollocationSection.collection_id.in_(link_ids))
-        .group_by(CollocationItem.topic_id)
-        .all()
-    )
-
-    # Completed counts per topic: a collocation counts toward progress when its
-    # effective_familiarity is hard/good/easy (not 'again'/'new'). Decay applied per row.
     from datetime import datetime as _dt
     now = _dt.utcnow()
-    fc_rows = (
-        db.query(
-            CollocationItem.topic_id,
-            CollocationFlashcard.familiarity,
-            CollocationFlashcard.familiarity_set_at,
-        )
-        .join(CollocationItem, CollocationItem.id == CollocationFlashcard.collocation_item_id)
-        .join(CollocationTopic, CollocationTopic.id == CollocationItem.topic_id)
-        .join(CollocationSection, CollocationSection.id == CollocationTopic.section_id)
-        .filter(
-            CollocationSection.collection_id.in_(link_ids),
-            CollocationFlashcard.player_id == player.id,
-            CollocationFlashcard.campaign_id == campaign.id,
-        )
-        .all()
-    )
-    completed_counts: dict[int, int] = {}
-    for topic_id, fam, set_at in fc_rows:
-        eff = services.effective_familiarity(fam, set_at, now)
-        if eff in ("hard", "good", "easy"):
-            completed_counts[topic_id] = completed_counts.get(topic_id, 0) + 1
+
+    # Use shared helper for all completion grains
+    grains = services.compute_collocation_completion(db, player.id, campaign.id, link_ids, now)
+    topic_grain: dict[int, tuple[int, int]] = grains["topic"]
 
     topics = (
         db.query(CollocationTopic)
@@ -2291,14 +2346,16 @@ def get_collocation_browse_topics(
     )
     result = []
     for t in topics:
+        done, total = topic_grain.get(t.id, (0, 0))
         result.append(CollocationBrowseTopicOut(
             id=t.id,
             title=t.title,
             topic_order=t.topic_order,
+            section_id=t.section_id if t.section else 0,
             section_title=t.section.title if t.section else "",
             section_order=t.section.section_order if t.section else 0,
-            item_count=item_counts.get(t.id, 0),
-            completed_count=completed_counts.get(t.id, 0),
+            item_count=total,
+            completed_count=done,
         ))
     return result
 
@@ -2552,3 +2609,263 @@ def get_collocation_flashcard_items(
 
 
 
+
+
+# ════════════════════════════════════════════════════════════════════
+# Vocabulary Library API  (vocab-library/*)
+# ════════════════════════════════════════════════════════════════════
+
+def _vocab_level_ids_for_campaign(db: Session, campaign_id: int) -> list[int]:
+    return [
+        r.vocab_level_id
+        for r in db.query(CampaignVocabLink.vocab_level_id)
+        .filter(CampaignVocabLink.campaign_id == campaign_id)
+        .all()
+    ]
+
+
+@app.get("/api/vocab-library/levels", response_model=list[VocabLevelOut])
+def vl_get_levels(
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    from datetime import datetime as _dt
+    level_ids = _vocab_level_ids_for_campaign(db, campaign.id)
+    levels = db.query(VocabLevel).order_by(VocabLevel.difficulty_order).all()
+    grains = services.compute_vocab_completion(db, player.id, campaign.id, level_ids, _dt.utcnow()) if level_ids else {"level": {}}
+    lv_grain = grains["level"]
+    result = []
+    for lv in levels:
+        done, total = lv_grain.get(lv.id, (0, 0))
+        pct = round(done / total * 100, 1) if total > 0 else 0.0
+        result.append(VocabLevelOut(
+            id=lv.id, name=lv.name, difficulty_order=lv.difficulty_order, icon=lv.icon,
+            total_words=total, completed_words=done, pct=pct, locked=(total == 0),
+        ))
+    return result
+
+
+@app.get("/api/vocab-library/levels/{level_id}/topics", response_model=list[VocabTopicOut])
+def vl_get_topics(
+    level_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    from datetime import datetime as _dt
+    topics = db.query(VocabTopic).filter_by(level_id=level_id).order_by(VocabTopic.topic_order).all()
+    grains = services.compute_vocab_completion(db, player.id, campaign.id, [level_id], _dt.utcnow())
+    tp_grain = grains["topic"]
+    result = []
+    for t in topics:
+        done, total = tp_grain.get(t.id, (0, 0))
+        pct = round(done / total * 100, 1) if total > 0 else 0.0
+        result.append(VocabTopicOut(
+            id=t.id, level_id=t.level_id, title=t.title, topic_order=t.topic_order,
+            total_words=total, completed_words=done, pct=pct,
+        ))
+    return result
+
+
+@app.get("/api/vocab-library/topics/{topic_id}/units", response_model=list[VocabUnitOut])
+def vl_get_units(
+    topic_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    from datetime import datetime as _dt
+    topic = db.query(VocabTopic).filter_by(id=topic_id).first()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    units = db.query(VocabUnit).filter_by(topic_id=topic_id).order_by(VocabUnit.unit_order).all()
+    grains = services.compute_vocab_completion(db, player.id, campaign.id, [topic.level_id], _dt.utcnow())
+    un_grain = grains["unit"]
+    result = []
+    for u in units:
+        done, total = un_grain.get(u.id, (0, 0))
+        pct = round(done / total * 100, 1) if total > 0 else 0.0
+        result.append(VocabUnitOut(
+            id=u.id, topic_id=u.topic_id, title=u.title,
+            unit_number=u.unit_number, unit_order=u.unit_order,
+            total_words=total, completed_words=done, pct=pct,
+        ))
+    return result
+
+
+@app.get("/api/vocab-library/units/{unit_id}/sections", response_model=list[VocabSectionOut])
+def vl_get_sections(
+    unit_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    from datetime import datetime as _dt
+    unit = db.query(VocabUnit).filter_by(id=unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    topic = db.query(VocabTopic).filter_by(id=unit.topic_id).first()
+    sections = db.query(VocabSection).filter_by(unit_id=unit_id).order_by(VocabSection.section_order).all()
+    grains = services.compute_vocab_completion(db, player.id, campaign.id, [topic.level_id], _dt.utcnow())
+    sec_grain = grains["section"]
+    result = []
+    for s in sections:
+        done, total = sec_grain.get(s.id, (0, 0))
+        pct = round(done / total * 100, 1) if total > 0 else 0.0
+        result.append(VocabSectionOut(
+            id=s.id, unit_id=s.unit_id, title=s.title,
+            section_letter=s.section_letter, section_order=s.section_order,
+            total_words=total, completed_words=done, pct=pct,
+        ))
+    return result
+
+
+@app.get("/api/vocab-library/sections/{section_id}/words", response_model=list[VocabWordOut])
+def vl_get_words(
+    section_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    from datetime import datetime as _dt
+    now = _dt.utcnow()
+    words = db.query(VocabLibraryItem).filter_by(section_id=section_id).order_by(VocabLibraryItem.item_order).all()
+    item_ids = [w.id for w in words]
+    fc_map: dict[int, VocabLibraryFlashcard] = {}
+    if item_ids:
+        for fc in db.query(VocabLibraryFlashcard).filter(
+            VocabLibraryFlashcard.vocab_library_item_id.in_(item_ids),
+            VocabLibraryFlashcard.player_id == player.id,
+            VocabLibraryFlashcard.campaign_id == campaign.id,
+        ).all():
+            fc_map[fc.vocab_library_item_id] = fc
+
+    result = []
+    for w in words:
+        fc = fc_map.get(w.id)
+        eff = services.effective_familiarity(fc.familiarity, fc.familiarity_set_at, now) if fc else "again"
+        result.append(VocabWordOut(
+            id=w.id, section_id=w.section_id, word=w.word,
+            part_of_speech=w.part_of_speech, pronunciation_us=w.pronunciation_us,
+            meaning_vi=w.meaning_vi, example_en=w.example_en, example_vi=w.example_vi,
+            item_order=w.item_order,
+            effective_familiarity=eff,
+            is_added=(fc is not None),
+        ))
+    return result
+
+
+@app.post("/api/vocab-library/words/{item_id}/flashcard", status_code=201)
+def vl_add_flashcard(
+    item_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    item = db.query(VocabLibraryItem).filter_by(id=item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Word not found")
+    fc = db.query(VocabLibraryFlashcard).filter_by(
+        player_id=player.id, campaign_id=campaign.id, vocab_library_item_id=item_id,
+    ).first()
+    if fc:
+        if fc.familiarity == "easy":
+            from datetime import datetime as _dt
+            fc.familiarity = "again"
+            fc.familiarity_set_at = _dt.utcnow()
+            db.flush()
+    else:
+        db.add(VocabLibraryFlashcard(
+            player_id=player.id, campaign_id=campaign.id, vocab_library_item_id=item_id,
+            familiarity="again",
+        ))
+        db.flush()
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.delete("/api/vocab-library/words/{item_id}/flashcard", status_code=200)
+def vl_remove_flashcard(
+    item_id: int,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    fc = db.query(VocabLibraryFlashcard).filter_by(
+        player_id=player.id, campaign_id=campaign.id, vocab_library_item_id=item_id,
+    ).first()
+    if fc:
+        db.delete(fc)
+        db.flush()
+        db.commit()
+    return {"status": "ok"}
+
+
+@app.post("/api/vocab-library/words/{item_id}/flashcard/review", status_code=200)
+def vl_review_flashcard(
+    item_id: int,
+    body: VocabReviewIn,
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """XP-neutral review: only updates familiarity + familiarity_set_at. No quest trigger."""
+    from datetime import datetime as _dt
+    valid = {"again", "hard", "good", "easy"}
+    if body.result not in valid:
+        raise HTTPException(status_code=422, detail=f"result must be one of {valid}")
+    fc = db.query(VocabLibraryFlashcard).filter_by(
+        player_id=player.id, campaign_id=campaign.id, vocab_library_item_id=item_id,
+    ).first()
+    if not fc:
+        raise HTTPException(status_code=404, detail="Flashcard not found - add it first")
+    fc.familiarity = body.result
+    fc.familiarity_set_at = _dt.utcnow()
+    db.flush()
+    db.commit()
+    return {"status": "ok", "familiarity": body.result}
+
+
+@app.get("/api/vocab-library/flashcards/due", response_model=list[VocabFlashcardDueOut])
+def vl_get_due_flashcards(
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Return all vocab-library flashcards that are due for review (familiarity != 'easy' or added today)."""
+    from datetime import datetime as _dt
+    now = _dt.utcnow()
+    fcs = (
+        db.query(VocabLibraryFlashcard)
+        .filter_by(player_id=player.id, campaign_id=campaign.id)
+        .all()
+    )
+    result = []
+    for fc in fcs:
+        eff = services.effective_familiarity(fc.familiarity, fc.familiarity_set_at, now)
+        item = fc.item
+        if item is None:
+            continue
+        section = item.section
+        unit = section.unit if section else None
+        level = unit.topic.level if (unit and unit.topic) else None
+        result.append(VocabFlashcardDueOut(
+            id=item.id,
+            section_id=item.section_id,
+            word=item.word,
+            part_of_speech=item.part_of_speech,
+            pronunciation_us=item.pronunciation_us,
+            meaning_vi=item.meaning_vi,
+            example_en=item.example_en,
+            example_vi=item.example_vi,
+            item_order=item.item_order,
+            effective_familiarity=eff,
+            is_added=True,
+            familiarity=fc.familiarity,
+            familiarity_set_at=fc.familiarity_set_at,
+            section_title=section.title if section else "",
+            unit_title=unit.title if unit else "",
+            level_name=level.name if level else "",
+        ))
+    return result

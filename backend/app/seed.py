@@ -35,6 +35,7 @@ from .models import (
     VocabularySetting,
     WeeklyMission,
     WeeklyMissionItem,
+    CollocationLevel,
     CollocationCollection,
     CollocationSection,
     CollocationTopic,
@@ -44,6 +45,12 @@ from .models import (
     QuestXpPolicy,
     WeeklyMissionXpPolicy,
     MainQuestXpPolicy,
+    VocabLevel,
+    VocabTopic,
+    VocabUnit,
+    VocabSection,
+    VocabLibraryItem,
+    CampaignVocabLink,
 )
 from .auth_utils import hash_password
 from .services import create_rank_suggestions_for_test, link_collection_to_campaign
@@ -2060,7 +2067,7 @@ def collocations_file_path() -> Path:
 
     current_file = Path(__file__).resolve()
     # C-1: repointed to the polished (OCR-denoised) file
-    rel_path = Path("material/vocabularies/month1-6/English_Collocations_campaign1-3_3-6_polished.md")
+    rel_path = Path("material/collocation/English_Collocations_campaign1-3_3-6_polished.md")
     candidates.extend(
         [
             current_file.parents[2] / rel_path,
@@ -2202,12 +2209,40 @@ def parse_collocations_file(filepath: Path) -> dict:
     }
 
 
+_COLLOCATION_LEVELS = [
+    {"name": "Elementary",        "difficulty_order": 1, "icon": "📗"},
+    {"name": "Intermediate",      "difficulty_order": 2, "icon": "📘"},
+    {"name": "Upper Intermediate","difficulty_order": 3, "icon": "📙"},
+    {"name": "Advanced",          "difficulty_order": 4, "icon": "📕"},
+]
+
+
+def ensure_collocation_levels(db: Session) -> dict[str, CollocationLevel]:
+    """Idempotent: create 4 canonical collocation levels, return name→obj map."""
+    level_by_name: dict[str, CollocationLevel] = {}
+    for row in _COLLOCATION_LEVELS:
+        obj = db.query(CollocationLevel).filter_by(name=row["name"]).first()
+        if not obj:
+            obj = CollocationLevel(
+                name=row["name"],
+                difficulty_order=row["difficulty_order"],
+                icon=row["icon"],
+            )
+            db.add(obj)
+            db.flush()
+        level_by_name[row["name"]] = obj
+    return level_by_name
+
+
 def ensure_collocations(db: Session, campaign: Campaign) -> None:
     try:
         filepath = collocations_file_path()
         data = parse_collocations_file(filepath)
     except FileNotFoundError:
         return
+
+    # 0. Ensure level entities exist
+    level_by_name = ensure_collocation_levels(db)
 
     # 1. Get or create CollocationCollection
     collection = db.query(CollocationCollection).filter_by(code=data["code"]).first()
@@ -2221,6 +2256,12 @@ def ensure_collocations(db: Session, campaign: Campaign) -> None:
             is_active=True
         )
         db.add(collection)
+        db.flush()
+
+    # Assign level_id from level name on collection (idempotent)
+    level_name = data.get("level")
+    if level_name and level_name in level_by_name and collection.level_id is None:
+        collection.level_id = level_by_name[level_name].id
         db.flush()
 
     # 2. Link to campaign
@@ -2330,6 +2371,317 @@ def ensure_collocations(db: Session, campaign: Campaign) -> None:
             db.flush()
 
 
+_VOCAB_LEVELS_META = [
+    {"name": "Elementary",          "difficulty_order": 1, "icon": "📗"},
+    {"name": "Pre-Intermediate / Intermediate", "difficulty_order": 2, "icon": "📘"},
+    {"name": "Upper Intermediate",  "difficulty_order": 3, "icon": "📙"},
+    {"name": "Advanced",            "difficulty_order": 4, "icon": "📕"},
+]
+
+# Map folder names → canonical level names
+_FOLDER_TO_LEVEL: dict[str, str] = {
+    "elementary":                   "Elementary",
+    "pre-intermediate_intermediate": "Pre-Intermediate / Intermediate",
+    "pre_intermediate_intermediate": "Pre-Intermediate / Intermediate",
+    "upper_intermediate":           "Upper Intermediate",
+    "upper-intermediate":           "Upper Intermediate",
+    "advanced":                     "Advanced",
+}
+
+_VOCAB_HEADER_FIRST_COL = "collocation / từ vựng"
+
+_re_bold = re.compile(r"\*\*(.+?)\*\*")
+_re_topic = re.compile(r"^#{1,2}\s+(?:Vocabulary\s+)?Topic:\s+(.+)", re.IGNORECASE)
+_re_unit  = re.compile(r"^#{2,3}\s+Unit\s+(\d+):\s+(.+)", re.IGNORECASE)
+_re_sec   = re.compile(r"^#{3,4}\s+([A-Z])\.\s+(.+)")
+
+
+def _strip_bold(text: str) -> str:
+    return _re_bold.sub(r"\1", text).strip()
+
+
+def parse_vocab_file(filepath: Path, level_name: str) -> dict:
+    """Parse a vocab.md file into a nested dict.
+
+    Hierarchy detected:
+        # Topic: ...          → topic
+        ## Unit N: ...        → unit (unit_number = N)
+        ### A. Title          → section (letter = A)
+        | collocation / từ vựng | từ loại | phiên âm | nghĩa | ví dụ | nghĩa ví dụ |
+            → standard 6-col row → VocabLibraryItem
+
+    Tables whose first header column ≠ 'collocation / từ vựng' are SKIPPED
+    (e.g. the Country/Nationality/Language reference table in Unit 5 Section A).
+    """
+    text = filepath.read_text(encoding="utf-8")
+    lines = text.splitlines()
+
+    topics: list[dict] = []
+    current_topic: dict | None = None
+    current_unit: dict | None = None
+    current_section: dict | None = None
+    topic_order = 0
+    unit_order_counter = 0
+    section_order_counter = 0
+    item_order_counter = 0
+    in_standard_table: bool = False   # True once we've confirmed the table header
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # ── Topic heading ──────────────────────────────────────────────────
+        m = _re_topic.match(stripped)
+        if m:
+            topic_order += 1
+            unit_order_counter = 0
+            current_topic = {
+                "title": m.group(1).strip(),
+                "topic_order": topic_order,
+                "units": [],
+            }
+            topics.append(current_topic)
+            current_unit = None
+            current_section = None
+            in_standard_table = False
+            continue
+
+        # ── Unit heading ────────────────────────────────────────────────────
+        m = _re_unit.match(stripped)
+        if m:
+            if current_topic is None:
+                topic_order += 1
+                current_topic = {"title": "General", "topic_order": topic_order, "units": []}
+                topics.append(current_topic)
+            unit_order_counter += 1
+            section_order_counter = 0
+            current_unit = {
+                "title": m.group(2).strip(),
+                "unit_number": int(m.group(1)),
+                "unit_order": unit_order_counter,
+                "sections": [],
+            }
+            current_topic["units"].append(current_unit)
+            current_section = None
+            in_standard_table = False
+            continue
+
+        # ── Section heading ─────────────────────────────────────────────────
+        m = _re_sec.match(stripped)
+        if m:
+            if current_unit is None:
+                continue
+            section_order_counter += 1
+            item_order_counter = 0
+            current_section = {
+                "title": m.group(2).strip(),
+                "section_letter": m.group(1),
+                "section_order": section_order_counter,
+                "items": [],
+            }
+            current_unit["sections"].append(current_section)
+            in_standard_table = False
+            continue
+
+        # ── Table rows ──────────────────────────────────────────────────────
+        if stripped.startswith("|") and stripped.endswith("|"):
+            cols = [c.strip() for c in stripped.split("|")[1:-1]]
+            if not cols:
+                continue
+
+            first = _strip_bold(cols[0]).lower()
+
+            # Header row — decide whether this is a standard vocab table
+            if first == _VOCAB_HEADER_FIRST_COL or "---" in first:
+                if "---" not in first:
+                    # This is the header row of a standard table
+                    in_standard_table = True
+                continue
+
+            # Detect non-standard table header (Country/Nationality etc.)
+            # If we hit a header-ish row with a first col that is NOT our marker,
+            # mark this table as non-standard and skip
+            if not in_standard_table:
+                # Any pipe row before we've confirmed the header is part of a skipped table
+                continue
+
+            # Skip separator rows
+            if "---" in first:
+                continue
+
+            if current_section is None or not in_standard_table:
+                continue
+
+            word = _strip_bold(cols[0]) if cols else None
+            if not word:
+                continue
+
+            part_of_speech   = _strip_bold(cols[1]) if len(cols) > 1 else None
+            pronunciation_us = _strip_bold(cols[2]) if len(cols) > 2 else None
+            meaning_vi       = _strip_bold(cols[3]) if len(cols) > 3 else None
+            example_en       = _strip_bold(cols[4]) if len(cols) > 4 else None
+            example_vi       = _strip_bold(cols[5]) if len(cols) > 5 else None
+
+            def blank_none(v):
+                return None if (v is None or v == "") else v
+
+            item_order_counter += 1
+            current_section["items"].append({
+                "word":            word,
+                "part_of_speech":  blank_none(part_of_speech),
+                "pronunciation_us": blank_none(pronunciation_us),
+                "meaning_vi":       blank_none(meaning_vi),
+                "example_en":       blank_none(example_en),
+                "example_vi":       blank_none(example_vi),
+                "item_order":       item_order_counter,
+            })
+
+    return {"level_name": level_name, "topics": topics}
+
+
+def _vocab_materials_root() -> Path:
+    """Resolve the vocabularies folder (same search strategy as collocations)."""
+    configured = os.getenv("VOCABULARIES_PATH")
+    if configured:
+        return Path(configured)
+    current_file = Path(__file__).resolve()
+    rel = Path("material/vocabularies")
+    for parent in current_file.parents[:3]:
+        candidate = parent / rel
+        if candidate.is_dir():
+            return candidate
+    return Path.cwd() / rel
+
+
+def ensure_vocab_library(db: Session, campaign: Campaign) -> None:
+    """Idempotent: seed VocabLevel / VocabTopic / VocabUnit / VocabSection / VocabLibraryItem
+    from folder structure under material/vocabularies/.
+
+    Each subfolder = one level (folder name mapped via _FOLDER_TO_LEVEL).
+    Levels without a vocab.md file are still created (locked/empty).
+    All 4 canonical levels are always linked to the campaign.
+    """
+    vocab_root = _vocab_materials_root()
+
+    # 1. Ensure all 4 canonical VocabLevel rows exist
+    level_by_name: dict[str, VocabLevel] = {}
+    for meta in _VOCAB_LEVELS_META:
+        obj = db.query(VocabLevel).filter_by(name=meta["name"]).first()
+        if not obj:
+            obj = VocabLevel(
+                name=meta["name"],
+                difficulty_order=meta["difficulty_order"],
+                icon=meta["icon"],
+            )
+            db.add(obj)
+            db.flush()
+        level_by_name[meta["name"]] = obj
+
+    # 2. Link all levels to campaign (idempotent)
+    for i, lv in enumerate(sorted(level_by_name.values(), key=lambda x: x.difficulty_order)):
+        existing = db.query(CampaignVocabLink).filter_by(
+            campaign_id=campaign.id, vocab_level_id=lv.id
+        ).first()
+        if not existing:
+            db.add(CampaignVocabLink(
+                campaign_id=campaign.id,
+                vocab_level_id=lv.id,
+                display_order=i,
+            ))
+            db.flush()
+
+    # 3. Parse vocab files found in subfolders
+    if not vocab_root.is_dir():
+        return
+
+    for folder in sorted(vocab_root.iterdir()):
+        if not folder.is_dir():
+            continue
+        folder_name = folder.name.lower()
+        level_name = _FOLDER_TO_LEVEL.get(folder_name)
+        if level_name is None:
+            continue
+        vocab_file = folder / "vocab.md"
+        if not vocab_file.exists():
+            continue
+
+        level_obj = level_by_name.get(level_name)
+        if level_obj is None:
+            continue
+
+        data = parse_vocab_file(vocab_file, level_name)
+        _seed_vocab_tree(db, level_obj, data["topics"])
+
+
+def _seed_vocab_tree(db: Session, level_obj: VocabLevel, topics_data: list[dict]) -> None:
+    """Idempotent upsert of the full Topic→Unit→Section→Item tree under a VocabLevel."""
+    for topic_data in topics_data:
+        topic = db.query(VocabTopic).filter_by(
+            level_id=level_obj.id,
+            title=topic_data["title"],
+        ).first()
+        if not topic:
+            topic = VocabTopic(
+                level_id=level_obj.id,
+                title=topic_data["title"],
+                topic_order=topic_data["topic_order"],
+            )
+            db.add(topic)
+            db.flush()
+
+        for unit_data in topic_data.get("units", []):
+            unit = db.query(VocabUnit).filter_by(
+                topic_id=topic.id,
+                unit_number=unit_data["unit_number"],
+            ).first()
+            if not unit:
+                unit = VocabUnit(
+                    topic_id=topic.id,
+                    title=unit_data["title"],
+                    unit_number=unit_data["unit_number"],
+                    unit_order=unit_data["unit_order"],
+                )
+                db.add(unit)
+                db.flush()
+
+            for sec_data in unit_data.get("sections", []):
+                section = db.query(VocabSection).filter_by(
+                    unit_id=unit.id,
+                    section_letter=sec_data["section_letter"],
+                ).first()
+                if not section:
+                    section = VocabSection(
+                        unit_id=unit.id,
+                        title=sec_data["title"],
+                        section_letter=sec_data["section_letter"],
+                        section_order=sec_data["section_order"],
+                    )
+                    db.add(section)
+                    db.flush()
+
+                # Existing words in this section for dedup
+                existing_words: set[str] = {
+                    r.word for r in db.query(VocabLibraryItem.word).filter_by(section_id=section.id).all()
+                }
+
+                for item_data in sec_data.get("items", []):
+                    if item_data["word"] in existing_words:
+                        continue
+                    existing_words.add(item_data["word"])
+                    db.add(VocabLibraryItem(
+                        section_id=section.id,
+                        word=item_data["word"],
+                        part_of_speech=item_data["part_of_speech"],
+                        pronunciation_us=item_data["pronunciation_us"],
+                        meaning_vi=item_data["meaning_vi"],
+                        example_en=item_data["example_en"],
+                        example_vi=item_data["example_vi"],
+                        item_order=item_data["item_order"],
+                    ))
+                db.flush()
+
+
 def seed_database(db: Session, start_date: date) -> None:
     player = ensure_player(db, start_date)
     campaign = ensure_campaign(db, player, start_date)
@@ -2353,7 +2705,9 @@ def seed_database(db: Session, start_date: date) -> None:
     backfill_quest_phase_and_material(db, campaign, phase_by_code)
     ensure_weekly_missions(db, campaign)
     ensure_bosses(db, campaign, badges)
+    ensure_collocation_levels(db)
     ensure_collocations(db, campaign)
+    ensure_vocab_library(db, campaign)
     db.commit()
 
 
@@ -2419,6 +2773,7 @@ def activate_campaign_for_player(db: Session, player: Player, template_code: str
     ensure_weekly_missions(db, campaign)
     ensure_bosses(db, campaign, badges)
     ensure_collocations(db, campaign)
+    ensure_vocab_library(db, campaign)
 
     # ensure campaign skill states are created
     from .services import ensure_campaign_skill_states
