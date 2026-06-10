@@ -1,6 +1,6 @@
 # IELTS Quest Dashboard Tasks
 
-Last updated: `2026-06-10` (session 8n+3 — **planned: Vocab Library 5-layer + Collocation Level/Section upgrade** (7 tasks B1–B3, A1–A4). Open Decision #6/#7 locked. See plan block below. Previously: session 8l-C — **C-1 + C-2 COMPLETE + gap-checked**. Parser rewritten: `_Section:_` → CollocationSection (10), `## N.` → CollocationTopic (60, topic_number=N). Global dedup. Volume mount added. Suite: **68/0/1 BE**. Parser smoke: 10 sections / 60 topics / 1409 unique items.)
+Last updated: `2026-06-10` (session 8n+5 — **Mobile Responsive Redesign IMPLEMENTED** — MR-1..MR-13 CSS done, verified 375px DevTools: dashboard 1-col ✅, vocab tab-strip ✅, overlay full-screen ✅, no overflow ✅. Fix: khối `<600px` phải đặt SAU toàn bộ Vocabulary CSS ở cuối file. Previously session 8n+4 — **planned: Mobile Responsive Redesign** (14 tasks MR-1..MR-14, CSS-only `<600px`, desktop unchanged). UX locked via grill (A1–A8). See plan block `Mobile Responsive Redesign` below + plan file `~/.claude/plans/ph-n-3-majestic-snowglobe.md`. Previously: session 8n+3 — **planned: Vocab Library 5-layer + Collocation Level/Section upgrade** (7 tasks B1–B3, A1–A4). Open Decision #6/#7 locked. See plan block below. Previously: session 8l-C — **C-1 + C-2 COMPLETE + gap-checked**. Parser rewritten: `_Section:_` → CollocationSection (10), `## N.` → CollocationTopic (60, topic_number=N). Global dedup. Volume mount added. Suite: **68/0/1 BE**. Parser smoke: 10 sections / 60 topics / 1409 unique items.)
 
 ## Session Resume
 
@@ -1255,6 +1255,197 @@ Root cause: `seed.py:ensure_player()` used `Player.first()` — nondeterministic
 
 ### Checkpoint A-complete ✅
 - [x] Build pass (224 modules, 0 errors) · 5-layer browse API working · Level block + drill via neon boxes · word add/remove/review XP-neutral · Codex CRUD tab intact.
+
+---
+
+# Implementation Plan: Mobile Responsive Redesign — Dashboard + Vocabulary Workspace (2026-06-10)
+
+**Owner:** khanhpn308 · **Grilled + locked:** session 8n+4 · **Type:** Frontend CSS-only (single `<600px` media block; **no JSX/logic change**) · **Plan file:** `~/.claude/plans/ph-n-3-majestic-snowglobe.md`
+
+## Goal
+
+Add mobile responsiveness (`<600px`) to the entire Dashboard + Vocabulary Workspace by **adapting the existing layout** — desktop (`>=600px`) stays byte-identical; all mobile rules live in one compact media block in `frontend/src/styles.css`. Keep the Solo-Leveling neon/glow theme; only adjust layout/spacing/sizing.
+
+## Architecture Decisions (locked via grill-me)
+
+| # | Decision | Rationale |
+|---|---|---|
+| A1 | **One compact breakpoint: `@media (max-width: 599.98px)`** | Content-based, not device-based. Every fixed-width row collapses below ~600px (vocab sidebar 300px, coll nav 256px, tree sidebar 280px, topbar 3-col). Matches Material "compact" `<600dp`. `.98` avoids overlapping a future `min-width:600px`. Single tier, no tablet layer. |
+| A2 | Media block placed **after the existing `@media (max-width: 640px)` block** (`styles.css` ends ~line 2715), opened by banner comment `/* ===== MOBILE COMPACT (<600px) — content-based, not device-based ===== */` | Last in source → wins cascade over the 640/980 rules without `!important`. |
+| A3 | **Dashboard keeps DOM order** (topbar → RoadmapHero → support cards), no reorder | Hero = identity/progress, natural first; reorder adds risk for no gain. |
+| A4 | **Vocab sidebar (11 tabs) → horizontal scrolling tab-strip.** `.vocab-workspace` → `flex-direction:column`; `.vocab-sidebar` → full-width auto-height sticky top; `.vocab-sidebar__nav` → `row` + `overflow-x:auto` + `nowrap`, buttons `flex-shrink:0` | CSS-only, no JSX. Level-1 nav only, independent of inner-tab layers. |
+| A5 | **App overlays (Status/Quest/Boss/Cert) → full-screen sheet + sticky header.** `.overlay-frame{inset:0;width:100%;max-width:100%;max-height:100vh;transform:none;border-radius:0}`; `.overlay-frame__header{position:sticky;top:0}` | Narrow screens want full bleed; sticky header keeps `×` in reach on long content. |
+| A6 | **Inner multi-layer tabs → collapse nested grids to 1 column**, handled per-tab | Collocation 3-layer, Codex form grid, Shadow Duel/Word Family/Echo Chamber grids → `1fr`. |
+| A7 | **Tree (react-flow) → CSS adapt, keep canvas.** Sidebar collapses above full-width canvas (~60vh); keep touch pan/zoom + MiniMap + `fitView`; node-drawer → **bottom-sheet** (overlays canvas, keeps pan position) | react-flow supports touch; CSS-only keeps the feature. Bottom-sheet keeps canvas visible vs. inline block which jumps it. |
+| A8 | Keep Solo-Leveling theme. No React Router/Tailwind/new lib. CSS-only in `frontend/src/styles.css` | CLAUDE.md constraint. |
+
+## Affected screens/components (from codegraph — session 8n+3)
+
+- **Dashboard** (`App.jsx`): `.home-topbar`, `.topbar-cluster`, `.inbox-dropdown`, `.roadmap-track`, stat cards, `.home-shell__support` (4 panels), quest/roadmap panels (`MainQuestMapPanel`, `.current-main-quest`, `PanelArchive`).
+- **App overlays** (`OverlayFrame`/`NavigationDrawer`): `StatusModal`, `QuestOverlay` (tab-row), `BossOverlay`, `CertificateOverlay`, `.nav-drawer`, `.toast-rack`.
+- **Vocabulary Workspace** (`VocabularyWorkspace.jsx`, 0 mobile rules): `.vocab-workspace`/`.vocab-sidebar`(300px)/`.vocab-sidebar__nav`(11 btns)/`.vocab-content`; tabs Codex, Collocations, Flashcard Gate (3 sub-modes), Library, Shadow Duel, Word Family, Echo Chamber, Error Dungeon, Boss.
+- **Tree** (`WordNetworkTree.jsx`): `.vocab-tree-layout` = `.vocab-tree-sidebar`(280px) | `.vocab-tree-canvas`(ReactFlow+Controls+MiniMap) | `.vocab-tree-drawer`(320px).
+- **Collocation** (`CollocationForge.jsx`): `.coll-browser__body`, `.coll-section-nav`(256px), `.coll-topic-box-grid`(2-col), `.coll-items-grid`, `.coll-item-card`.
+
+> **Per-task verify (applies to ALL tasks below):** `npm run build` passes · DevTools-MCP screenshots at **360/375/390/412/430px** with no horizontal overflow / clipping / unreadable text · desktop `>=600px` unchanged (before/after screenshot at 1280px). **Scope for ALL tasks:** add rules to the `<600px` media block ONLY; **no JSX change** (the chosen patterns are all CSS-only).
+
+## Task List
+
+### Phase 1 — Foundation (do first)
+
+- [ ] **Task MR-1 — Compact breakpoint block + overlay full-screen-sheet.**
+  - **Goal:** Create the single `<600px` media block and implement the app-overlay full-screen-sheet + sticky-header pattern that later tasks write into.
+  - **Files/selectors:** `frontend/src/styles.css` — new block after ~line 2715 (banner comment A2); `.overlay-frame`, `.overlay-frame--phase`, `.nav-drawer`, `.overlay-frame__header`, `.toast-rack`.
+  - **Done (mobile):** overlays full-bleed (`inset:0;width:100%;max-height:100vh;transform:none;border-radius:0`); `.overlay-frame__header` `position:sticky;top:0` with solid bg so `×` is always reachable; body scrolls vertically; toast fits viewport. Checked 360→430px.
+  - **Scope:** only add `<600px` media; no JSX.
+  - **Dependencies:** None.
+  - **Risks:** double-scroll (sheet + inner panel) → keep one scroll container, header sticky, avoid nested `overflow:auto`. Rule leaking to desktop → block is last in source; verify 1280px parity.
+  - **Gap check:** [ ]
+
+- [ ] **Task MR-2 — Vocab shell → tab-strip pattern.**
+  - **Goal:** Convert the vocab shell from 300px sidebar + content (row) into a stacked layout with a top horizontal scrolling tab-strip.
+  - **Files/selectors:** `frontend/src/styles.css` — `.vocab-workspace`, `.vocab-sidebar`, `.vocab-sidebar__nav`, `.vocab-sidebar__stats`, `.vocab-sidebar__title-block`, `.vocab-content`.
+  - **Done (mobile):** `.vocab-workspace` `flex-direction:column`; `.vocab-sidebar` full-width sticky top, sensible max-height; `.vocab-sidebar__nav` `row`+`overflow-x:auto`+`nowrap`, buttons `flex-shrink:0`, all 11 tabs reachable by horizontal scroll, active state visible; stats/title-block fit (shrink/hide title if it eats height); `.vocab-content` pad ~14–16px. Checked 360→430px.
+  - **Scope:** only add `<600px` media; no JSX.
+  - **Dependencies:** MR-1 (same block).
+  - **Risks:** tab-strip hides that more tabs exist → optional faded edge / partial next tab; verify scrollability.
+  - **Gap check:** [ ]
+
+- [ ] **Task MR-3 — Mobile spacing helper var (only if it removes real duplication).**
+  - **Goal:** Add at most 1–2 mobile CSS vars (e.g. `--mobile-pad:14px`) reusing existing tokens; skip if no meaningful dedup.
+  - **Files/selectors:** `frontend/src/styles.css` — `:root` (add new var only).
+  - **Done:** new var used only inside the `<600px` block; desktop token values unchanged. *(Note: NO drawer toggle component/state needed — vocab nav is the CSS-only tab-strip (A4); dashboard `NavigationDrawer` already exists.)*
+  - **Scope:** add var only; don't edit existing vars; no JSX.
+  - **Dependencies:** MR-1.
+  - **Gap check:** [ ]
+
+#### ✅ Checkpoint Foundation (after MR-1..MR-3)
+- [ ] `npm run build` clean.
+- [ ] Overlays = full-screen sheet + sticky header; vocab shell = stacked + tab-strip.
+- [ ] Desktop `>=600px` unchanged (1280px screenshot diff).
+- [ ] Review with owner before Phase 2.
+
+### Phase 2 — Dashboard panel grid (priority 1)
+
+- [ ] **Task MR-4 — Topbar + inbox dropdown.**
+  - **Goal:** Make the top bar and notification inbox fit narrow screens.
+  - **Files/selectors:** `frontend/src/styles.css` — `.home-topbar`, `.topbar-cluster`, `.topbar-level`, `.topbar-clock`, `.inbox-dropdown`.
+  - **Done (mobile):** topbar stacks 1-col, no overflow at 360px; level/clock `min-width` don't force horizontal scroll; `.inbox-dropdown` clamped (`right:0;left:auto;width:min(<existing>,calc(100vw-24px))`), never bleeds off-screen. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX.
+  - **Dependencies:** MR-1.
+  - **Gap check:** [ ]
+
+- [ ] **Task MR-5 — Roadmap hero + stat cards + support panels.**
+  - **Goal:** Stack hero, 3 stat cards, and 4 support panels to 1 column without overflow.
+  - **Files/selectors:** `frontend/src/styles.css` — `.roadmap-track`, stat-card grid, `.home-shell__support`, `.support-panel`.
+  - **Done (mobile):** all three → 1 column; long titles wrap (no clipping); nothing exceeds viewport at 360px. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX.
+  - **Dependencies:** MR-1.
+  - **Gap check:** [ ]
+
+- [ ] **Task MR-6 — Quest/roadmap nested panels.**
+  - **Goal:** Collapse nested grids inside quest/roadmap panels to 1 column.
+  - **Files/selectors:** `frontend/src/styles.css` — `.current-main-quest`, `.current-main-quest__grid`, `.main-quest-session__grid`, `.main-quest-map__summary`, `.quest-summary`, `.backlog-item`, `.backlog-header`.
+  - **Done (mobile):** all grids → 1 col; headers/meta stack; reward/action rows wrap; claim buttons reachable; no overflow inside Quest overlay at 360px. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX.
+  - **Dependencies:** MR-1, MR-4, MR-5.
+  - **Gap check:** [ ]
+
+#### ✅ Checkpoint Dashboard (after MR-4..MR-6)
+- [ ] Build clean; home+topbar+inbox usable 360–430px; desktop unchanged.
+
+### Phase 3 — Overlay/modal content (priority 2)
+
+- [ ] **Task MR-7 — Status / Boss / Certificate overlay bodies.**
+  - **Goal:** Make the content grids inside Status/Boss/Certificate overlays read well in the full-screen sheet.
+  - **Files/selectors:** `frontend/src/styles.css` — `.status-modal--quad`, `.status-core__metrics`, `.status-badge-grid`, `.status-shell__hero`, `.boss-hero`, `BossTimelinePanel` selectors, `.certificate-form`, `.certificate-card__scores`.
+  - **Done (mobile):** status quad/metrics/badge → 1 col; boss hero + timeline stack; certificate form fields → 1 col, score row wraps; no overflow/clipped controls at 360px. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX.
+  - **Dependencies:** MR-1.
+  - **Gap check:** [ ]
+
+- [ ] **Task MR-8 — Quest overlay tab-row + bodies.**
+  - **Goal:** Make the Quest overlay tab-row and tab bodies usable on narrow screens.
+  - **Files/selectors:** `frontend/src/styles.css` — `.overlay-tab-row`, `.overlay-tab`, `.quest-main-tab`.
+  - **Done (mobile):** tab-row (Main/Daily/Weekly/Archive) wraps or scrolls horizontally without overflow; each tab body stacks 1 col; works at 360px. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX.
+  - **Dependencies:** MR-1.
+  - **Gap check:** [ ]
+
+#### ✅ Checkpoint Overlay (after MR-7..MR-8)
+- [ ] Build clean; 4 overlays usable end-to-end 360–430px; desktop unchanged.
+
+### Phase 4 — Vocabulary Workspace (priority 3)
+
+- [ ] **Task MR-9 — Codex Archive tab.**
+  - **Goal:** Make the Codex tab usable: controls stack, create/edit form → 1 col, cards full-width.
+  - **Files/selectors:** `frontend/src/styles.css` — `.codex-controls`, `.vocab-form`, `.form-grid`, `.textarea-label`, `.search-input`, Codex list/card.
+  - **Done (mobile):** controls stack (search full-width + button below); `.form-grid` → 1 col; textareas full-width; list/cards readable at 360px. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX.
+  - **Dependencies:** MR-2.
+  - **Gap check:** [ ]
+
+- [ ] **Task MR-10 — Flashcard Gate (vocab + collocation + library sub-modes).**
+  - **Goal:** Fit the flashcard arena to narrow screens across all 3 review sub-modes.
+  - **Files/selectors:** `frontend/src/styles.css` — `.flip-card`, `.flip-card-inner`, `.flip-card-front/back`, `.arena-header`, `.flashcard-gate-lobby`, `.flashcard-gate-active`.
+  - **Done (mobile):** flip-card width 100%/max-width, no overflow; review buttons (again/hard/good/easy) reachable + tappable at 360px; lobby + completion + sub-tab switch usable in all 3 sub-modes. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX. *(Note: tap-to-flip + grade-stopPropagation handlers already exist from plan F — do NOT re-touch JSX.)*
+  - **Dependencies:** MR-2.
+  - **Gap check:** [ ]
+
+- [ ] **Task MR-11 — Collocation Forge browser (3 layers).**
+  - **Goal:** Stack the 3-layer Collocation browser to a single column.
+  - **Files/selectors:** `frontend/src/styles.css` — `.coll-browser__body`, `.coll-section-nav`, `.coll-topic-box-grid`, `.coll-items-grid`, `.coll-item-card`, `.level-block-grid`.
+  - **Done (mobile):** `.coll-browser__body` → column; `.coll-section-nav` `width:100%` (keep `overflow-y`); `.coll-topic-box-grid` → 1 col; `.coll-items-grid` min-track reduced (~150px) so cards don't overflow 360px; level→section→topic→items flow works; back buttons reachable. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX.
+  - **Dependencies:** MR-2.
+  - **Gap check:** [ ]
+
+- [ ] **Task MR-12 — Word Network Tree (react-flow + bottom-sheet).**
+  - **Goal:** Adapt Tree (A7): collapse sidebar above a full-width canvas, keep react-flow touch pan/zoom + MiniMap + fitView, convert node-drawer to a bottom-sheet.
+  - **Files/selectors:** `frontend/src/styles.css` — `.vocab-tree-layout`, `.vocab-tree-sidebar`, `.vocab-tree-canvas`, `.vocab-tree-drawer`, `.react-flow__controls`/`__minimap`.
+  - **Done (mobile):** `.vocab-tree-layout` → column; sidebar full-width collapsible/scrollable strip above canvas; `.vocab-tree-canvas` full-width fixed height (~60vh); `.vocab-tree-drawer` → bottom-sheet (`left:0;right:0;bottom:0;max-height:~55%`) overlaying canvas, close button reachable, pan position preserved; Controls/MiniMap not covered by sheet; pinch-zoom + drag work on touch. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX.
+  - **Dependencies:** MR-2.
+  - **Risks:** touch pan/zoom unusable on real phone → flag follow-up, do NOT rebuild as list this round. Bottom-sheet covers Controls/MiniMap → Controls top-left, cap sheet ~55%.
+  - **Gap check:** [ ]
+
+- [ ] **Task MR-13 — Shadow Duel / Word Family / Echo Chamber / Error Dungeon / Boss tabs.**
+  - **Goal:** Collapse multi-column grids and oversized fixed-width cards in the remaining gameplay tabs.
+  - **Files/selectors:** `frontend/src/styles.css` — `.shadow-duel`, `.word-family-evolution`, `.echo-chamber`, `.echo-arena`, `.echo-card`, `.dungeon`, boss-arena selectors.
+  - **Done (mobile):** grids `1fr 1fr`/`1.5fr 1fr`/`repeat(3–4)` → 1 col where they overflow; cards `min-width:320px` → `min-width:0`/`width:100%`; Dungeon + Boss content readable, buttons reachable, no overflow at 360px. Checked 360→430px.
+  - **Scope:** only `<600px` media; no JSX.
+  - **Dependencies:** MR-2.
+  - **Gap check:** [ ]
+
+#### ✅ Checkpoint Vocabulary (after MR-9..MR-13)
+- [ ] Build clean; all 10 vocab tabs usable end-to-end 360–430px via tab-strip; desktop unchanged.
+
+### Phase 5 — Verify & close
+
+- [ ] **Task MR-14 — Full-device sweep + docs.**
+  - **Goal:** Complete the screenshot sweep, confirm desktop parity, update docs.
+  - **Verify:** screenshot every screen at 360/375/390/412/430 (zero overflow/clip, or file follow-ups); confirm 1280px unchanged; `docker compose up --build` runs, app at `http://localhost:5173`.
+  - **Files:** `docs/history/changelogs.md` (newest first), `docs/history/TEST_REPORT.md` (screenshot evidence), `tasks-done.md` + `TASKS.md` (`Gap check: [x]`).
+  - **Dependencies:** MR-1..MR-13.
+  - **Gap check:** [ ]
+
+#### ✅ Checkpoint Complete
+- [ ] All acceptance met; no horizontal overflow at any test width; desktop pixel-stable; ready for review.
+
+## Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| react-flow Tree pan/zoom unusable on real touch | Med | Keep canvas + MiniMap + fitView (MR-12). Fail on real phone → file follow-up, don't rebuild as list this round. |
+| Full-screen overlay sheet → double-scroll | Med | One scroll container: body scrolls, header sticky; avoid nested `overflow:auto`. |
+| `<600` rule leaks to desktop (specificity/order) | High | All rules in one media block placed last in source; verify 1280px parity each checkpoint. |
+| Tab-strip hides remaining tabs (11 tabs scroll) | Low | Optional faded edge / partial next tab; verify scrollability in DevTools. |
+| Bottom-sheet covers Controls/MiniMap | Low | Controls top-left, cap sheet ~55% (MR-12). |
+
+## Open Questions
+
+> **None — all UX resolved via grill-me (decisions A3–A7).** Dashboard keeps DOM order; Tree keeps canvas (option A) with bottom-sheet node-drawer; overlays full-screen + sticky header; vocab nav = horizontal tab-strip.
 
 ---
 

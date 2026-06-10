@@ -5399,7 +5399,7 @@ select:focus-visible {
 .coll-browser__body { display: flex; gap: 0; flex: 1; min-height: 0; overflow: hidden; margin-top: 0; }
 
 /* ── Two-level accordion sidebar (section → topic boxes) ── */
-.coll-section-nav { width: 256px; flex-shrink: 0; border-right: 1px solid var(--line, rgba(255,255,255,0.07)); overflow-y: auto; padding: 8px; }
+.coll-section-nav { flex: 1; min-width: 0; overflow-y: auto; padding: 8px; }
 .coll-topic-list__loading, .coll-topic-list__empty { font-size: 0.8125rem; color: var(--text-muted, rgba(230,237,243,0.4)); padding: 8px 12px; }
 
 .coll-section-group { margin-bottom: 4px; }
@@ -5484,7 +5484,7 @@ select:focus-visible {
 .coll-topic-box__pct { font-size: 0.95rem; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
 .coll-topic-box__frac { font-size: 0.65rem; color: rgba(230,237,243,0.7); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
 
-/* Items panel */
+/* Items panel (sidebar layout — shown when no topic selected) */
 .coll-items-panel { flex: 1; overflow-y: auto; padding: 12px; }
 .coll-items-panel__head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line, rgba(255,255,255,0.07)); }
 .coll-items-panel__title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text, #e6edf3); }
@@ -5492,6 +5492,37 @@ select:focus-visible {
 .coll-items-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; gap: 8px; color: var(--text-muted, rgba(230,237,243,0.4)); font-size: 0.875rem; text-align: center; }
 .coll-items-empty__icon { font-size: 2rem; }
 .coll-items-loading { padding: 24px; text-align: center; color: var(--text-muted, rgba(230,237,243,0.4)); font-size: 0.875rem; }
+
+/* Items full-screen view (topic selected → sidebar disappears) */
+.coll-items-fullscreen {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+.coll-items-fullscreen__head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line, rgba(255,255,255,0.07));
+  flex-shrink: 0;
+}
+.coll-items-fullscreen__title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.coll-items-fullscreen .coll-items-panel__title {
+  font-size: 1.2rem;
+}
+.coll-items-fullscreen .coll-items-grid {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
 
 .coll-items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 
@@ -5576,3 +5607,427 @@ select:focus-visible {
 .vl-drill-grid .coll-topic-box__title { font-size: 0.85rem; -webkit-line-clamp: 3; }
 .vl-drill-grid .coll-topic-box__pct { font-size: 1.05rem; }
 .vl-drill-grid .coll-topic-box__frac { font-size: 0.72rem; }
+
+/* ===== MOBILE COMPACT (<600px) — content-based, not device-based =====
+   Strategy: adapt existing layout (A1-A8). No JSX changes.
+   All rules here cascade after the 640px block above.
+   Desktop (>=600px) is NOT affected.
+   ===================================================================== */
+@media (max-width: 599.98px) {
+
+  /* ── MR-1: App overlay → full-screen sheet + sticky header ──────── */
+  .overlay-frame,
+  .overlay-frame[data-presence='open'],
+  .overlay-frame[data-presence='entering'],
+  .overlay-frame[data-presence='closing'],
+  .overlay-frame--fallback {
+    position: fixed;
+    inset: 0;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 100vh;
+    transform: none !important;
+    border-radius: 0;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .overlay-frame--phase {
+    width: 100%;
+    max-height: 100vh;
+  }
+
+  .overlay-frame__header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 16px 12px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  .overlay-frame__body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+
+  .nav-drawer {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transform: none;
+  }
+
+  .nav-drawer[data-presence='entering'],
+  .nav-drawer[data-presence='closing'] {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  .nav-drawer[data-presence='open'] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .nav-drawer__header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 16px 12px;
+    flex-shrink: 0;
+  }
+
+  .nav-drawer__actions,
+  .nav-drawer__subactions {
+    overflow-y: auto;
+    padding: 8px 12px;
+  }
+
+  .toast-rack {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    max-width: calc(100vw - 24px);
+  }
+
+  /* ── MR-2: Vocab shell → tab-strip cuộn ngang ───────────────────── */
+  .vocab-workspace {
+    flex-direction: column;
+  }
+
+  .vocab-sidebar {
+    width: 100%;
+    height: auto;
+    flex-shrink: 0;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 243, 191, 0.25);
+    box-shadow: none;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+
+  .vocab-sidebar__header {
+    padding: 10px 14px 8px;
+  }
+
+  .vocab-back-button {
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+  }
+
+  .vocab-sidebar__title-block {
+    display: none;
+  }
+
+  .vocab-sidebar__stats {
+    padding: 8px 14px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .vocab-stat-card {
+    padding: 4px 2px;
+  }
+
+  .vocab-stat-card span {
+    font-size: 0.6rem;
+  }
+
+  .vocab-stat-card strong {
+    font-size: 1rem;
+  }
+
+  .vocab-sidebar__nav {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    padding: 6px 10px;
+    gap: 4px;
+    flex: none;
+    scrollbar-width: none;
+  }
+
+  .vocab-sidebar__nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .vocab-nav-btn {
+    flex-shrink: 0;
+    padding: 7px 12px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .vocab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    min-height: 0;
+  }
+
+  /* ── MR-4: Topbar + inbox dropdown ──────────────────────────────── */
+  .home-shell {
+    width: calc(100vw - 16px);
+    padding-top: 6px;
+  }
+
+  .home-topbar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .topbar-level,
+  .topbar-clock {
+    min-width: 0;
+  }
+
+  .topbar-cluster {
+    gap: 8px;
+  }
+
+  .inbox-dropdown {
+    right: 0;
+    left: auto;
+    width: min(360px, calc(100vw - 16px));
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    border-radius: 12px;
+  }
+
+  /* ── MR-5: Roadmap hero + stat cards + support panels ────────────── */
+  .hero-panel {
+    padding: 16px;
+  }
+
+  .hero-panel__copy h1 {
+    font-size: 32px;
+  }
+
+  .roadmap-track {
+    grid-template-columns: 1fr;
+  }
+
+  .home-shell__support {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-stats-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .support-panel {
+    padding: 14px;
+  }
+
+  /* ── MR-6: Quest/roadmap nested panels ───────────────────────────── */
+  .quest-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .current-main-quest {
+    padding: 14px;
+  }
+
+  .current-main-quest__actions,
+  .main-quest-session__actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .quest-node__reward {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+    padding-left: 0;
+  }
+
+  /* ── MR-7: Status / Boss / Certificate overlay bodies ────────────── */
+  .status-modal--quad,
+  .status-condition__grid,
+  .status-core__metrics,
+  .status-badge-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-shell__hero {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .boss-hero {
+    gap: 12px;
+  }
+
+  .certificate-form {
+    grid-template-columns: 1fr;
+  }
+
+  .certificate-card__scores {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* ── MR-8: Quest overlay tab-row + bodies ────────────────────────── */
+  .overlay-tab-row {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .overlay-tab-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .overlay-tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+  }
+
+  /* ── MR-9: Codex Archive tab ─────────────────────────────────────── */
+  .codex-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .codex-controls input,
+  .codex-controls select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vocab-form textarea {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* ── MR-10: Flashcard Gate ───────────────────────────────────────── */
+  .flip-card {
+    height: min(440px, 60vh);
+  }
+
+  .arena-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .difficulty-selectors {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .flashcard-gate-lobby {
+    padding: 16px;
+  }
+
+  /* ── MR-11: Collocation Forge browser (3 lớp) ───────────────────── */
+  .coll-browser__body {
+    flex-direction: column;
+  }
+
+  .coll-section-nav {
+    width: 100%;
+    flex-shrink: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--line, rgba(255,255,255,0.07));
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .coll-topic-box-grid {
+    grid-template-columns: 1fr;
+    padding-left: 8px;
+  }
+
+  .coll-items-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .level-block-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  /* ── MR-12: Word Network Tree (react-flow + bottom-sheet) ────────── */
+  .vocab-tree-layout {
+    flex-direction: column;
+    height: auto;
+  }
+
+  /* override the !important height set for .vocab-workspace context */
+  .vocab-workspace .vocab-tree-layout {
+    height: auto !important;
+  }
+
+  .vocab-tree-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    max-height: 180px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .vocab-tree-canvas {
+    width: 100%;
+    height: 60vh;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .vocab-tree-drawer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 55%;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    overflow-y: auto;
+    z-index: 20;
+    border-radius: 16px 16px 0 0;
+  }
+
+  /* ── MR-13: Shadow Duel / Word Family / Echo Chamber / Error Dungeon / Boss ── */
+  .duel-options {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .echo-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .echo-arena {
+    padding: 12px 0;
+  }
+}
