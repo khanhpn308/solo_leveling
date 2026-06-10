@@ -2,9 +2,9 @@
 
 _For IELTS Quest Dashboard / Solo-Leveling-inspired gamified learning system_
 
-> **Last updated:** 2026-06-10 (session 8n+1 — gap-checked against code; all sections corrected to match actual implementation)
+> **Last updated:** 2026-06-10 (session 8n+2 — full code review of all 8 UI components; 6 modules upgraded from stub/partial to LIVE)
 >
-> **Implementation status:** Phases I1–I4 **complete**. All core modules exist in code. Remaining work is frontend visualization (Word Network Tree), UI polish for stub modules, and boss/error-dungeon completion.
+> **Implementation status:** Phases I1–I4 **complete**. All 9 implemented modules are LIVE. Only Context Hunt remains unstarted. Open gaps are gameplay depth items, not missing modules.
 
 ---
 
@@ -57,18 +57,18 @@ Upper-intermediate supports:
 
 ### 1.3. Mapping to implemented features
 
-| Source idea | Implemented game feature |
-|---|---|
-| Vocabulary notebook | Codex Archive (`vocabulary_items`) |
-| Cover meaning → recall → check | Flashcard Gate (tap-to-flip card, again/hard/good/easy) |
-| Network / diagram | Word Network Tree (`vocabulary_topics/nodes/edges`) |
-| Collocations | Collocation Forge (`collocation_*` tables, browser + flashcard) |
-| Word family | Word Family Evolution (`vocabulary_relations`) |
-| Synonym / antonym | Shadow Duel |
-| Pronunciation / stress | Echo Chamber |
-| Guess meaning from context | Context Hunt (not started) |
-| Typical errors | Error Dungeon (`vocabulary_errors`) |
-| Checkpoint test | Vocabulary Boss (`VocabularyBoss.jsx`) |
+| Source idea | Game feature (project name) | Status |
+|---|---|---|
+| Vocabulary notebook | **Codex Archive** (`vocabulary_items`) | ✅ Live |
+| Cover meaning → recall → check | **Flashcard Gate** (tap-to-flip, again/hard/good/easy) | ✅ Live |
+| Network / diagram | **Lexical Network Map** (`vocabulary_topics/nodes/edges`, React Flow) | ✅ Live |
+| Collocations | **Collocation Forge** (`collocation_*` tables, browser + flashcard) | ✅ Live |
+| Word family | **Word Family Evolution** (`vocabulary_relations`, React Flow + quiz) | ✅ Live |
+| Synonym / antonym | **Shadow Duel** (timed MCQ, 3 lives, streak) | ✅ Live |
+| Pronunciation / stress | **Echo Chamber** (syllable stress + silent letter hunt, TTS) | ✅ Live |
+| Typical errors | **Error Dungeon** (monster HP, correction battle) | ✅ Live |
+| Checkpoint test | **Lexical Checkpoint Boss** (4 bosses, exam + submit flow) | ✅ Live |
+| Guess meaning from context | **Context Hunt** | ❌ Not started |
 
 ---
 
@@ -96,12 +96,12 @@ VocabularyWorkspace (full-page shell, App.jsx)
 │   ├── Browser layer 1        — section accordion
 │   ├── Browser layer 2        — topic progress boxes (neon % fill)
 │   └── Browser layer 3        — collocation items + add/remove flashcard
-├── Word Network Tree          — WordNetworkTree.jsx (backend live, UI stub)
-├── Word Family Evolution      — WordFamilyEvolution.jsx (schema live, UI stub)
-├── Shadow Duel                — ShadowDuel.jsx (backend partially live, UI stub)
-├── Echo Chamber               — EchoChamber.jsx (backend stub, UI stub)
-├── Error Dungeon              — ErrorDungeon.jsx (partially live)
-└── Vocabulary Boss            — VocabularyBoss.jsx (backend partially live, UI thin)
+├── Lexical Network Map        — WordNetworkTree.jsx (React Flow, drag/connect, node drawer)
+├── Word Family Evolution      — WordFamilyEvolution.jsx (React Flow + inline quiz)
+├── Shadow Duel                — ShadowDuel.jsx (timed MCQ, 3 lives, timer)
+├── Echo Chamber               — EchoChamber.jsx (syllable stress + silent letter, TTS)
+├── Error Dungeon              — ErrorDungeon.jsx (monster HP, correction battle)
+└── Lexical Checkpoint Boss    — VocabularyBoss.jsx (4 bosses, exam + submit)
 ```
 
 ### 2.4. Main game loop (implemented)
@@ -266,81 +266,96 @@ GET    /api/collocations/flashcard/topics/{id}        — cards for a topic (non
 
 ---
 
-### 3.4. Word Network Tree ⚠️ BACKEND LIVE / UI STUB
+### 3.4. Lexical Network Map ✅ LIVE
 
 **What exists:**
 - `vocabulary_topics`, `vocabulary_nodes`, `vocabulary_edges` tables in DB.
 - Full backend CRUD API (see §6.3).
-- `WordNetworkTree.jsx` component (stub/early implementation — no React Flow).
+- `WordNetworkTree.jsx` — React Flow canvas with `CustomVocabNode` (status-based neon glow), `MiniMap`, `Controls`.
+- Create/select topic visual maps from sidebar.
+- Add Codex words to map as nodes; drag to reposition (position persisted via `PATCH /api/vocabulary/tree/nodes/{id}`).
+- Draw edge between nodes via React Flow connect handle → `POST /api/vocabulary/tree/edges`.
+- Delete edge via node drawer.
+- Click node → drawer shows IPA, word stress, meanings, examples, collocations.
+- `POST /api/vocabulary/tree/sync-all` syncs mastery states from flashcard data.
 
-**What is NOT implemented:**
-- React Flow visualization in the frontend.
-- Node unlock rules enforced end-to-end.
+**Node status values:** `locked` / `discovered` / `activated` / `stabilized` / `mastered` / `awakened` (color-coded neon).
+
+**What is NOT yet implemented:**
+- Automatic node status transitions driven by backend mastery rules (status defaults to `discovered` on create; no enforce from flashcard mastery yet).
 
 ---
 
-### 3.5. Word Family Evolution ⚠️ SCHEMA ONLY / UI STUB
+### 3.5. Word Family Evolution ✅ LIVE
 
 **What exists:**
-- `vocabulary_relations` table with CRUD API (see §6.1).
-- `WordFamilyEvolution.jsx` component (stub).
+- `vocabulary_relations` table: `source_word_id`, `target_word_id`, `target_text`, `relation_type`.
+- Backend API `GET /api/vocabulary/practice/word-family` — returns family groups with nodes + edges.
+- `WordFamilyEvolution.jsx` — React Flow canvas with `CustomFamilyNode` (rank-based neon glow F→S).
+- Family selector dropdown; root word at top, derived forms spread below.
+- Inline quiz: sentence-gap MCQ (hardcoded for 3 seed families; dynamic "select derived form" for DB families).
+- Correct answer → `POST /api/vocabulary/practice/record-success` with `xp_gained: 10`; `onXPUpdate` callback.
 
-**What is NOT implemented:**
-- UI for adding/browsing word families from Codex.
-- Dedicated API surface for relation browsing (reuses `/api/vocabulary/relations`).
+**What is NOT yet implemented:**
+- UI to add `word_family` relation directly from the Codex word editor form.
 
 ---
 
-### 3.6. Shadow Duel ⚠️ BACKEND PARTIALLY LIVE / UI STUB
+### 3.6. Shadow Duel ✅ LIVE
 
 **What exists:**
-- `ShadowDuel.jsx` component (stub).
-- `GET /api/vocabulary/practice/shadow-duel` — returns question set generated from `vocabulary_relations` + fallback hardcoded pool.
-- `POST /api/vocabulary/practice/record-success` — records a correct answer.
-
-**What is NOT implemented:**
-- Full scoring flow wired to frontend.
-- XP award for shadow duel completion.
+- `ShadowDuel.jsx` — full timed MCQ game loop.
+- Questions from `GET /api/vocabulary/practice/shadow-duel` (relation-based + hardcoded fallback pool).
+- 3 question types: `synonym`, `antonym`, `register` (informal → academic).
+- 10-second countdown timer per question; timeout = wrong answer.
+- 3 lives; game ends on 0 lives or last question.
+- Score, streak, best streak tracking.
+- End-game XP: synonym/antonym correct +2, register correct +3, best streak ≥10 +20.
+- `POST /api/vocabulary/practice/record-success` on game end.
 
 ---
 
-### 3.7. Echo Chamber ⚠️ BACKEND STUB / UI STUB
+### 3.7. Echo Chamber ✅ LIVE
 
 **What exists:**
-- `EchoChamber.jsx` component (stub).
-- `GET /api/vocabulary/practice/echo-chamber` — returns minimal response.
+- `EchoChamber.jsx` — 2-stage pronunciation gameplay.
+- Questions from `GET /api/vocabulary/practice/echo-chamber`.
+- Stage 1 — Stressed Syllable: click the syllable with primary stress from a split syllables array.
+- Stage 2 — Silent Letter Hunt: click each character in the word that is a silent letter (only triggered if word has `silent_letters`).
+- `window.speechSynthesis` TTS — auto-plays word on load and on "Listen" button.
+- 3 lives, streak, best streak.
+- End-game XP: word with silent letters +6, without +3, best streak ≥10 +20.
+- `POST /api/vocabulary/practice/record-success` on game end.
 
-**What is NOT implemented:**
-- Pronunciation data, stress-marking gameplay, scoring.
+**Dependency:** requires words seeded with `syllables`, `stressed_index`, and optionally `silent_letters` in the backend echo-chamber response.
 
 ---
 
-### 3.8. Error Dungeon ⚠️ PARTIALLY LIVE
+### 3.8. Error Dungeon ✅ LIVE
 
 **What exists:**
 - `vocabulary_errors` table: `error_type`, `wrong_text`, `corrected_text`, `explanation`, `status` (`active`/`defeated`), `defeated_count`.
-- `ErrorDungeon.jsx` component.
 - Full CRUD API including defeat endpoint (see §6.4).
-- `defeat_vocabulary_error()` service in `services.py`.
-
-**What is NOT implemented:**
-- Monster defeat animation / UI flow in `ErrorDungeon.jsx`.
-- Correction counter UI (tracking `defeated_count` increments).
+- `ErrorDungeon.jsx` — monster lobby grid + battle arena.
+- Monster cards: HP bar (`3 - defeated_count / 3`), type-based icon/name/description.
+- Battle: player types the corrected text → exact-match compare → `POST /api/vocabulary/errors/{id}/defeat`.
+- Feedback: "HP reduced (N/3 attempts)" or "fully defeated and banished".
+- 6 monster types: `wrong_collocation`, `wrong_meaning`, `wrong_register`, `wrong_word_form`, `wrong_preposition`, `wrong_grammar_pattern`.
 
 ---
 
-### 3.9. Vocabulary Boss ⚠️ BACKEND PARTIALLY LIVE / UI THIN
+### 3.9. Lexical Checkpoint Boss ✅ LIVE
 
 **What exists:**
-- `VocabularyBoss.jsx` component.
-- `GET /api/vocabulary/boss/status` — returns boss status list (locked/unlocked per boss ID).
-- `POST /api/vocabulary/boss/{boss_id}/challenge` — returns `VocabularyBossExam` question set.
-- `POST /api/vocabulary/boss/{boss_id}/submit` — accepts `score_pct`, runs `submit_vocabulary_boss_result()`.
-- 4 boss IDs supported (1–4).
+- `VocabularyBoss.jsx` — boss lobby + exam arena.
+- `GET /api/vocabulary/boss/status` — returns 4 bosses with `id`, `title`, `stage`, `goal`, `status` (locked/ready/cleared), `requirements` (met/unmet with current/target values), `reward_xp`.
+- `POST /api/vocabulary/boss/{id}/challenge` — returns question set.
+- Exam: multiple-choice per question, progress indicator, "Flee Battle" escape.
+- Submit: calculates `score_pct` client-side → `POST /api/vocabulary/boss/{id}/submit` → shows pass/fail, score, reward XP.
+- Pass threshold: 75%.
 
-**What is NOT implemented:**
-- Boss requirements computed from real gameplay data (currently stub conditions).
-- Full reward + badge unlock flow wired to frontend.
+**What is NOT yet implemented:**
+- Boss requirements populated from real gameplay data (backend `get_vocabulary_boss_status` currently returns stub/placeholder conditions).
 
 ---
 
@@ -527,16 +542,17 @@ GET    /api/collocations/flashcard/topics/{id}        — cards in a topic for r
 
 ## 7. Frontend: Actual Components
 
-| Component | File | Status |
+| Game name | File | Status |
 |---|---|---|
-| VocabularyWorkspace (shell + Codex + Flashcard tabs) | `VocabularyWorkspace.jsx` | ✅ Live |
-| CollocationForge (browser 2-layer + flashcard sub-tab) | `CollocationForge.jsx` | ✅ Live |
-| WordNetworkTree | `WordNetworkTree.jsx` | ⚠️ Stub (backend live) |
-| WordFamilyEvolution | `WordFamilyEvolution.jsx` | ⚠️ Stub |
-| ShadowDuel | `ShadowDuel.jsx` | ⚠️ Stub (backend partial) |
-| EchoChamber | `EchoChamber.jsx` | ⚠️ Stub |
-| ErrorDungeon | `ErrorDungeon.jsx` | ⚠️ Partial (defeat API exists, UI incomplete) |
-| VocabularyBoss | `VocabularyBoss.jsx` | ⚠️ Partial (challenge/submit API exists, UI thin) |
+| Codex Archive + Flashcard Gate (shell) | `VocabularyWorkspace.jsx` | ✅ Live |
+| Collocation Forge (browser + flashcard) | `CollocationForge.jsx` | ✅ Live |
+| Lexical Network Map | `WordNetworkTree.jsx` | ✅ Live (React Flow, drag/connect) |
+| Word Family Evolution | `WordFamilyEvolution.jsx` | ✅ Live (React Flow + quiz) |
+| Shadow Duel | `ShadowDuel.jsx` | ✅ Live (timed MCQ, 3 lives) |
+| Echo Chamber | `EchoChamber.jsx` | ✅ Live (stress + silent letters, TTS) |
+| Error Dungeon | `ErrorDungeon.jsx` | ✅ Live (monster HP, correction battle) |
+| Lexical Checkpoint Boss | `VocabularyBoss.jsx` | ✅ Live (exam + submit, 4 bosses) |
+| Context Hunt | _(not started)_ | ❌ Not started |
 
 ---
 
@@ -555,23 +571,21 @@ Quest XP for collocation forge: seeded value in `quest.base_xp` / `quest.xp` (ch
 
 ## 9. What Remains to Build
 
-### Priority 1 — Frontend for existing backend
+### Priority 1 — Gameplay depth for live features
 
-- **Word Network Tree** — wire `/api/vocabulary/tree/*` to React Flow visualization; implement node status transitions in UI.
-- **Word Family Evolution** — add UI to browse/add word family relations from Codex.
+- **Lexical Network Map — node auto-status transitions** — backend enforce: node status progresses `discovered → activated → stabilized → mastered → awakened` based on flashcard mastery level, not just manual `sync-all`.
+- **Lexical Checkpoint Boss — real requirements** — `get_vocabulary_boss_status()` in `services.py` returns stub/placeholder requirements; replace with real data computed from `vocabulary_items`, `collocation_flashcards`, `vocabulary_errors`, etc.
+- **Word Family Evolution — Codex relation editor** — add `word_family` relation directly from the Codex word form UI; currently must go through the API directly.
 
-### Priority 2 — Complete partial features
+### Priority 2 — New features
 
-- **Error Dungeon defeat UI** — wire `POST /api/vocabulary/errors/{id}/defeat`; monster defeat animation; correction counter display.
-- **Vocabulary Boss full flow** — boss requirements from real data; reward + badge unlock UI.
-- **Shadow Duel scoring** — wire question set to frontend; XP award on completion.
+- **Reverse flashcard / sentence gap types** — extend flashcard generation to support `reverse_recall`, `sentence_gap` card types.
+- **Context Hunt** — DB table `context_hunt_attempts`, component, API. No prior work exists.
 
-### Priority 3 — New features
+### Priority 3 — Polish
 
-- **Reverse flashcard / sentence gap types** — extend flashcard generation to `reverse_recall`, `sentence_gap` card types.
-- **Relation CRUD in Codex UI** — synonym/antonym/word family form in the Codex word editor.
-- **Context Hunt** — DB table `context_hunt_attempts`, component, API.
-- **Echo Chamber gameplay** — pronunciation / stress marking, scoring.
+- **Shadow Duel question depth** — hardcoded fallback pool is small; grow `vocabulary_relations` data to reduce fallback reliance.
+- **Echo Chamber data coverage** — words need `syllables`, `stressed_index`, and `silent_letters` fields populated in the backend response; coverage depends on seeded/entered data quality.
 
 ---
 
@@ -632,7 +646,7 @@ Risks:
 | # | Decision | Status |
 |---|---|---|
 | 1 | Should `player_collocation_progress` be removed or kept as legacy? | Open — keep for now, no active writes post-I4 |
-| 2 | Should Word Network Tree use React Flow or a simpler SVG/canvas approach? | Open — React Flow was the original proposal; backend ready |
+| 2 | Should Lexical Network Map node status transitions be auto-driven by flashcard mastery, or remain manual via sync-all? | Open — current: manual sync-all only |
 | 3 | Should Context Hunt be a standalone tab or part of Codex? | Open |
-| 4 | Should Shadow Duel questions be generated from vocabulary_relations or seeded manually? | Open — backend already uses relation-based generation + fallback pool |
+| 4 | Should Lexical Checkpoint Boss requirements be computed live or cached/snapshotted? | Open — currently stub; real data needed |
 | 5 | Should `compute_vocabulary_xp` eventually be replaced with event-driven XP transactions? | Open — current recompute model is simple but may drift from intent as features grow |
