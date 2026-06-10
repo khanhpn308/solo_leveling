@@ -27,7 +27,7 @@ services:
       DATABASE_URL: mysql+pymysql://ielts_user:ielts_password@mysql:3306/ielts_quest
       APP_START_DATE: "2026-06-04"
       MATERIAL_PLAN_PATH: /app/material.md
-      CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+      CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://18.141.232.235:5173"
       PYTHONUNBUFFERED: "1"
     ports:
       - "8000:8000"
@@ -45,7 +45,7 @@ services:
     container_name: ielts_quest_frontend
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://127.0.0.1:8000/api
+      VITE_API_URL: http://18.141.232.235:8000/api
       CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: "100"
     ports:
