@@ -1101,6 +1101,8 @@ class CollocationBrowseTopicOut(BaseModel):
     section_title: str
     section_order: int
     item_count: int = 0
+    # Progress: collocations whose effective_familiarity is hard/good/easy (not again/new)
+    completed_count: int = 0
 
     class Config:
         from_attributes = True

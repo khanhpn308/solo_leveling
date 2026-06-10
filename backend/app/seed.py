@@ -2053,13 +2053,14 @@ def ensure_rank_exam_pools(db: Session, skill_by_name: dict[str, Skill]) -> None
 
 def collocations_file_path() -> Path:
     candidates: list[Path] = []
-    
+
     configured_path = os.getenv("COLLOCATIONS_PATH")
     if configured_path:
         candidates.append(Path(configured_path))
-        
+
     current_file = Path(__file__).resolve()
-    rel_path = Path("material/vocabularies/month1-6/English_Collocations_campaign1-3_3-6.md")
+    # C-1: repointed to the polished (OCR-denoised) file
+    rel_path = Path("material/vocabularies/month1-6/English_Collocations_campaign1-3_3-6_polished.md")
     candidates.extend(
         [
             current_file.parents[2] / rel_path,
@@ -2067,64 +2068,99 @@ def collocations_file_path() -> Path:
             Path.cwd() / rel_path,
         ]
     )
-    
+
     for candidate in candidates:
         if candidate.exists():
             return candidate
-            
+
     searched = ", ".join(str(candidate) for candidate in candidates)
     raise FileNotFoundError(f"Collocations file not found. Checked: {searched}")
 
 
 def parse_collocations_file(filepath: Path) -> dict:
+    """Parse the polished collocation markdown file into a structured dict.
+
+    File hierarchy (polished format):
+        ## N. Topic Title          ← CollocationTopic (60 total)
+        _Section: Section Name_    ← CollocationSection (10 total); appears once
+                                     per ## N. block, directly after the heading.
+                                     Consecutive topics sharing the same section
+                                     name belong to the same section.
+        | col | pron | vi | ex_en | ex_vi |   ← CollocationItem rows
+
+    Parser rules (C-1):
+    - Open a new Section when the `_Section:_` label changes from the previous
+      one seen (not when a `## N.` heading appears).
+    - Each `## N. Title` becomes a Topic inside the current section; topic_number
+      = N, topic_order = 1-based counter within its section.
+    - Item global dedup (C-2): a collocation phrase already seen anywhere in the
+      collection is skipped — first occurrence wins.
+    """
     text = filepath.read_text(encoding="utf-8")
     lines = text.splitlines()
-    
-    sections = []
-    current_section = None
-    current_topic = None
-    
-    re_section = re.compile(r"^##\s+(\d+)\.\s+(.*)")
-    re_topic = re.compile(r"^_(?:Section|Topic):\s+(.*)_")
-    
-    topic_order_count = 0
+
+    sections: list[dict] = []
+    # Map section_name → section dict (for fast lookup / dedup)
+    section_by_name: dict[str, dict] = {}
+    section_order_counter = 0
+
+    current_section: dict | None = None
+    current_topic: dict | None = None
+    pending_topic_number: int | None = None
+    pending_topic_title: str | None = None
     item_order_count = 0
-    
+
+    re_heading = re.compile(r"^##\s+(\d+)\.\s+(.*)")
+    re_section_label = re.compile(r"^_(?:Section|Topic):\s+(.+?)_\s*$")
+
     for line in lines:
         line_stripped = line.strip()
         if not line_stripped:
             continue
-            
-        section_match = re_section.match(line_stripped)
-        if section_match:
-            section_order = int(section_match.group(1))
-            section_title = section_match.group(2).strip()
-            
-            current_section = {
-                "section_order": section_order,
-                "title": section_title,
-                "topics": []
-            }
-            sections.append(current_section)
-            current_topic = None
-            topic_order_count = 0
-            continue
-            
-        topic_match = re_topic.match(line_stripped)
-        if topic_match:
-            topic_title = topic_match.group(1).strip()
-            topic_order_count += 1
-            
-            current_topic = {
-                "title": topic_title,
-                "topic_order": topic_order_count,
-                "items": []
-            }
-            if current_section is not None:
-                current_section["topics"].append(current_topic)
+
+        # --- ## N. Topic heading ---
+        heading_match = re_heading.match(line_stripped)
+        if heading_match:
+            pending_topic_number = int(heading_match.group(1))
+            pending_topic_title = heading_match.group(2).strip()
+            current_topic = None  # topic not created yet — wait for _Section:_ line
             item_order_count = 0
             continue
-            
+
+        # --- _Section: Name_ label ---
+        section_match = re_section_label.match(line_stripped)
+        if section_match:
+            section_name = section_match.group(1).strip()
+
+            # Open a new section only when the name changes
+            if section_name not in section_by_name:
+                section_order_counter += 1
+                sec = {
+                    "section_order": section_order_counter,
+                    "title": section_name,
+                    "topics": [],
+                }
+                sections.append(sec)
+                section_by_name[section_name] = sec
+
+            current_section = section_by_name[section_name]
+
+            # Create the topic that was buffered by the preceding ## N. heading
+            if pending_topic_title is not None and pending_topic_number is not None:
+                topic_order = len(current_section["topics"]) + 1
+                current_topic = {
+                    "title": pending_topic_title,
+                    "topic_number": pending_topic_number,
+                    "topic_order": topic_order,
+                    "items": [],
+                }
+                current_section["topics"].append(current_topic)
+                pending_topic_title = None
+                pending_topic_number = None
+                item_order_count = 0
+            continue
+
+        # --- Table row ---
         if line_stripped.startswith("|") and line_stripped.endswith("|"):
             parts = [p.strip() for p in line_stripped.split("|")[1:-1]]
             if not parts:
@@ -2132,53 +2168,37 @@ def parse_collocations_file(filepath: Path) -> dict:
             collocation = parts[0]
             if collocation.lower() in ("collocation", "---") or "---" in collocation:
                 continue
-                
-            if current_section is None:
-                current_section = {
-                    "section_order": 1,
-                    "title": "Default Section",
-                    "topics": []
-                }
-                sections.append(current_section)
-                
+
             if current_topic is None:
-                topic_order_count += 1
-                current_topic = {
-                    "title": "Default Topic",
-                    "topic_order": topic_order_count,
-                    "items": []
-                }
-                current_section["topics"].append(current_topic)
-                
+                continue  # orphan row before any topic — skip
+
             pronunciation_us = parts[1] if len(parts) > 1 else None
-            meaning_vi = parts[2] if len(parts) > 2 else None
-            example_en = parts[3] if len(parts) > 3 else None
-            example_vi = parts[4] if len(parts) > 4 else None
-            
+            meaning_vi       = parts[2] if len(parts) > 2 else None
+            example_en       = parts[3] if len(parts) > 3 else None
+            example_vi       = parts[4] if len(parts) > 4 else None
+
             if pronunciation_us == "": pronunciation_us = None
-            if meaning_vi == "": meaning_vi = None
-            if example_en == "": example_en = None
-            if example_vi == "": example_vi = None
-            
+            if meaning_vi       == "": meaning_vi       = None
+            if example_en       == "": example_en       = None
+            if example_vi       == "": example_vi       = None
+
             item_order_count += 1
-            
-            item_data = {
-                "collocation": collocation,
+            current_topic["items"].append({
+                "collocation":     collocation,
                 "pronunciation_us": pronunciation_us,
-                "meaning_vi": meaning_vi,
-                "example_en": example_en,
-                "example_vi": example_vi,
-                "item_order": item_order_count
-            }
-            current_topic["items"].append(item_data)
-            
+                "meaning_vi":       meaning_vi,
+                "example_en":       example_en,
+                "example_vi":       example_vi,
+                "item_order":       item_order_count,
+            })
+
     return {
-        "code": "intermediate-collocations",
-        "title": "English Collocations in Use Intermediate",
-        "description": "English Collocations campaign 1-3, units 3-6",
+        "code":        "intermediate-collocations",
+        "title":       "English Collocations in Use Intermediate",
+        "description": "English Collocations in Use Intermediate — polished (OCR-denoised)",
         "source_book": "English Collocations in Use Intermediate",
-        "level": "Intermediate",
-        "sections": sections
+        "level":       "Intermediate",
+        "sections":    sections,
     }
 
 
@@ -2207,6 +2227,21 @@ def ensure_collocations(db: Session, campaign: Campaign) -> None:
     link_collection_to_campaign(db, campaign.id, collection.id)
 
     # 3. Sections & Topics & Items (idempotent)
+    # C-2: global dedup — track collocation phrases seen anywhere in this
+    # collection so each phrase is stored at most once (first occurrence wins).
+    globally_seen: set[str] = set()
+
+    # Pre-populate from items already in DB for this collection (idempotent re-seed)
+    existing_in_db = (
+        db.query(CollocationItem.collocation)
+        .join(CollocationTopic, CollocationItem.topic_id == CollocationTopic.id)
+        .join(CollocationSection, CollocationTopic.section_id == CollocationSection.id)
+        .filter(CollocationSection.collection_id == collection.id)
+        .all()
+    )
+    for (phrase,) in existing_in_db:
+        globally_seen.add(phrase)
+
     for section_data in data["sections"]:
         section = db.query(CollocationSection).filter_by(
             collection_id=collection.id,
@@ -2226,6 +2261,8 @@ def ensure_collocations(db: Session, campaign: Campaign) -> None:
                 db.flush()
 
         for topic_data in section_data["topics"]:
+            # C-1: topic_number comes from topic_data (the ## N value), not section_order
+            topic_number = topic_data.get("topic_number", section_data["section_order"])
             topic = db.query(CollocationTopic).filter_by(
                 section_id=section.id,
                 title=topic_data["title"]
@@ -2234,28 +2271,38 @@ def ensure_collocations(db: Session, campaign: Campaign) -> None:
                 topic = CollocationTopic(
                     section_id=section.id,
                     title=topic_data["title"],
-                    topic_number=section.section_order,
+                    topic_number=topic_number,
                     topic_order=topic_data["topic_order"]
                 )
                 db.add(topic)
                 db.flush()
             else:
-                if topic.topic_order != topic_data["topic_order"] or topic.topic_number != section.section_order:
+                changed = False
+                if topic.topic_order != topic_data["topic_order"]:
                     topic.topic_order = topic_data["topic_order"]
-                    topic.topic_number = section.section_order
+                    changed = True
+                if topic.topic_number != topic_number:
+                    topic.topic_number = topic_number
+                    changed = True
+                if changed:
                     db.flush()
 
-            # Key on (item_order, collocation) so identical strings at different
-            # positions are treated as distinct items (spec §9: allow duplicates).
+            # C-2: global dedup — skip phrases already seen in this collection
             existing_items = {
-                (item.item_order, item.collocation): item
+                item.collocation: item
                 for item in db.query(CollocationItem).filter_by(topic_id=topic.id).all()
             }
 
             for item_data in topic_data["items"]:
                 colloc = item_data["collocation"]
-                key = (item_data["item_order"], colloc)
-                if key not in existing_items:
+
+                # Already in DB for this collection (from a different topic) → skip
+                if colloc in globally_seen and colloc not in existing_items:
+                    continue
+
+                globally_seen.add(colloc)
+
+                if colloc not in existing_items:
                     new_item = CollocationItem(
                         topic_id=topic.id,
                         collocation=colloc,
@@ -2268,24 +2315,18 @@ def ensure_collocations(db: Session, campaign: Campaign) -> None:
                     )
                     db.add(new_item)
                 else:
-                    item = existing_items[key]
-                    updated = False
+                    item = existing_items[colloc]
                     if item.pronunciation_us != item_data["pronunciation_us"]:
                         item.pronunciation_us = item_data["pronunciation_us"]
-                        updated = True
                     if item.meaning_vi != item_data["meaning_vi"]:
                         item.meaning_vi = item_data["meaning_vi"]
-                        updated = True
                     if item.example_en != item_data["example_en"]:
                         item.example_en = item_data["example_en"]
-                        updated = True
                     if item.example_vi != item_data["example_vi"]:
                         item.example_vi = item_data["example_vi"]
-                        updated = True
                     if item.item_order != item_data["item_order"]:
                         item.item_order = item_data["item_order"]
-                        updated = True
-                    
+
             db.flush()
 
 

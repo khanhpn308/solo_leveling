@@ -159,10 +159,21 @@ function CollocationFlashcardReview({
         </button>
         <span>Collocation {cardIndex + 1} of {cards.length}</span>
       </div>
-      <div className={`flip-card coll-review-card ${neonCls} ${showAnswer ? 'is-flipped' : ''}`}>
+      <div
+        className={`flip-card coll-review-card ${neonCls} ${showAnswer ? 'is-flipped' : ''}`}
+        role="button"
+        tabIndex={0}
+        aria-pressed={showAnswer}
+        aria-label="Flashcard, click to flip"
+        onClick={() => setShowAnswer(s => !s)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') setShowAnswer(s => !s)
+          if (e.key === ' ') { e.preventDefault(); setShowAnswer(s => !s) }
+        }}
+      >
         <div className="flip-card-inner">
           <div className="flip-card-front">
-            <div className="card-title">Recall Collocation</div>
+            <div className="card-title">Collocation</div>
             <h2 className="card-vocab-word">{item.collocation}</h2>
             {item.pronunciation_us && (
               <p style={{ fontStyle: 'italic', color: '#9ca3af', margin: '4px 0' }}>/{item.pronunciation_us}/</p>
@@ -170,19 +181,9 @@ function CollocationFlashcardReview({
             {item.collocation_type && (
               <span className="coll-tag coll-tag--type">{item.collocation_type}</span>
             )}
-            <button className="system-button reveal-btn" onClick={() => setShowAnswer(true)}>
-              Reveal Meaning
-            </button>
           </div>
           <div className="flip-card-back">
             <div className="card-title">Meaning</div>
-            <button
-              className="system-button coll-flip-back-btn"
-              onClick={() => setShowAnswer(false)}
-              style={{ position: 'absolute', top: '10px', left: '10px', padding: '4px 10px', fontSize: '0.8rem', opacity: 0.7 }}
-            >
-              ↩ Recall
-            </button>
             <h2 className="card-vocab-word" style={{ fontSize: '1.4rem', marginBottom: '8px' }}>{item.collocation}</h2>
             {item.meaning_vi && (
               <p className="meaning-vi" style={{ color: '#a7f3d0', margin: '4px 0' }}>{item.meaning_vi}</p>
@@ -194,10 +195,10 @@ function CollocationFlashcardReview({
               <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>↳ {item.example_vi}</p>
             )}
             <div className="difficulty-selectors" style={{ marginTop: '16px' }}>
-              <button className="system-button review-act-btn again" onClick={() => handleReview('again')}>Again</button>
-              <button className="system-button review-act-btn hard" onClick={() => handleReview('hard')}>Hard</button>
-              <button className="system-button review-act-btn good" onClick={() => handleReview('good')}>Good</button>
-              <button className="system-button review-act-btn easy" onClick={() => handleReview('easy')}>Easy ★</button>
+              <button className="system-button review-act-btn again" onClick={e => { e.stopPropagation(); handleReview('again') }}>Again</button>
+              <button className="system-button review-act-btn hard" onClick={e => { e.stopPropagation(); handleReview('hard') }}>Hard</button>
+              <button className="system-button review-act-btn good" onClick={e => { e.stopPropagation(); handleReview('good') }}>Good</button>
+              <button className="system-button review-act-btn easy" onClick={e => { e.stopPropagation(); handleReview('easy') }}>Easy ★</button>
             </div>
           </div>
         </div>
@@ -779,10 +780,21 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                           </span>
                         </div>
 
-                        <div className={`flip-card ${showAnswer ? 'is-flipped' : ''}`}>
+                        <div
+                          className={`flip-card ${showAnswer ? 'is-flipped' : ''}`}
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={showAnswer}
+                          aria-label="Flashcard, click to flip"
+                          onClick={() => setShowAnswer(s => !s)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') setShowAnswer(s => !s)
+                            if (e.key === ' ') { e.preventDefault(); setShowAnswer(s => !s) }
+                          }}
+                        >
                           <div className="flip-card-inner">
                             <div className="flip-card-front">
-                              <div className="card-title">Recall Meaning</div>
+                              <div className="card-title">Vocabulary</div>
                               {activeReview.cards[activeReview.currentIndex].vocabulary_item ? (
                                 <div className="card-vocab-details">
                                   <h2 className="card-vocab-word">
@@ -811,20 +823,9 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                                   <strong>Hint:</strong> {activeReview.cards[activeReview.currentIndex].hint}
                                 </p>
                               )}
-                              <button className="system-button reveal-btn" onClick={() => setShowAnswer(true)}>
-                                Reveal Definition
-                              </button>
                             </div>
                             <div className="flip-card-back">
                               <div className="card-title">Definition</div>
-                              {/* I4-6: Two-way flip — return to front */}
-                              <button
-                                className="system-button coll-flip-back-btn"
-                                onClick={() => setShowAnswer(false)}
-                                style={{ position: 'absolute', top: '10px', left: '10px', padding: '4px 10px', fontSize: '0.8rem', opacity: 0.7 }}
-                              >
-                                ↩ Recall
-                              </button>
                               {activeReview.cards[activeReview.currentIndex].vocabulary_item ? (
                                 <div className="card-back-details" style={{ textAlign: 'left', width: '100%' }}>
                                   <div className="definition-box" style={{ marginBottom: '12px' }}>
@@ -839,8 +840,8 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                                       </p>
                                     )}
                                   </div>
-                                  
-                                  {activeReview.cards[activeReview.currentIndex].vocabulary_item.examples && 
+
+                                  {activeReview.cards[activeReview.currentIndex].vocabulary_item.examples &&
                                    activeReview.cards[activeReview.currentIndex].vocabulary_item.examples.length > 0 && (
                                     <div className="example-box" style={{ background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '4px', marginTop: '8px' }}>
                                       <strong>Example Sentence:</strong>
@@ -861,29 +862,29 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                                   {activeReview.cards[activeReview.currentIndex].back_text}
                                 </pre>
                               )}
-                              
+
                               <div className="difficulty-selectors">
                                 <button
                                   className="system-button review-act-btn again"
-                                  onClick={() => handleReviewAction('again')}
+                                  onClick={e => { e.stopPropagation(); handleReviewAction('again') }}
                                 >
                                   Again <small>+0 XP</small>
                                 </button>
                                 <button
                                   className="system-button review-act-btn hard"
-                                  onClick={() => handleReviewAction('hard')}
+                                  onClick={e => { e.stopPropagation(); handleReviewAction('hard') }}
                                 >
                                   Hard <small>+10 XP</small>
                                 </button>
                                 <button
                                   className="system-button review-act-btn good"
-                                  onClick={() => handleReviewAction('good')}
+                                  onClick={e => { e.stopPropagation(); handleReviewAction('good') }}
                                 >
                                   Good <small>+20 XP</small>
                                 </button>
                                 <button
                                   className="system-button review-act-btn easy"
-                                  onClick={() => handleReviewAction('easy')}
+                                  onClick={e => { e.stopPropagation(); handleReviewAction('easy') }}
                                 >
                                   Easy <small>+30 XP</small>
                                 </button>

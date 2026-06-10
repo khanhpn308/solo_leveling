@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 // Familiarity → neon CSS class
 function neonClass(familiarity) {
@@ -19,6 +19,54 @@ function familiarityLabel(familiarity) {
   }
 }
 
+// Group flat topic list into [{ section_order, section_title, topics: [...] }]
+function groupBySection(topics) {
+  const map = new Map()
+  for (const t of topics) {
+    const key = t.section_order
+    if (!map.has(key)) {
+      map.set(key, {
+        section_order: t.section_order,
+        section_title: t.section_title || 'Untitled section',
+        topics: [],
+      })
+    }
+    map.get(key).topics.push(t)
+  }
+  return [...map.values()].sort((a, b) => a.section_order - b.section_order)
+}
+
+// Topic progress box: fills bottom-up by completion %, color shifts blue→yellow.
+function TopicProgressBox({ topic, isActive, onSelect }) {
+  const total = topic.item_count || 0
+  const done = topic.completed_count || 0
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+
+  return (
+    <button
+      type="button"
+      className={`coll-topic-box ${isActive ? 'is-active' : ''}`}
+      onClick={() => onSelect(topic)}
+      aria-pressed={isActive}
+      aria-label={`${topic.title}, ${pct}% complete, ${done} of ${total} collocations`}
+      style={{ '--coll-ratio': pct / 100 }}
+    >
+      <span
+        className="coll-topic-box__fill"
+        style={{ '--coll-pct': `${pct}%` }}
+        aria-hidden="true"
+      />
+      <span className="coll-topic-box__content">
+        <span className="coll-topic-box__title">{topic.title}</span>
+        <span className="coll-topic-box__stats">
+          <span className="coll-topic-box__pct">{pct}%</span>
+          <span className="coll-topic-box__frac">{done}/{total}</span>
+        </span>
+      </span>
+    </button>
+  )
+}
+
 function CollocationForge({ api }) {
   const [topics, setTopics] = useState([])
   const [selectedTopic, setSelectedTopic] = useState(null)
@@ -27,16 +75,26 @@ function CollocationForge({ api }) {
   const [loadingItems, setLoadingItems] = useState(false)
   const [error, setError] = useState('')
   const [actionLoading, setActionLoading] = useState({})
+  const [expandedSections, setExpandedSections] = useState(() => new Set())
 
   useEffect(() => {
     loadTopics()
   }, [])
+
+  const sections = useMemo(() => groupBySection(topics), [topics])
 
   async function loadTopics() {
     try {
       setLoadingTopics(true)
       const data = await api('/collocations/topics')
       setTopics(data)
+      // Auto-expand the first section on initial load so the panel isn't empty.
+      if (data.length > 0) {
+        setExpandedSections(prev => {
+          if (prev.size > 0) return prev
+          return new Set([data[0].section_order])
+        })
+      }
     } catch (err) {
       setError(err.message || 'Failed to load topics')
     } finally {
@@ -58,15 +116,31 @@ function CollocationForge({ api }) {
     }
   }
 
+  function toggleSection(sectionOrder) {
+    setExpandedSections(prev => {
+      const next = new Set(prev)
+      if (next.has(sectionOrder)) next.delete(sectionOrder)
+      else next.add(sectionOrder)
+      return next
+    })
+  }
+
+  // After a flashcard mutation, refresh both the open item list and the topic
+  // progress counts (so the % box updates live).
+  async function refreshAfterMutation() {
+    if (selectedTopic) {
+      const itemsData = await api(`/collocations/topics/${selectedTopic.id}/items`)
+      setItems(itemsData)
+    }
+    const topicsData = await api('/collocations/topics')
+    setTopics(topicsData)
+  }
+
   async function handleAddFlashcard(itemId) {
     try {
       setActionLoading(prev => ({ ...prev, [itemId]: true }))
       await api(`/collocations/${itemId}/flashcard`, { method: 'POST' })
-      // Refresh items to update is_added and effective_familiarity
-      if (selectedTopic) {
-        const data = await api(`/collocations/topics/${selectedTopic.id}/items`)
-        setItems(data)
-      }
+      await refreshAfterMutation()
     } catch (err) {
       setError(err.message || 'Failed to add flashcard')
     } finally {
@@ -78,10 +152,7 @@ function CollocationForge({ api }) {
     try {
       setActionLoading(prev => ({ ...prev, [itemId]: true }))
       await api(`/collocations/${itemId}/flashcard`, { method: 'DELETE' })
-      if (selectedTopic) {
-        const data = await api(`/collocations/topics/${selectedTopic.id}/items`)
-        setItems(data)
-      }
+      await refreshAfterMutation()
     } catch (err) {
       setError(err.message || 'Failed to remove flashcard')
     } finally {
@@ -97,39 +168,60 @@ function CollocationForge({ api }) {
           Collocation Browser
         </h3>
         <p className="coll-browser__subtitle">
-          Browse collocations by topic. Add items to your flashcard deck to start reviewing.
+          Pick a section, open a topic, and add collocations to your flashcard deck.
         </p>
       </div>
 
-      {error && <div className="vocab-error-banner">{error}</div>}
+      {error && <div className="vocab-error-banner" role="alert">{error}</div>}
 
       <div className="coll-browser__body">
-        {/* Topic list sidebar */}
-        <aside className="coll-topic-list">
-          <div className="coll-topic-list__head">Topics</div>
+        {/* Two-level accordion sidebar: section → topic boxes */}
+        <aside className="coll-section-nav" aria-label="Collocation sections">
           {loadingTopics && <div className="coll-topic-list__loading">Loading…</div>}
-          {!loadingTopics && topics.length === 0 && (
+          {!loadingTopics && sections.length === 0 && (
             <div className="coll-topic-list__empty">No topics linked to your campaign.</div>
           )}
-          {topics.map(topic => (
-            <button
-              key={topic.id}
-              className={`coll-topic-btn ${selectedTopic?.id === topic.id ? 'is-active' : ''}`}
-              onClick={() => loadItems(topic)}
-              type="button"
-            >
-              <span className="coll-topic-btn__title">{topic.title}</span>
-              <span className="coll-topic-btn__meta">{topic.section_title} · {topic.item_count} items</span>
-            </button>
-          ))}
+
+          {sections.map(section => {
+            const isOpen = expandedSections.has(section.section_order)
+            return (
+              <div key={section.section_order} className="coll-section-group">
+                <button
+                  type="button"
+                  className={`coll-section-btn ${isOpen ? 'is-open' : ''}`}
+                  onClick={() => toggleSection(section.section_order)}
+                  aria-expanded={isOpen}
+                >
+                  <span className="coll-section-btn__chevron" aria-hidden="true">
+                    {isOpen ? '▾' : '▸'}
+                  </span>
+                  <span className="coll-section-btn__title">{section.section_title}</span>
+                  <span className="coll-section-btn__count">{section.topics.length}</span>
+                </button>
+
+                {isOpen && (
+                  <div className="coll-topic-box-grid">
+                    {section.topics.map(topic => (
+                      <TopicProgressBox
+                        key={topic.id}
+                        topic={topic}
+                        isActive={selectedTopic?.id === topic.id}
+                        onSelect={loadItems}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </aside>
 
-        {/* Items panel */}
+        {/* Items panel (layer 3) */}
         <main className="coll-items-panel">
           {!selectedTopic && (
             <div className="coll-items-empty">
               <div className="coll-items-empty__icon">👈</div>
-              <p>Select a topic from the left to browse its collocations.</p>
+              <p>Open a section, then pick a topic to browse its collocations.</p>
             </div>
           )}
 
@@ -142,73 +234,79 @@ function CollocationForge({ api }) {
           )}
 
           {selectedTopic && !loadingItems && items.length > 0 && (
-            <div className="coll-items-grid">
-              {items.map(item => {
-                const loading = actionLoading[item.id]
-                return (
-                  <div
-                    key={item.id}
-                    className={`coll-item-card ${neonClass(item.effective_familiarity)}`}
-                  >
-                    <div className="coll-item-card__header">
-                      <h4 className="coll-item-card__word">{item.collocation}</h4>
-                      <div className="coll-item-card__badges">
-                        {item.collocation_type && (
-                          <span className="coll-tag coll-tag--type">{item.collocation_type}</span>
+            <>
+              <div className="coll-items-panel__head">
+                <h4 className="coll-items-panel__title">{selectedTopic.title}</h4>
+                <span className="coll-items-panel__crumb">{selectedTopic.section_title}</span>
+              </div>
+              <div className="coll-items-grid">
+                {items.map(item => {
+                  const loading = actionLoading[item.id]
+                  return (
+                    <div
+                      key={item.id}
+                      className={`coll-item-card ${neonClass(item.effective_familiarity)}`}
+                    >
+                      <div className="coll-item-card__header">
+                        <h4 className="coll-item-card__word">{item.collocation}</h4>
+                        <div className="coll-item-card__badges">
+                          {item.collocation_type && (
+                            <span className="coll-tag coll-tag--type">{item.collocation_type}</span>
+                          )}
+                          {item.is_added && (
+                            <span className={`coll-tag coll-tag--fam ${neonClass(item.effective_familiarity)}`}>
+                              {familiarityLabel(item.effective_familiarity)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="coll-item-card__body">
+                        {item.pronunciation_us && (
+                          <p className="coll-item-card__pron">/{item.pronunciation_us}/</p>
                         )}
-                        {item.is_added && (
-                          <span className={`coll-tag coll-tag--fam ${neonClass(item.effective_familiarity)}`}>
-                            {familiarityLabel(item.effective_familiarity)}
-                          </span>
+                        {item.meaning_vi && (
+                          <p className="coll-item-card__meaning">{item.meaning_vi}</p>
+                        )}
+                        {item.example_en && (
+                          <p className="coll-item-card__example">
+                            <em>"{item.example_en}"</em>
+                          </p>
+                        )}
+                        {item.example_vi && (
+                          <p className="coll-item-card__example-vi">↳ {item.example_vi}</p>
+                        )}
+                      </div>
+
+                      <div className="coll-item-card__footer">
+                        {!item.is_added ? (
+                          <button
+                            className="system-button system-button--primary coll-add-btn"
+                            onClick={() => handleAddFlashcard(item.id)}
+                            disabled={loading}
+                          >
+                            {loading ? '…' : '+ Add to Flashcard'}
+                          </button>
+                        ) : (
+                          <div className="coll-added-row">
+                            <span className="coll-added-badge">✓ Added</span>
+                            {item.effective_familiarity !== 'easy' && (
+                              <button
+                                className="system-button coll-remove-btn"
+                                onClick={() => handleRemoveFlashcard(item.id)}
+                                disabled={loading}
+                              >
+                                {loading ? '…' : 'Remove'}
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
-
-                    <div className="coll-item-card__body">
-                      {item.pronunciation_us && (
-                        <p className="coll-item-card__pron">/{item.pronunciation_us}/</p>
-                      )}
-                      {item.meaning_vi && (
-                        <p className="coll-item-card__meaning">{item.meaning_vi}</p>
-                      )}
-                      {item.example_en && (
-                        <p className="coll-item-card__example">
-                          <em>"{item.example_en}"</em>
-                        </p>
-                      )}
-                      {item.example_vi && (
-                        <p className="coll-item-card__example-vi">↳ {item.example_vi}</p>
-                      )}
-                    </div>
-
-                    <div className="coll-item-card__footer">
-                      {!item.is_added ? (
-                        <button
-                          className="system-button system-button--primary coll-add-btn"
-                          onClick={() => handleAddFlashcard(item.id)}
-                          disabled={loading}
-                        >
-                          {loading ? '…' : '+ Add to Flashcard'}
-                        </button>
-                      ) : (
-                        <div className="coll-added-row">
-                          <span className="coll-added-badge">✓ Added</span>
-                          {item.effective_familiarity !== 'easy' && (
-                            <button
-                              className="system-button coll-remove-btn"
-                              onClick={() => handleRemoveFlashcard(item.id)}
-                              disabled={loading}
-                            >
-                              {loading ? '…' : 'Remove'}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            </>
           )}
         </main>
       </div>

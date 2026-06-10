@@ -37,6 +37,7 @@ services:
     volumes:
       - ./backend:/app
       - ./material/material.md:/app/material.md:ro
+      - ./material/vocabularies:/app/material/vocabularies:ro
 
   frontend:
     build: ./frontend

@@ -2,6 +2,62 @@
 
 Newest first.
 
+## [2026-06-10] Session 8l-C — Polished Collocation Seed (Tasks C-1, C-2)
+
+### Changes
+
+**C-1: Parser rewrite + file repoint**
+- **`backend/app/seed.py` `collocations_file_path()`** — repointed `rel_path` to `English_Collocations_campaign1-3_3-6_polished.md` (OCR-denoised). `COLLOCATIONS_PATH` env override preserved.
+- **`backend/app/seed.py` `parse_collocations_file()`** — full rewrite to match the polished file's real hierarchy: `_Section: X_` → `CollocationSection` (10 distinct sections, deduped by name); `## N. Title` → `CollocationTopic` (60 topics, `topic_number = N`, `topic_order` = 1-based per section). `## N.` heading is buffered and the topic is created only when the following `_Section:_` line is seen (needed because `_Section:_` appears *after* each `## N.` in the file). Item row parsing unchanged (5 columns).
+- **`docker-compose.yml`** — added `./material/vocabularies:/app/material/vocabularies:ro` volume mount so the backend container can read the polished collocation file.
+
+**C-2: Global dedup + test update**
+- **`backend/app/seed.py` `ensure_collocations()`** — switched dedup from per-topic `(item_order, collocation)` to **global-per-collection by phrase**: `globally_seen: set[str]` tracks all phrases; pre-populated from DB at start (idempotency); first occurrence wins, cross-topic and same-topic duplicates both skipped.
+- **`backend/app/seed.py` `ensure_collocations()`** — fixed `topic.topic_number` upsert to read from `topic_data["topic_number"]` (the `## N` value) instead of `section.section_order`.
+- **`backend/app/test_backend.py`** — replaced `test_gap2_collocation_seed_allows_duplicate_strings_different_order` with `test_c2_global_dedup_collocation_seed`: fixture with same-topic + cross-topic duplicates; asserts 3 unique items (not 5); asserts `make_progress` appears exactly once; asserts idempotency. Updated `test_collocation_parser_and_seed` to assert 10 sections / 60 topics / `topic_number=1` / `≥1000 items` (not the old `≥60 sections / ≥1400 items`).
+
+### Note (GAP-2 reversal)
+GAP-2 (session 8g) previously enforced per-topic dedup `(item_order, collocation)` to allow the same phrase in different positions of the same topic. This decision has been **reversed** (owner 2026-06-10): global dedup is required because the polished file contains many cross-topic duplicates (e.g. "sharp pain", "make an effort") that would otherwise create confusing duplicate flashcard entries.
+
+### Suite
+- BE: **68 passed / 0 failed / 1 skipped** (pytest). Parser smoke: 10 sections / 60 topics / 1409 unique items.
+
+## [2026-06-10] Session 8l — Target / Suggest / Collocations Overhaul (all 12 tasks complete)
+
+### Changes
+
+**Phase 1 — Per-skill target bands (I1-1, I1-2, I1-3)**
+- **`backend/alembic/versions/20260609_19_add_per_skill_target_bands.py`** — adds 4 nullable `String(20)` columns (`target_listening_band`, `target_reading_band`, `target_writing_band`, `target_speaking_band`) to `players`.
+- **`backend/app/models.py`** `Player` — 4 new mapped columns.
+- **`backend/app/schemas.py`** `PlayerProfileOut`, `PlayerMeOut`, `OnboardingActivateIn` — 4 new optional target fields; new `PlayerTargetsIn` (5 optional str).
+- **`backend/app/main.py`** `activate-campaign` — persist 5 bands from onboarding; new `PATCH /api/player/targets` endpoint.
+- **`frontend/src/api/auth.js`** `activateCampaign` — receives `targets` object; new `updatePlayerTargets()` helper.
+- **`frontend/src/pages/Onboarding.jsx`** — full rewrite: drops Certificate step; adds StepTarget with 5 dropdown selects (BAND_OPTIONS 4.0–9.0).
+- **`frontend/src/components/StatusModal.jsx`** — `TargetEditor` component in "Mục tiêu IELTS" AuxSection; dirty-state save with "Lưu mục tiêu"; uses `updatePlayerTargets`.
+- **`frontend/src/dashboard-data.js`** `buildPlayerSnapshot` — exposes 5 target fields.
+- **`frontend/src/styles.css`** — `.target-editor`, `.target-row`, `.target-save-btn`, `.target-save-msg` CSS.
+
+**Phase 2 — Stop Grammar/Collocation suggestions (I3-1, I2-1, I2-2)**
+- **`backend/alembic/versions/20260609_18_dismiss_grammar_collocation_suggestions.py`** — data migration: sets pending Grammar/Collocation rank suggestions to `status='dismissed'`.
+- **`backend/app/services.py`** `create_rank_suggestions_for_certificate` — `inferred` dict changed from `{Vocabulary, Grammar, Collocation}` to `{Vocabulary}` only (Grammar/Collocation excluded from suggestion creation).
+- **`backend/app/test_backend.py`** — `test_manual_certificate_creation_*` updated: count 7→5; Grammar/Collocation assertNotIn.
+- **`frontend/src/components/DailyQuestPanel.jsx`** — `claimGroup()` + `sortByClaimStatus()` sort: claim-ready → middle → claimed.
+
+**Phase 4 — Collocation browser + flashcards (I4-1 … I4-7)**
+- **`backend/alembic/versions/20260609_20_add_collocation_flashcards.py`** — creates `collocation_flashcards` table with UniqueConstraint(player_id, campaign_id, collocation_item_id).
+- **`backend/app/models.py`** — `CollocationFlashcard` model; `CollocationItem.flashcards` relationship.
+- **`backend/app/services.py`** — `effective_familiarity()` (7-day decay, easy never decays); `try_autocomplete_collocation_forge()` (5-distinct-per-day → auto-complete quest).
+- **`backend/app/main.py`** — 6 new endpoints: `GET /collocations/topics`, `GET /collocations/topics/{id}/items`, `POST/DELETE /collocations/{id}/flashcard`, `POST /collocations/{id}/flashcard/review`, `GET /collocations/flashcard/topics`, `GET /collocations/flashcard/topics/{id}`. Key fix: `familiarity_set_at=None` on ADD (only set on review) prevents premature autocomplete count.
+- **`frontend/src/components/CollocationForge.jsx`** — rewritten as topic browser with neon cards + Add/Remove flashcard.
+- **`frontend/src/components/VocabularyWorkspace.jsx`** — dead per-word collocation UI removed; Flashcard tab split (Vocabulary | Collocation sub-tabs); `CollocationFlashcardReview` inline component; "↩ Recall" flip-back button on both vocab + collocation card backs (two-way flip).
+- **`frontend/src/styles.css`** — `.coll-browser`, `.coll-topic-*`, `.coll-item-card`, `.coll-neon-*`, `.coll-tag-*`, `.flashcard-subtabs`, `.coll-flash-*`, `.coll-review-card`, `.coll-flip-back-btn` CSS.
+
+### Fix (session 8l)
+- `test_autocomplete_collocation_forge_5_distinct` + `_same_card_no_complete` were failing with UNIQUE constraint violation: tests tried to INSERT a new `vocab_collocation` Quest for today, but `activate-campaign` seed had already created one. Fix: tests now query + reuse the seeded quest (with a reset to `active`/`not-completed`). Also fixed `familiarity_set_at=None` on flashcard add so the autocomplete count only fires on actual reviews.
+
+### Suite
+- BE: **67 passed / 0 failed / 1 skipped** (pytest). FE build: ✓ 222 modules.
+
 ## [2026-06-09] Session 8k — Main Quest Start-Date Rebase (lazy-purring-sundae.md)
 
 ### Bug

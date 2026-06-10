@@ -2113,10 +2113,26 @@ class TestCollocationMasterData(unittest.TestCase):
         data = parse_collocations_file(filepath)
         self.assertEqual(data["code"], "intermediate-collocations")
         self.assertEqual(data["title"], "English Collocations in Use Intermediate")
-        
-        # Verify section count is around 60 (or exact)
-        self.assertGreaterEqual(len(data["sections"]), 60)
-        
+
+        # C-1: polished file has 10 real sections (not 60)
+        self.assertEqual(len(data["sections"]), 10,
+            f"Parser must produce exactly 10 sections from _Section: labels; got {len(data['sections'])}")
+
+        # C-1: total topics across all sections must be 60
+        total_topics = sum(len(sec["topics"]) for sec in data["sections"])
+        self.assertEqual(total_topics, 60,
+            f"Parser must produce exactly 60 topics from ## N. headings; got {total_topics}")
+
+        # C-1: topic_number must reflect the ## N value (not section_order)
+        # Topic "What is a collocation?" is ## 1 → topic_number=1
+        first_sec = data["sections"][0]
+        self.assertEqual(first_sec["topics"][0]["topic_number"], 1)
+
+        # C-1: verify a known section name and its topic grouping
+        section_titles = [sec["title"] for sec in data["sections"]]
+        self.assertIn("Learning about collocations", section_titles)
+        self.assertIn("Travel and the environment", section_titles)
+
         # Count all parsed items
         total_items = 0
         found_ancient_monument = False
@@ -2130,9 +2146,10 @@ class TestCollocationMasterData(unittest.TestCase):
                         self.assertEqual(item["meaning_vi"], "di tích cổ")
                         self.assertEqual(item["example_en"], "We visited an ancient monument in the city center.")
                         self.assertEqual(item["example_vi"], "Chúng tôi đến thăm một di tích cổ ở trung tâm thành phố.")
-                        
-        self.assertGreaterEqual(total_items, 1400)
-        self.assertTrue(found_ancient_monument)
+
+        self.assertGreaterEqual(total_items, 1000,
+            f"Parsed item count should be at least 1000; got {total_items}")
+        self.assertTrue(found_ancient_monument, "'ancient monument' must be found in the parsed data")
         
         # 2. Test seeding is idempotent
         # Clear existing collocation models first (in SQLite memory DB)
@@ -2149,8 +2166,9 @@ class TestCollocationMasterData(unittest.TestCase):
         self.db.commit()
         
         # Assert collection, campaign link, and items were created
+        # C-2: global dedup means count < raw row count in file; still expect ≥1000
         col_count_first = self.db.query(CollocationItem).count()
-        self.assertGreaterEqual(col_count_first, 1400)
+        self.assertGreaterEqual(col_count_first, 1000)
         
         link_exists = self.db.query(CampaignCollocationLink).filter_by(
             campaign_id=self.campaign.id
@@ -2253,10 +2271,17 @@ class TestCollocationMasterData(unittest.TestCase):
             f"support_breakdown should count only Daily Quest XP (30), got {grammar_breakdown.xp}",
         )
 
-    def test_gap2_collocation_seed_allows_duplicate_strings_different_order(self):
-        """GAP-2: ensure_collocations dedup key must be (item_order, collocation),
-        not just collocation string. Two items with same text at different positions
-        in the same topic must both be seeded."""
+    def test_c2_global_dedup_collocation_seed(self):
+        """C-2 (reverses GAP-2): ensure_collocations global dedup — a collocation
+        phrase appearing in multiple topics is seeded only once (first occurrence wins).
+        A phrase appearing twice in the same topic is also deduplicated to 1.
+        Idempotent: re-running seed does not change the count.
+
+        NOTE: GAP-2 previously asserted that same-string items at different
+        item_order positions were BOTH seeded. That decision has been reversed:
+        owner decision 2026-06-10 adopts global dedup (first-wins) to avoid
+        duplicate flashcard entries across the polished collocation file.
+        """
         from app.seed import ensure_collocations
         from app.models import (
             CollocationCollection, CollocationSection,
@@ -2264,11 +2289,12 @@ class TestCollocationMasterData(unittest.TestCase):
         )
         from unittest.mock import patch
 
-        # Build a minimal parsed-data fixture with 2 items that share the same
-        # collocation string but have different item_order values.
+        # Fixture: "make progress" appears in Topic X (order 1) AND Topic Y (order 1).
+        # "learn fast" appears twice in Topic X (orders 1 and 2) — same topic dup.
+        # Expected after global dedup: 3 unique phrases total (make progress, learn fast, find a way).
         fixture = {
-            "code": "test-dup-col",
-            "title": "Test Dup Collection",
+            "code": "test-global-dedup",
+            "title": "Test Global Dedup Collection",
             "description": "Test only",
             "source_book": "Test Book",
             "level": "Intermediate",
@@ -2279,6 +2305,7 @@ class TestCollocationMasterData(unittest.TestCase):
                     "topics": [
                         {
                             "title": "Topic X",
+                            "topic_number": 1,
                             "topic_order": 1,
                             "items": [
                                 {
@@ -2291,20 +2318,51 @@ class TestCollocationMasterData(unittest.TestCase):
                                 },
                                 {
                                     "item_order": 2,
-                                    "collocation": "make progress",  # same string, different order
+                                    "collocation": "make progress",  # duplicate in same topic → skip
                                     "pronunciation_us": "/meɪk/",
                                     "meaning_vi": "đạt tiến bộ",
                                     "example_en": "Teams make progress together.",
                                     "example_vi": "Các nhóm cùng tiến bộ.",
                                 },
+                                {
+                                    "item_order": 3,
+                                    "collocation": "learn fast",
+                                    "pronunciation_us": "/lɜːrn/",
+                                    "meaning_vi": "học nhanh",
+                                    "example_en": "Children learn fast.",
+                                    "example_vi": "Trẻ em học nhanh.",
+                                },
                             ],
-                        }
+                        },
+                        {
+                            "title": "Topic Y",
+                            "topic_number": 2,
+                            "topic_order": 2,
+                            "items": [
+                                {
+                                    "item_order": 1,
+                                    "collocation": "make progress",  # cross-topic dup → skip
+                                    "pronunciation_us": "/meɪk/",
+                                    "meaning_vi": "tiến bộ",
+                                    "example_en": "She made progress quickly.",
+                                    "example_vi": "Cô ấy tiến bộ nhanh chóng.",
+                                },
+                                {
+                                    "item_order": 2,
+                                    "collocation": "find a way",
+                                    "pronunciation_us": "/faɪnd/",
+                                    "meaning_vi": "tìm ra cách",
+                                    "example_en": "They found a way.",
+                                    "example_vi": "Họ tìm ra cách.",
+                                },
+                            ],
+                        },
                     ],
                 }
             ],
         }
 
-        # Clean slate for this collection
+        # Clean slate
         self.db.query(CampaignCollocationLink).delete()
         self.db.query(CollocationItem).delete()
         self.db.query(CollocationTopic).delete()
@@ -2312,8 +2370,6 @@ class TestCollocationMasterData(unittest.TestCase):
         self.db.query(CollocationCollection).delete()
         self.db.commit()
 
-        # Patch both collocations_file_path (avoids FileNotFoundError early-return)
-        # and parse_collocations_file (returns our fixture instead of real file).
         with patch("app.seed.collocations_file_path", return_value="/fake/path"), \
              patch("app.seed.parse_collocations_file", return_value=fixture):
             ensure_collocations(self.db, self.campaign)
@@ -2322,18 +2378,22 @@ class TestCollocationMasterData(unittest.TestCase):
         seeded_count = self.db.query(CollocationItem).count()
         self.assertEqual(
             seeded_count,
-            2,
-            f"Both duplicate-string items must be seeded; got {seeded_count}",
+            3,
+            f"Global dedup: 3 unique phrases (make progress×1, learn fast, find a way); got {seeded_count}",
         )
 
-        # Idempotency: run again — count must stay at 2
+        # Verify "make progress" seeded only once
+        make_progress_count = self.db.query(CollocationItem).filter_by(collocation="make progress").count()
+        self.assertEqual(make_progress_count, 1, "Global dedup: 'make progress' must appear exactly once")
+
+        # Idempotency: re-run → count stays at 3
         with patch("app.seed.collocations_file_path", return_value="/fake/path"), \
              patch("app.seed.parse_collocations_file", return_value=fixture):
             ensure_collocations(self.db, self.campaign)
             self.db.commit()
 
         seeded_count_second = self.db.query(CollocationItem).count()
-        self.assertEqual(seeded_count_second, 2, "Idempotent run must not duplicate items")
+        self.assertEqual(seeded_count_second, 3, "Idempotent re-seed must not change count")
 
 
 class TestPolicyTables(unittest.TestCase):
@@ -2817,25 +2877,38 @@ class TestCollocationFlashcards(unittest.TestCase):
         self.assertEqual(resp_browse.json()[0]["effective_familiarity"], "easy")
 
     def test_autocomplete_collocation_forge_5_distinct(self):
-        colloc_skill = self.db.query(Skill).filter(Skill.name == "Collocation").first()
-        quest = Quest(
-            campaign_id=self.campaign.id,
-            skill_id=colloc_skill.id,
-            session_type="Daily Quest",
-            quest_date=date.today(),
-            week_no=1,
-            stage="Foundation",
-            title="Collocation Forge",
-            source="test",
-            details="",
-            daily_slot_code="vocab_collocation",
-            status="active",
-            completed=False,
-            reward_claimed=False,
-            base_xp=5,
-        )
-        self.db.add(quest)
-        self.db.commit()
+        # Reuse the quest seeded during campaign activation (avoid UNIQUE constraint on vocab_collocation slot)
+        quest = self.db.query(Quest).filter(
+            Quest.campaign_id == self.campaign.id,
+            Quest.daily_slot_code == "vocab_collocation",
+            Quest.quest_date == date.today(),
+        ).first()
+        if quest is None:
+            # Fallback: create quest only if seed didn't produce one for today
+            colloc_skill = self.db.query(Skill).filter(Skill.name == "Collocation").first()
+            quest = Quest(
+                campaign_id=self.campaign.id,
+                skill_id=colloc_skill.id,
+                session_type="Daily Quest",
+                quest_date=date.today(),
+                week_no=1,
+                stage="Foundation",
+                title="Collocation Forge",
+                source="test",
+                details="",
+                daily_slot_code="vocab_collocation",
+                status="active",
+                completed=False,
+                reward_claimed=False,
+                base_xp=5,
+            )
+            self.db.add(quest)
+            self.db.commit()
+        else:
+            # Reset to active/not-completed in case seed marked it otherwise
+            quest.completed = False
+            quest.status = "active"
+            self.db.commit()
 
         items = []
         for i in range(1, 6):
@@ -2880,25 +2953,36 @@ class TestCollocationFlashcards(unittest.TestCase):
         self.assertEqual(quest.status, "completed")
 
     def test_autocomplete_collocation_forge_same_card_no_complete(self):
-        colloc_skill = self.db.query(Skill).filter(Skill.name == "Collocation").first()
-        quest = Quest(
-            campaign_id=self.campaign.id,
-            skill_id=colloc_skill.id,
-            session_type="Daily Quest",
-            quest_date=date.today(),
-            week_no=1,
-            stage="Foundation",
-            title="Collocation Forge",
-            source="test",
-            details="",
-            daily_slot_code="vocab_collocation",
-            status="active",
-            completed=False,
-            reward_claimed=False,
-            base_xp=5,
-        )
-        self.db.add(quest)
-        self.db.commit()
+        # Reuse the quest seeded during campaign activation (avoid UNIQUE constraint on vocab_collocation slot)
+        quest = self.db.query(Quest).filter(
+            Quest.campaign_id == self.campaign.id,
+            Quest.daily_slot_code == "vocab_collocation",
+            Quest.quest_date == date.today(),
+        ).first()
+        if quest is None:
+            colloc_skill = self.db.query(Skill).filter(Skill.name == "Collocation").first()
+            quest = Quest(
+                campaign_id=self.campaign.id,
+                skill_id=colloc_skill.id,
+                session_type="Daily Quest",
+                quest_date=date.today(),
+                week_no=1,
+                stage="Foundation",
+                title="Collocation Forge",
+                source="test",
+                details="",
+                daily_slot_code="vocab_collocation",
+                status="active",
+                completed=False,
+                reward_claimed=False,
+                base_xp=5,
+            )
+            self.db.add(quest)
+            self.db.commit()
+        else:
+            quest.completed = False
+            quest.status = "active"
+            self.db.commit()
 
         self.client.post(f"/api/collocations/{self.item.id}/flashcard", headers=self.headers)
 

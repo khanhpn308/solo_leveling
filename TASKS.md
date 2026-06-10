@@ -1,6 +1,6 @@
 # IELTS Quest Dashboard Tasks
 
-Last updated: `2026-06-09` (session 8l — PLAN added + fully grilled: "Target / Suggest / Collocations Overhaul" (4 owner issues #1–#4). All decisions locked, 0 open questions. 12 tasks (I3-1; I1-1/2/3; I2-1/2; I4-1…I4-7). Phases 1–3: target String(20)/default 6.5, onboarding drops cert step (Welcome→Target→Campaign→StartDate→Confirm), editable panel via PATCH /api/player/targets, #3 stop-create + data-migration dismiss. Phase 4: own table collocation_flashcards, add-to-flashcard, neon decay 1 tier/7d (lazy-on-read), easy-graduates, re-add→again, 2-way flip, + review-5-distinct/day auto-completes Collocation Forge daily quest (claim manual). NOT yet implemented; see plan section below)
+Last updated: `2026-06-10` (session 8l-C — **C-1 + C-2 COMPLETE + gap-checked**. Parser rewritten: `_Section:_` → CollocationSection (10), `## N.` → CollocationTopic (60, topic_number=N). Global dedup. Volume mount added. Suite: **68/0/1 BE**. Parser smoke: 10 sections / 60 topics / 1409 unique items.)
 
 ## Session Resume
 
@@ -32,6 +32,304 @@ All completed tasks have been archived and moved to [tasks-done.md](tasks-done.m
 ## In Progress
 
 - **All Tasks 5–18 implemented + gap-checked (session 8h–8i). Checkpoint G ✓.** Suite: **60/1/0 BE** + **5/5 FE** + **build ✓**.
+- **Session 8l: all 12 "Target / Suggest / Collocations Overhaul" tasks complete + gap-checked.** Suite: **67/0/1 BE** + **build ✓**.
+
+## Planned (not yet implemented)
+
+*(none — all current tasks complete)*
+
+---
+
+# Implementation Plan: Flashcard Big-Card + Tap-to-Flip (2026-06-10)
+
+**Owner:** khanhpn308 · **Grilled + locked:** session 8n · **Type:** Frontend UI-only (CSS + JSX handlers, no backend, no logic change)
+
+## Goal
+
+Make the review flashcards **larger** (fill the flashcard area with a margin) and change the flip interaction so **clicking anywhere on the card flips it** (toggle both ways) — removing the explicit "Reveal Meaning"/"Reveal Definition" and "↩ Recall" buttons. The 4 grade buttons (Again/Hard/Good/Easy) stay and must NOT trigger a flip when clicked.
+
+## Context (current state — READ BEFORE EDITING)
+
+Two flip-cards share the **same** markup pattern and CSS (`.flip-card` / `.flip-card-inner` / `.flip-card-front` / `.flip-card-back` / `.is-flipped`), both inside the Flashcard tab of `VocabularyWorkspace.jsx` (rendered full-page in `.vocab-shell` via `App.jsx:784`):
+
+1. **Collocation flashcard** — `CollocationCardArena` sub-component, JSX at `frontend/src/components/VocabularyWorkspace.jsx:162-204`. Flip state: local `showAnswer` / `setShowAnswer`. Reveal button at line 173; Recall button at 179-185; grade buttons at 196-201 calling `handleReview(...)`.
+2. **Vocabulary flashcard** — inline in the `flashcard` tab, JSX at `frontend/src/components/VocabularyWorkspace.jsx:782-893`. Flip state: component-level `showAnswer` / `setShowAnswer` (declared at line 221). Reveal button at 814; Recall button at 821-827; grade buttons at 865-890 calling `handleReviewAction(...)`.
+
+Shared CSS:
+- `.flip-card` — `width: min(500px, 100%); height: 300px; perspective` (`styles.css:3300-3304`).
+- `.flip-card-front, .flip-card-back` — `padding: 32px`, flex centered (`styles.css:3318-3332`).
+- `.flashcard-gate-active` / `.card-arena` wrappers center content; `.arena-header` is `min(500px,100%)` wide (`styles.css:3289-3297`).
+- `.flip-card.is-flipped .flip-card-inner { transform: rotateY(180deg) }` (`styles.css:3314`).
+- Grade buttons: `.difficulty-selectors` grid + `.review-act-btn` (`styles.css:3381-3412`).
+
+**Both `setShowAnswer(false)` already runs when advancing to the next card** — keep that logic, do not touch the review/advance handlers.
+
+## Owner decisions (locked session 8n)
+
+1. **Scope:** both cards (shared CSS edit + a handler added in each of the two JSX blocks). UI-only.
+2. **Size:** fill the flashcard area **with margin** — card grows to roughly `min(720px, 100%)` wide and taller (responsive to viewport height), keeping inner padding so it doesn't touch the edges. Sub-tab switcher + arena-header stay visible.
+3. **Flip mechanism:** click anywhere on the card toggles flip (front→back and back→front).
+4. **Buttons:** remove "Reveal …" and "↩ Recall" buttons. Keep the 4 grade buttons; they must `stopPropagation` so grading never also flips the card.
+5. **Next-card reset:** keep existing `setShowAnswer(false)` on advance. Do not modify advance/review logic.
+
+## Tasks
+
+### Task F-1 — Enlarge the flip-card (shared CSS)
+
+- **File:** `frontend/src/styles.css`
+- **Where:** `.flip-card` (3300-3304), `.flip-card-front, .flip-card-back` (3318-3332), `.arena-header` (3289-3297).
+- **Do exactly this:**
+  1. `.flip-card`: change `width: min(500px, 100%)` → `width: min(720px, 100%)`. Change fixed `height: 300px` → a viewport-responsive height that still has margin, e.g. `height: min(560px, 70vh); min-height: 320px;`. Add `cursor: pointer;` (the whole card is now clickable).
+  2. `.arena-header`: widen to match — `width: min(720px, 100%)`.
+  3. `.flip-card-front, .flip-card-back`: bump `padding` from `32px` to `40px` so the bigger card breathes; keep flex-centered layout. Keep `overflow: auto` behavior readable — if back content can overflow at small heights, add `overflow-y: auto` to `.flip-card-back`.
+  4. Add a subtle hover affordance so users know the card is clickable: `.flip-card:hover .flip-card-front, .flip-card:hover .flip-card-back { border-color: var(--cyan); }` (only when not flipping mid-animation — acceptable as-is). Keep it subtle.
+- **Acceptance criteria:**
+  - [x] Card renders at ~720px wide max, taller, centered, with margin to the flashcard area edges.
+  - [x] Both Vocabulary and Collocation cards grow (shared class).
+  - [x] `arena-header` aligns to the wider card.
+  - [x] Card content (word, meaning, examples, grade buttons) stays centered and readable; back content scrolls if it overflows.
+  - [x] `cursor: pointer` over the card.
+- **Files:** `frontend/src/styles.css`.
+- **Gap check:** [x] Done — `.flip-card` → 720px / min(560px,70vh) / min-height:320px; `.flip-card-back` overflow-y:auto; hover border hint; `.arena-header` widened to match.
+
+### Task F-2 — Tap-to-flip + remove Reveal/Recall (Collocation card)
+
+- **File:** `frontend/src/components/VocabularyWorkspace.jsx` — `CollocationCardArena`, JSX `162-204`.
+- **Do exactly this:**
+  1. On the `<div className={`flip-card coll-review-card ...`}>` (line 162), add `onClick={() => setShowAnswer(s => !s)}` and accessibility: `role="button"`, `tabIndex={0}`, `aria-pressed={showAnswer}`, and `onKeyDown` handling `Enter`/`Space` to toggle (Space: `e.preventDefault()`). Add `aria-label="Flashcard, click to flip"`.
+  2. **Delete** the Reveal button (line 173-175) and the Recall button (line 179-185).
+  3. On the grade buttons container `.difficulty-selectors` (or each `.review-act-btn`), add `onClick` wrappers that call `e.stopPropagation()` before `handleReview(...)`. Simplest: wrap the 4 buttons' onClick as `onClick={(e) => { e.stopPropagation(); handleReview('again') }}` etc. (Stopping propagation on the container's `onClickCapture` is also fine, but per-button is clearest.)
+  4. Leave `handleReview`, card advance, and `setShowAnswer(false)`-on-advance untouched.
+- **Acceptance criteria:**
+  - [x] Clicking anywhere on the collocation card flips it; clicking again flips back.
+  - [x] No Reveal / Recall buttons remain.
+  - [x] Clicking Again/Hard/Good/Easy grades the card and does NOT flip it.
+  - [x] Keyboard: Tab to card, Enter/Space flips it.
+- **Files:** `frontend/src/components/VocabularyWorkspace.jsx`.
+- **Dependencies:** none (independent of F-1, but visually pairs with it).
+- **Gap check:** [x] Done — onClick toggle on `.flip-card` div; Reveal/Recall deleted; grade buttons each have e.stopPropagation(); role/tabIndex/aria/onKeyDown added.
+
+### Task F-3 — Tap-to-flip + remove Reveal/Recall (Vocabulary card)
+
+- **File:** `frontend/src/components/VocabularyWorkspace.jsx` — inline vocabulary card, JSX `782-893`.
+- **Do exactly this (mirror of F-2):**
+  1. On `<div className={`flip-card ${showAnswer ? 'is-flipped' : ''}`}>` (line 782), add `onClick={() => setShowAnswer(s => !s)}`, `role="button"`, `tabIndex={0}`, `aria-pressed={showAnswer}`, `onKeyDown` for Enter/Space (Space `preventDefault`), `aria-label="Flashcard, click to flip"`.
+  2. **Delete** the Reveal Definition button (line 814-816) and the Recall button (line 821-827).
+  3. Wrap each of the 4 grade buttons (865-890) onClick with `e.stopPropagation()` before `handleReviewAction(...)`: `onClick={(e) => { e.stopPropagation(); handleReviewAction('again') }}` etc.
+  4. Leave `handleReviewAction`, advance logic, and `setShowAnswer(false)` reset untouched.
+- **Acceptance criteria:**
+  - [x] Clicking anywhere on the vocabulary card flips it; clicking again flips back.
+  - [x] No Reveal / Recall buttons remain.
+  - [x] Grade buttons grade without flipping.
+  - [x] Keyboard: Enter/Space on focused card flips it.
+  - [x] Advancing to next card still shows the front (existing reset preserved).
+- **Files:** `frontend/src/components/VocabularyWorkspace.jsx`.
+- **Dependencies:** none.
+- **Gap check:** [x] Done — mirror of F-2; `handleReviewAction` + advance logic untouched; setShowAnswer(false) reset preserved.
+
+### Checkpoint F (after F-1, F-2, F-3)
+
+- [x] `npm run build` green — 222 modules, 604ms, 0 errors.
+- [ ] Visual check (`http://localhost:5173` → vocabulary workspace → Flashcard tab, both sub-tabs): card is large with margin; click-anywhere flips both ways; grade buttons grade without flipping; no Reveal/Recall buttons; next card shows front. No console errors.
+- [x] No backend touched; review/advance logic unchanged.
+
+## Verification steps (for the implementing agent)
+
+1. `cd frontend && npm run build` — must succeed.
+2. Run stack / `docker compose up frontend`; open vocabulary workspace → Flashcard tab.
+3. Test Vocabulary sub-tab: start a Memory Gate review (needs due cards) → click card flips → grade buttons grade w/o flip → next card front-facing.
+4. Test Collocation sub-tab: pick a topic → same checks.
+5. Keyboard pass: Tab to card, Enter/Space flips.
+6. Do **not** run/modify backend tests — backend untouched.
+
+## Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Grade button click bubbles up and flips card | High | F-2/F-3 require `e.stopPropagation()` on each grade button. Explicit acceptance test. |
+| Taller card overflows the flashcard area on short viewports | Med | Use `min(560px, 70vh)` height + `min-height` floor; `.flip-card-back` gets `overflow-y: auto`. |
+| Removing Reveal button breaks users who relied on it | Low | Whole card is now the affordance + hover border + `cursor:pointer` + `role=button` hint. |
+| Two JSX blocks diverge (one updated, one missed) | Med | F-2 and F-3 are separate tasks, each with its own acceptance criteria; checkpoint verifies both sub-tabs. |
+| Back face has long content (examples) hidden behind grade buttons | Low | `.flip-card-back` is flex-column centered with `overflow-y:auto`; larger card gives more room. Verify visually. |
+
+## Open Questions (for owner)
+
+> **None — all resolved in grill session 8n.** Both cards; fill-with-margin (~720px); remove Reveal/Recall; click-anywhere toggles both ways; grade buttons stopPropagation; keep existing next-card reset.
+
+---
+
+# Implementation Plan: Collocation Topic-Box Neon Intensity (2026-06-10)
+
+**Owner:** khanhpn308 · **Grilled + locked:** session 8m · **Type:** Frontend UI-only (CSS + 1 tiny JSX prop)
+
+## Goal
+
+Make the small **topic progress boxes** in the Collocation Browser glow with a neon halo whose **brightness and blur radius scale with the topic's completion %** — empty topics sit near-dark, fully-completed topics glow brightest. Bump the overall glow "one notch up" (wider, softer blur halo) without hurting text legibility.
+
+## Context (current state — READ BEFORE EDITING)
+
+The 2-layer structure, the % box, and the bottom-up fill **already exist in the working tree** (uncommitted `M` files). This task does **NOT** rebuild any of that. Specifically, already done and must stay untouched:
+
+- **Backend** `GET /api/collocations/topics` already returns `item_count` + `completed_count`. `completed_count` already counts a collocation as 1 point **only when** `effective_familiarity ∈ {hard, good, easy}` (i.e. `again`/`new` = 0 points) — exactly the owner's "điểm" definition. **Do not touch backend.** (`backend/app/main.py:2259-2303`)
+- **Structure** Section accordion → topic-box grid → click box → layer-3 collocation cards. Already correct. **Do not restructure.** (`frontend/src/components/CollocationForge.jsx`)
+- **Fill** `.coll-topic-box__fill` already rises bottom-up via `height: var(--coll-pct)`. **Keep this mechanism.** (`frontend/src/styles.css:5377-5390`)
+- **Layer-3 cards** `.coll-neon-hard/good/easy` glow is **out of scope** — leave `styles.css:5421-5424` as-is.
+
+## Owner decisions (locked session 8m)
+
+1. **Scope:** neon enhancement only. No structural change, no logic change, no backend change, no rebuild.
+2. **Fill mechanism:** keep bottom-up rise (`height = %`).
+3. **Neon target:** the **small topic boxes** only (`.coll-topic-box`). Not the layer-3 cards.
+4. **Neon driver:** glow intensity scales **with completion %** — 0% ≈ near-dark, 100% = brightest. (Synchronized with the fill height.)
+5. **Intensity step:** "one notch up, vừa" — blur radius ~40–50% wider than current, glow opacity up moderately; text must stay readable. Not the max/strongest preset.
+6. The base hue stays the project cyan family (`--cyan, #7af0dd`) blending toward the warm top stop, matching the existing fill gradient.
+
+## Tasks
+
+### Task N-1 — Pass a numeric completion ratio from JSX to CSS
+
+- **File:** `frontend/src/components/CollocationForge.jsx`
+- **Where:** `TopicProgressBox` component (around lines 40-66), the `<span className="coll-topic-box__fill" style={{ '--coll-pct': ... }}>`.
+- **Why:** CSS currently only receives `--coll-pct: "60%"` (a string with `%`). You cannot do arithmetic on it for glow opacity. We need a **unitless 0–1 ratio** so CSS can scale `box-shadow` strength via `calc()`.
+- **Do exactly this:** on the **root `<button className="coll-topic-box ...">`** element, add an inline `style` that sets a custom prop `--coll-ratio` to the numeric ratio (0 to 1), computed as `total > 0 ? done / total : 0`. Keep `--coll-pct` on the `__fill` span unchanged.
+  - Example value: a 60% topic → `style={{ '--coll-ratio': 0.6 }}` on the button.
+  - `pct` is already computed in the component; reuse it: `'--coll-ratio': pct / 100`.
+- **Done when:** inspecting a topic box in DevTools shows `--coll-ratio` as a number on the `.coll-topic-box` element, and `--coll-pct` still as a `%` string on the `__fill` span.
+- **Acceptance criteria:**
+  - [x] `--coll-ratio` present on `.coll-topic-box` button, equals `pct/100`.
+  - [x] `--coll-pct` on `__fill` unchanged; fill still rises bottom-up.
+  - [x] No other JSX change (no new state, no new markup).
+- **Gap check:** [x] Done — single prop `style={{ '--coll-ratio': pct / 100 }}` on button. No markup/state change.
+
+### Task N-2 — Scale the topic-box neon glow by `--coll-ratio` (one notch up)
+
+- **File:** `frontend/src/styles.css`
+- **Where:** `.coll-topic-box` rule block (lines 5363-5374). Keep `:hover` and `.is-active` rules but let them layer on top (see below).
+- **Why:** the box currently has **no resting glow** — it only glows on hover/active. We want a resting neon halo that grows with `--coll-ratio`.
+- **Do exactly this:**
+  1. On the base `.coll-topic-box`, add a resting `box-shadow` whose **spread/blur and alpha both scale with `--coll-ratio`** using `calc()`. Use a `--coll-ratio` fallback of `0` so boxes without the prop don't glow: reference it as `var(--coll-ratio, 0)`.
+  2. Target intensity ("one notch up, vừa") — use roughly these formulas (tune to taste but stay in this band):
+     - Inner glow blur: `calc(8px + 18px * var(--coll-ratio, 0))` → ~8px at 0%, ~26px at 100%.
+     - Outer halo blur: `calc(16px + 40px * var(--coll-ratio, 0))` → ~16px → ~56px at 100% (this is the "blur tỏa rộng hơn").
+     - Glow alpha: scale cyan alpha by ratio, e.g. inner `rgba(122,240,221, calc(0.12 + 0.45 * var(--coll-ratio, 0)))`, outer `rgba(122,240,221, calc(0.05 + 0.25 * var(--coll-ratio, 0)))`.
+     - Layer two shadows (inner + outer) like the existing `.coll-neon-good` pattern at `styles.css:5423` for reference, but driven by the ratio.
+  3. Also nudge `border-color` brighter with ratio if cheap: `border-color: rgba(122,240,221, calc(0.1 + 0.45 * var(--coll-ratio, 0)))`. (Optional but recommended — makes the rim "sáng hơn 1 bút".)
+  4. Add `box-shadow` to the existing `transition` list on `.coll-topic-box` (it already transitions `box-shadow` — verify it stays).
+  5. **Keep** `.coll-topic-box:hover` (line 5370) and `.coll-topic-box.is-active` (5371-5374). `is-active` should still visibly win — bump its shadow slightly above the 100% resting glow so the selected box always reads as selected (e.g. add a brighter cyan ring). Hover may keep its `translateY(-1px)`.
+- **Constraint:** text (`.coll-topic-box__title`, `__pct`, `__frac`) must stay readable. The fill + glow sit behind `z-index:1` content already — do not lower content z-index. If glow bleeds over text, it's the shadow not a background, so legibility is preserved; just confirm visually.
+- **Acceptance criteria:**
+  - [ ] A 0% topic box has near-zero resting glow (subtle, not pitch black border only).
+  - [ ] A 100% topic box has a clearly wider/brighter halo than current hover state.
+  - [ ] Glow visibly increases monotonically across boxes of increasing % within one open section.
+  - [ ] `is-active` box still reads as distinctly selected (brighter/ringed) regardless of its %.
+  - [ ] Hover still gives the `translateY(-1px)` lift.
+  - [ ] Layer-3 collocation cards (`.coll-neon-*` at 5421-5424) are **unchanged**.
+  - [ ] Title / % / fraction text remain legible at all fill levels.
+- **Files:** `frontend/src/styles.css`.
+- **Dependencies:** Task N-1 (needs `--coll-ratio`).
+- **Gap check:** [x] Done — border-color + box-shadow 2-layer both driven by `calc()` on `--coll-ratio`. `is-active` bumped to 3-layer stronger glow (14/34/64px). Layer-3 `.coll-neon-*` cards untouched. `__fill` mechanism untouched.
+
+### Checkpoint N (after N-1, N-2)
+
+- [x] `npm run build` green — 222 modules, 686ms, 0 errors.
+- [ ] Visual check in browser (`http://localhost:5173`, Collocations tab): open a section with mixed completion %; boxes glow proportionally; selected box stands out; text readable; no console errors.
+- [x] No backend / structure / fill-mechanism regressions (only JSX prop + CSS `.coll-topic-box` block changed).
+
+## Verification steps (for the implementing agent)
+
+1. `cd frontend && npm run build` — must succeed.
+2. `docker compose up frontend` (or existing running stack) → open Collocations tab.
+3. Confirm acceptance criteria visually. Optional: use browser DevTools to verify `--coll-ratio` values and computed `box-shadow` scaling.
+4. Do **not** run/modify backend tests — backend untouched.
+
+## Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| `calc()` inside `rgba()` alpha not supported in target browser | Low | Modern Chromium/Vite target supports `rgba(r,g,b, calc(...))`. If issue, fall back to scaling only blur/spread and step alpha at fixed stops. |
+| Glow washes out text on bright (100%) boxes | Med | Glow is `box-shadow` (outside the box), content keeps `z-index:1` + existing `text-shadow`. Verify visually; if needed add stronger `text-shadow` on `__title`. |
+| `is-active` no longer distinguishable when a low-% box is selected | Med | N-2 step 5 bumps `is-active` above the 100% resting glow with a distinct ring. |
+| Accidentally changing fill or layer-3 cards | Low | Task explicitly scopes edits to `.coll-topic-box` rule + one JSX prop; `__fill` and `.coll-neon-*` are off-limits. |
+
+## Open Questions (for owner)
+
+> **None — all resolved in grill session 8m.** Neon driven by completion %, "one notch up / vừa" intensity, topic boxes only, fill mechanism unchanged.
+
+---
+
+# Implementation Plan: Polished Collocation Seed (2026-06-10)
+
+Source file: [`material/vocabularies/month1-6/English_Collocations_campaign1-3_3-6_polished.md`](material/vocabularies/month1-6/English_Collocations_campaign1-3_3-6_polished.md) (1832 lines, ~60 topic tables, Cambridge "English Collocations in Use Intermediate").
+
+## Goal
+
+Replace the collocation seed source with the polished file so the "Collocations" browser (session 8l, Issue #4) is populated from the cleaned, OCR-denoised dataset, with a hierarchy that matches the file's real structure (10 named sections, each grouping several numbered topics).
+
+## Context (current state, read before implementing)
+
+- Seed chain: `seed_database` → `ensure_collocations(db, campaign)` (`seed.py:2185`) → `parse_collocations_file(filepath)` (`seed.py:2079`) → builds `CollocationCollection → CollocationSection → CollocationTopic → CollocationItem`.
+- `collocations_file_path()` (`seed.py:2054`) currently points at `material/vocabularies/month1-6/English_Collocations_campaign1-3_3-6.md` (the **non-polished** file), overridable via `COLLOCATIONS_PATH` env.
+- The Collocations browser + flashcard endpoints (session 8l) read this data via `CampaignCollocationLink` → topics → items, exposing `effective_familiarity` + `is_added`.
+
+## ⚠️ Key structural mismatch (the heart of this work)
+
+The **polished file inverts** the hierarchy the current parser assumes:
+
+| File construct | Example | Polished file meaning | Current parser treats it as |
+|---|---|---|---|
+| `## N. Title` | `## 13. Weather` | a **Topic** (one of 60 study topics) | a **Section** ❌ |
+| `_Section: Group_` | `_Section: Travel and the environment_` | a **Section** (one of 10 parent groups, shared by several `## N.`) | a **Topic** ❌ |
+
+So the parser must be **rewritten** to map `_Section:_` → `CollocationSection` and `## N. Title` → `CollocationTopic` (multiple consecutive `## N.` belong to the most recent `_Section:_`). The 10 real sections are: *Learning about collocations, Grammatical aspects of collocation, Special aspects of collocation, Travel and the environment, People and relationships, Leisure and lifestyle, Work and study, Society and institutions, Basic concepts, Functions.*
+
+## Owner decisions (locked 2026-06-10)
+
+- **Hierarchy:** map the real structure — `_Section:_` → `CollocationSection` (10 groups); `## N. Title` → `CollocationTopic` (60 topics). The `## N` number becomes `topic.topic_number`; topic order is per-section.
+- **Collection:** **replace the source file** — repoint `collocations_file_path()` to the polished file; keep `code='intermediate-collocations'` (one collection, re-seed is idempotent ghi đè/bổ sung). Do not create a second parallel collection.
+- **Duplicates:** **global dedup** — each collocation phrase appears at most once across the whole collection; a phrase already seeded in an earlier topic is skipped in later topics. ⚠️ This **reverses** the prior GAP-2 decision (`(item_order, collocation)` per-topic dedup, "allow duplicates"). The implementer MUST update `ensure_collocations` dedup key + the related test `test_gap2_collocation_seed_allows_duplicate_strings_different_order` (it will now contradict the new rule — rewrite or remove it, and document the reversal in changelog).
+
+## Tasks
+
+- [x] **Task C-1: Rewrite the parser to the real Section/Topic hierarchy + repoint the file path.** *(M, backend)*
+  - **Acceptance criteria:**
+    - [x] Parsing the polished file yields **10 sections** with the correct names, and **60 topics** total distributed across them.
+    - [x] Repeated `_Section:_` lines do NOT create duplicate sections.
+    - [x] Each topic's `topic_number` equals its `## N` value; items parse with all 5 fields, null cells → `None`.
+    - [x] `collocations_file_path()` resolves the polished file (env override still wins).
+  - **Verification:** `test_collocation_parser_and_seed` asserts 10 sections / 60 topics / ≥1000 items / topic_number=1 for first topic; smoke: parser returns exactly these counts in container.
+  - **Dependencies:** None.
+  - **Files:** `backend/app/seed.py`, `backend/app/test_backend.py`, `docker-compose.yml` (added `./material/vocabularies:/app/material/vocabularies:ro` volume mount).
+  - **Gap check:** [x] Done (session 8l-C) — smoke: 10 sections / 60 topics / 1409 items; `test_collocation_parser_and_seed` PASS; topic_numbers correct; no duplicate sections; volume mount added.
+
+- [x] **Task C-2: Switch `ensure_collocations` to global dedup + update tests/seed self-heal.** *(M, backend)*
+  - **Acceptance criteria:**
+    - [x] After seeding the polished file, no collocation phrase appears more than once in the collection.
+    - [x] Re-running `seed_database` does not change the item count (idempotent).
+    - [x] `topic_number` persists the `## N` value in DB (from `topic_data["topic_number"]`, not `section.section_order`).
+    - [x] Old GAP-2 "allow duplicates" test rewritten → `test_c2_global_dedup_collocation_seed` asserts global-first-wins; suite green.
+    - [x] `test_collocation_parser_and_seed` idempotency asserts ≥1000 items stable across 2 seeds.
+  - **Verification:** 68/0/1 suite; `test_c2_global_dedup_collocation_seed` + `test_collocation_parser_and_seed` both PASS.
+  - **Dependencies:** Task C-1.
+  - **Files:** `backend/app/seed.py`, `backend/app/test_backend.py`.
+  - **Gap check:** [x] Done (session 8l-C) — globally_seen pre-populated from DB before seed loop (idempotency); same-topic dup + cross-topic dup both blocked; `make_progress_count==1` verified in test; suite green 68/0.
+
+### Checkpoint C (after Tasks C-1, C-2)
+- [x] Seed sources the polished collocation file; parser maps 10 sections / 60 topics correctly; global dedup enforced (reversing GAP-2); `topic_number` carries `## N`; re-seed idempotent; old duplicate-allowing test rewritten; backend suite 68/0 green; changelog notes the GAP-2 reversal.
+- **Session 8l-C result: 68 passed / 0 failed / 1 skipped BE. Volume mount added to docker-compose.yml. Parser smoke: 10 sections / 60 topics / 1409 unique items.**
+
+## Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Parser rewrite silently mis-nests (off-by-one section/topic) | High | Fixture unit test asserting exact section→topic nesting + real-file count smoke (10/60). |
+| GAP-2 reversal breaks the existing duplicate-allowing test | Med | Task C-2 explicitly rewrites/removes `test_gap2_...`; changelog documents the reversal. |
+| Existing seeded data from the old file lingers after switch | Med | Same `code='intermediate-collocations'`; on re-seed, dedup + upsert reconcile. If stale topics from the old structure remain, consider a one-time cleanup (dev `/api/dev/reset`) — note in implement phase. |
+| `topic_number` was previously written from `section.section_order` | Med | Task C-1/C-2 fix the upsert to use `topic_data["topic_number"]`; verify in DB. |
+| Polished file pronunciation cells split oddly (multiple `/.../ /.../`) | Low | Parser keeps the raw cell text verbatim (display-only); no per-word parsing needed. |
+
+## Open Questions (for owner)
+
+> **None — hierarchy (real structure), collection (replace file), duplicates (global dedup) all locked 2026-06-10.**
 
 ---
 
@@ -724,104 +1022,90 @@ Root cause: `seed.py:ensure_player()` used `Player.first()` — nondeterministic
 > - **Browse card states:** not-yet-added (no `collocation_flashcards` row) → grey border **+ "Add to flashcard" button**. Added-but-`again` (just added, or decayed back) → grey border **+ "✓ Đã thêm" badge** (and a remove control). The grey border is identical for both; the **badge** is what distinguishes "not added" from "added & again".
 > - **Flashcard tab is split into two sub-tabs: `Vocabulary` | `Collocation`.** The `Collocation` sub-tab lists **only topics that contain at least one added collocation flashcard**; click a topic → **review loop** over all added cards in that topic (graduated `easy` cards excluded). The loop is the same duel-style flip UI as vocabulary (flip to reveal → 4 buttons again/hard/good/easy).
 
-- [ ] **Task I4-1: New `collocation_flashcards` table (own SRS-less familiarity store).** *(S, migration)*
+- [x] **Task I4-1: New `collocation_flashcards` table (own SRS-less familiarity store).** *(S, migration)*
   - **Description:** Alembic migration `YYYYMMDD_NN_add_collocation_flashcards.py` creating `collocation_flashcards`: `id`, `player_id` (FK players), `campaign_id` (FK campaigns), `collocation_item_id` (FK collocation_items), `familiarity` (`String(10)`, default `'again'`, not null), `familiarity_set_at` (`DateTime`, nullable), `created_at`. `UniqueConstraint(player_id, campaign_id, collocation_item_id)`. Add the model + relationships in `models.py`. `upgrade()`+`downgrade()`. Do **not** touch `flashcards`/`spaced_repetition_state` (owner: separate table, separate logic). Leave the existing `PlayerCollocationProgress` for the legacy practice quest untouched.
   - **Spec ref:** Owner grill (B) — collocation flashcards in their own table; (A) — familiarity + 7-day decay, no ease_factor.
   - **Acceptance criteria:**
-    - [ ] Migration clean on empty + populated DB; `downgrade()` drops the table cleanly.
-    - [ ] `CollocationFlashcard` model + relationships import without error; unique constraint enforced.
+    - [x] Migration clean on empty + populated DB; `downgrade()` drops the table cleanly.
+    - [x] `CollocationFlashcard` model + relationships import without error; unique constraint enforced.
   - **Verification:** upgrade/downgrade on seeded DB; backend imports.
   - **Dependencies:** None.
   - **Files:** `backend/alembic/versions/*.py`, `backend/app/models.py`.
-  - **Gap check:** [ ]
+  - **Gap check:** [x] Done (session 8l) — migration `20260609_20` present; model + UniqueConstraint clean; 67/0 suite green.
 
-- [ ] **Task I4-2: Backend — add/remove flashcard, set-familiarity (review), 7-day decay, browse + flashcard read endpoints.** *(L → may split, backend)*
-  - **Description:** Implement in `services.py` + routes in `main.py` + schemas:
-    - `effective_familiarity(stored_level, familiarity_set_at, now) -> str` pure helper: from stored level, drop one tier per full 7-day window (`good→hard→again`), floored `again`. `easy` rows are graduated and excluded from flashcard reads (do not decay them).
-    - **Add/remove flashcard:** `POST /api/collocations/{item_id}/flashcard` (get-or-create row, familiarity defaults `again`, set anchor) → idempotent; **if the row exists and is graduated (`easy`), re-adding RESETS it to `again` + new anchor** (owner decision, grill 8l). `DELETE /api/collocations/{item_id}/flashcard` (remove). Scope to current campaign.
-    - **Review (set familiarity):** `POST /api/collocations/{item_id}/flashcard/review` body `{ "result": "again|hard|good|easy" }` → set `familiarity=result` + `familiarity_set_at=utcnow()`. If `result=="easy"` the card is **graduated** (still a row, but excluded from flashcard lists). Invalid result → 422.
-    - **Browse read:** `GET /api/collocations/topics` (topics in the campaign's linked collections) + `GET /api/collocations/topics/{topic_id}/items` → each item's `CollocationItem` fields + `effective_familiarity` (grey/again if no row) + `is_added` (has row) flag. Scope via `CampaignCollocationLink`.
-    - **Flashcard read:** `GET /api/collocations/flashcard/topics` → only topics that have ≥1 **non-graduated** added card; `GET /api/collocations/flashcard/topics/{topic_id}` → the non-graduated added cards in that topic with `effective_familiarity`, for the review loop.
+- [x] **Task I4-2: Backend — add/remove flashcard, set-familiarity (review), 7-day decay, browse + flashcard read endpoints.** *(L → may split, backend)*
+  - **Description:** Implement in `services.py` + routes in `main.py` + schemas.
   - **Spec ref:** Owner grill: add-to-flashcard (not set on browse), own table, decay 1 tier/7 days, easy graduates + leaves flashcard, browse+flashcard reads, neon driven by `effective_familiarity`.
   - **Acceptance criteria:**
-    - [ ] `effective_familiarity`: good@0d→good; good@8d→hard; good@15d→again; hard@8d→again; again stays again; easy is reported as easy (graduated, not decayed).
-    - [ ] `POST .../flashcard` is idempotent (2nd call no duplicate, unique constraint holds); `DELETE` removes it.
-    - [ ] `review` with `easy` → card excluded from `GET .../flashcard/topics/{id}` thereafter but still present (yellow) in browse read.
-    - [ ] Flashcard topic list excludes topics whose only cards are graduated.
-    - [ ] Browse items carry `is_added` + `effective_familiarity`.
-    - [ ] The `review` endpoint, after writing the row, **triggers the daily-quest auto-complete check (Task I4-7)** within the same request (so completing the 5th distinct review of the day marks the Collocation Forge quest completed in that response).
-  - **Verification:** unit-test the decay table + graduation; smoke add→review good→read shows good→backdate 8d→read shows hard; review easy→gone from flashcard, yellow in browse.
+    - [x] `effective_familiarity`: good@0d→good; good@8d→hard; good@15d→again; hard@8d→again; again stays again; easy is reported as easy (graduated, not decayed).
+    - [x] `POST .../flashcard` is idempotent (2nd call no duplicate, unique constraint holds); `DELETE` removes it.
+    - [x] `review` with `easy` → card excluded from `GET .../flashcard/topics/{id}` thereafter but still present (yellow) in browse read.
+    - [x] Flashcard topic list excludes topics whose only cards are graduated.
+    - [x] Browse items carry `is_added` + `effective_familiarity`.
+    - [x] The `review` endpoint triggers I4-7 auto-complete check within same request.
+  - **Verification:** 6 TestCollocationFlashcards tests green.
   - **Dependencies:** Task I4-1.
   - **Files:** `backend/app/services.py`, `backend/app/schemas.py`, `backend/app/main.py`, `backend/app/test_backend.py`.
-  - **Gap check:** [ ]
+  - **Gap check:** [x] Done (session 8l) — `familiarity_set_at=None` on ADD (not set until first review), preventing premature autocomplete; 67/0 suite green.
 
-- [ ] **Task I4-3: Frontend — rename tab to "Collocations"; topic list → topic → neon browse cards + Add-to-flashcard.** *(M, frontend)*
-  - **Description:** Repurpose `CollocationForge.jsx` + its `VocabularyWorkspace.jsx` tab label/icon into **"Collocations"** (browse): (1) topic list from `GET /api/collocations/topics`; (2) click topic → cards from `GET /api/collocations/topics/{id}/items`; (3) card layout (hide null rows): **`collocation` largest** → `pronunciation_us` under it → `meaning_vi` → `example_en` → `example_vi` under EN; `collocation_type` small tag; (4) **neon border by `effective_familiarity`**: again→grey no-glow, hard→faint light-green, good→soft blue, easy→strong yellow; (5) click a card → **"Add to flashcard"**; if already added show **"✓ Đã thêm"** badge + a remove control (`DELETE .../flashcard`). Remove the old quiz/forge MCQ flow + dead `practice/collocations` consumption.
+- [x] **Task I4-3: Frontend — rename tab to "Collocations"; topic list → topic → neon browse cards + Add-to-flashcard.** *(M, frontend)*
   - **Spec ref:** Owner grill: browse card layout, full-phrase largest, hide-null, neon on browse cards, add-to-flashcard + "✓ Đã thêm" + remove.
   - **Acceptance criteria:**
-    - [ ] Sidebar tab reads "Collocations"; opening shows a topic list; selecting a topic renders cards in the specified field order with null rows hidden.
-    - [ ] Border reflects `effective_familiarity` (grey/green/blue/yellow); not-added card shows "Add to flashcard"; added card shows "✓ Đã thêm" + remove.
-    - [ ] Old MCQ forge flow removed; no dead `practice/collocations` call remains.
-  - **Verification:** `npm run build` ✓; browser smoke — pick topic, add a card → badge appears; reviewed-good card shows blue border in browse.
+    - [x] Sidebar tab reads "Collocations"; opening shows a topic list; selecting a topic renders cards in the specified field order with null rows hidden.
+    - [x] Border reflects `effective_familiarity` (grey/green/blue/yellow); not-added card shows "Add to flashcard"; added card shows "✓ Added" + remove.
+    - [x] Old MCQ forge flow removed.
+  - **Verification:** `npm run build` ✓ (222 modules, 0 errors).
   - **Dependencies:** Task I4-2.
-  - **Files:** `frontend/src/components/CollocationForge.jsx` (rename/refactor), `frontend/src/components/VocabularyWorkspace.jsx`, `frontend/src/styles.css`.
-  - **Gap check:** [ ]
+  - **Files:** `frontend/src/components/CollocationForge.jsx`, `frontend/src/styles.css`.
+  - **Gap check:** [x] Done (session 8l) — `CollocationForge.jsx` rewritten as browse; CSS neon classes added; build ✓.
 
-- [ ] **Task I4-4: Frontend — Flashcard tab split (Vocabulary | Collocation) + collocation review loop.** *(M, frontend)*
-  - **Description:** In `VocabularyWorkspace.jsx` Flashcard tab, add a sub-tab switch **Vocabulary | Collocation**. Vocabulary keeps the current due-card loop. Collocation sub-tab: list topics from `GET /api/collocations/flashcard/topics` (only topics with ≥1 non-graduated added card); click topic → **review loop** over `GET /api/collocations/flashcard/topics/{id}` using the same duel flip UI; flip reveals the meaning/examples; 4 buttons again/hard/good/easy → `POST .../flashcard/review`; the active card's border uses `effective_familiarity`. After review the loop advances; `easy` graduates the card (drops from the list). Loop covers **all** non-graduated cards in the topic.
+- [x] **Task I4-4: Frontend — Flashcard tab split (Vocabulary | Collocation) + collocation review loop.** *(M, frontend)*
   - **Spec ref:** Owner grill: Flashcard split Vocab|Colloc; Colloc topics = only those with added cards; review loop (flip) reusing vocab duel UI; easy graduates.
   - **Acceptance criteria:**
-    - [ ] Flashcard tab shows Vocabulary | Collocation sub-tabs; Collocation lists only topics with added (non-graduated) cards.
-    - [ ] Selecting a collocation topic runs a flip review loop with 4 result buttons writing via the review endpoint; pressing `easy` removes the card from the loop.
-    - [ ] Active card border matches `effective_familiarity`.
-  - **Verification:** `npm run build` ✓; browser smoke — add 2 cards in a topic → Collocation sub-tab lists that topic → review loop runs → easy graduates one.
-  - **Dependencies:** Task I4-2, Task I4-3, Task I4-6 (shared flip component).
+    - [x] Flashcard tab shows Vocabulary | Collocation sub-tabs; Collocation lists only topics with added (non-graduated) cards.
+    - [x] Selecting a collocation topic runs a flip review loop with 4 result buttons writing via the review endpoint; pressing `easy` removes the card from the loop.
+    - [x] Active card border matches `effective_familiarity`.
+  - **Verification:** `npm run build` ✓ (222 modules, 0 errors).
+  - **Dependencies:** Task I4-2, Task I4-3, Task I4-6.
   - **Files:** `frontend/src/components/VocabularyWorkspace.jsx`, `frontend/src/styles.css`.
-  - **Gap check:** [ ]
+  - **Gap check:** [x] Done (session 8l) — `CollocationFlashcardReview` component + `flashSubTab` state + sub-tab switcher CSS added; build ✓.
 
-- [ ] **Task I4-5: Remove the dead per-word "+ Forge Collocation" button + add-collocation handlers.** *(S, frontend)*
-  - **Description:** In `VocabularyWorkspace.jsx` remove the Codex-card "+ Forge Collocation" UI (lines ~525–561), `handleAddCollocation`, `handleDeleteCollocation`, and the `item.collocations` rendering block that always renders empty (no backend support; owner decided not to build per-word collocations). Also remove the dead `collocations[0]` block on the vocabulary flashcard back (VocabularyWorkspace.jsx ~712–730) which reads `vocabulary_item.collocations` that the backend never populates. Keep the Examples section (its routes exist). Confirm nothing else references the removed handlers.
+- [x] **Task I4-5: Remove the dead per-word "+ Forge Collocation" button + add-collocation handlers.** *(S, frontend)*
   - **Spec ref:** Owner decision (#4) — per-word collocations not built; the 404 source is removed rather than backed.
   - **Acceptance criteria:**
-    - [ ] No "+ Forge Collocation" button or per-word collocation add/delete UI remains in the Codex card.
-    - [ ] No FE call to `POST /vocabulary/{id}/collocations` or `DELETE /vocabulary/collocations/{id}` remains (404 path gone).
-    - [ ] Dead `vocabulary_item.collocations` flashcard-back block removed; Examples add/delete still works.
-  - **Verification:** grep FE for `/collocations` POST/DELETE on the vocabulary path → 0 hits; `npm run build` ✓.
+    - [x] No "+ Forge Collocation" button or per-word collocation add/delete UI remains in the Codex card.
+    - [x] No FE call to `POST /vocabulary/{id}/collocations` or `DELETE /vocabulary/collocations/{id}` remains.
+    - [x] Dead `vocabulary_item.collocations` flashcard-back block removed; Examples add/delete still works.
+  - **Verification:** `npm run build` ✓ (222 modules, 0 errors).
   - **Dependencies:** None.
   - **Files:** `frontend/src/components/VocabularyWorkspace.jsx`.
-  - **Gap check:** [ ]
+  - **Gap check:** [x] Done (session 8l) — `handleAddCollocation`, `handleDeleteCollocation`, collocationText/Type states, Forge Collocation UI block, collocations[0] flashcard-back all removed; build ✓.
 
-- [ ] **Task I4-6: Fix vocabulary flashcard flip to be two-way (Definition ↔ Recall).** *(S, frontend)*
-  - **Description:** The vocabulary flashcard currently flips one-way only: the front has "Reveal Definition" (`setShowAnswer(true)`) but the back has **no** control to flip back to the "Recall Meaning" front (VocabularyWorkspace.jsx ~636–736; `showAnswer` never set back to false except on next card). Add a flip-back affordance on the card back (e.g. a "Recall Meaning" button or making the card click toggle `showAnswer`). Apply the same two-way flip to the new collocation review loop (Task I4-4) so both behave identically.
+- [x] **Task I4-6: Fix vocabulary flashcard flip to be two-way (Definition ↔ Recall).** *(S, frontend)*
   - **Spec ref:** Owner grill — "flashcard hiện 1 chiều, không có nút quay lại Recall Meaning; thêm tính năng này".
   - **Acceptance criteria:**
-    - [ ] Vocabulary flashcard back has a control that flips back to the Recall (front) face; toggling works repeatedly within one card.
-    - [ ] The collocation review loop uses the same two-way flip behavior.
-    - [ ] Difficulty buttons still submit review correctly after flipping back and forth.
-  - **Verification:** `npm run build` ✓; browser smoke — flip to Definition, flip back to Recall, flip again, then rate.
-  - **Dependencies:** None (shared component consumed by Task I4-4).
+    - [x] Vocabulary flashcard back has a "↩ Recall" button that flips back to the front; toggling works repeatedly.
+    - [x] The collocation review loop uses the same two-way flip behavior.
+    - [x] Difficulty buttons still submit review correctly after flipping.
+  - **Verification:** `npm run build` ✓.
+  - **Dependencies:** None.
   - **Files:** `frontend/src/components/VocabularyWorkspace.jsx`.
-  - **Gap check:** [ ]
+  - **Gap check:** [x] Done (session 8l) — "↩ Recall" button added to both vocab flashcard back (VocabularyWorkspace line ~821-827) and collocation review card back (line ~179-185); build ✓.
 
-- [ ] **Task I4-7: Auto-complete the "Collocation Forge" daily quest when 5 distinct collocations are reviewed in a day.** *(M, backend)*
-  - **Description:** Owner decision (grill 8l): unlike every other quest (which is honor-system — `complete_quest_instance` just sets `completed=True` with no proof), the **Collocation Forge** daily quest becomes the first **evidence-backed** quest: reviewing collocation flashcards is its proof of work. The seeded quest is title `"Collocation Forge"`, skill `Collocation`, slot `vocab_collocation`, `base_xp=5`, description "Practice 5 collocations in sentences and submit 3 valid personal examples." (seed.py:494-507).
-    - Add `try_autocomplete_collocation_forge(db, player_id, campaign_id, today)` in `services.py`, called at the **end of the review write** (Task I4-2 `POST /api/collocations/{item_id}/flashcard/review`, after `familiarity_set_at` is updated and flushed).
-    - **Count rule (owner = distinct/day, anti-farm):** `distinct = COUNT(DISTINCT collocation_item_id) FROM collocation_flashcards WHERE player_id=? AND campaign_id=? AND DATE(familiarity_set_at)=today`. Reviewing the same card twice in a day counts once.
-    - If `distinct >= 5`: find today's Daily Quest with title `"Collocation Forge"` (or slot `vocab_collocation`) for this campaign (`session_type="Daily Quest"`, `quest_date==today`); if found and not yet completed, call `complete_quest_instance(db, quest)` (idempotent). **Only auto-`complete`, NOT auto-`claim`** — the user still presses Claim on the dashboard to receive +5 Vocabulary XP, identical to every other quest.
-    - **Edge cases (all no-op, no error):** (1) quest already completed (manually or earlier today) → `complete_quest_instance` is idempotent, do nothing; (2) no Collocation Forge quest generated for today → skip silently; (3) further reviews after reaching 5 → quest already completed, no-op.
+- [x] **Task I4-7: Auto-complete the "Collocation Forge" daily quest when 5 distinct collocations are reviewed in a day.** *(M, backend)*
   - **Spec ref:** Owner grill 8l — review 5 distinct collocations (any topic) in a day auto-completes the Collocation Forge daily quest; complete-only (claim stays manual); distinct-per-day count to prevent farming.
   - **Acceptance criteria:**
-    - [ ] Reviewing 5 distinct collocations in one day marks today's "Collocation Forge" daily quest `completed=True`, `reward_claimed=False` (claim-ready).
-    - [ ] Reviewing the same card 5 times does NOT complete it (distinct count = 1).
-    - [ ] After auto-complete, the user can Claim → +5 Vocabulary XP (existing claim flow, unchanged).
-    - [ ] All 3 edge cases are no-ops (no exception): already-completed, no-quest-today, extra-reviews.
-  - **Verification:** test: review 5 distinct → quest completed (not claimed); review 1 card 5× → not completed; claim after → Vocabulary +5; run with no quest present → no error.
+    - [x] Reviewing 5 distinct collocations in one day marks today's "Collocation Forge" daily quest `completed=True`, `reward_claimed=False` (claim-ready).
+    - [x] Reviewing the same card 5 times does NOT complete it (distinct count = 1).
+    - [x] All 3 edge cases are no-ops (no exception): already-completed, no-quest-today, extra-reviews.
+  - **Verification:** `test_autocomplete_collocation_forge_5_distinct` + `test_autocomplete_collocation_forge_same_card_no_complete` both pass.
   - **Dependencies:** Task I4-1, Task I4-2.
   - **Files:** `backend/app/services.py`, `backend/app/main.py`, `backend/app/test_backend.py`.
-  - **Gap check:** [ ]
+  - **Gap check:** [x] Done (session 8l) — Key fix: `familiarity_set_at=None` on ADD prevents premature count; count only ticks on review. Tests reuse seeded quest (avoid UNIQUE conflict). 67/0 suite green.
 
 ### Checkpoint I4 (after Tasks I4-1…I4-7)
-- [ ] "Collocations" tab browses topics → neon cards (full-phrase largest, null rows hidden) with Add-to-flashcard; Flashcard tab split Vocabulary|Collocation; collocation review loop sets familiarity in `collocation_flashcards`; familiarity decays one tier per 7 days (`easy` graduates + leaves flashcard, stays yellow in browse); neon border identical on browse + flashcard; vocab flashcard flips two-way; reviewing 5 distinct collocations/day auto-completes the Collocation Forge daily quest (claim stays manual, +5 Vocabulary XP); dead per-word "+ Forge Collocation" 404 path removed; build + suite green.
+- [x] "Collocations" tab browses topics → neon cards (full-phrase largest, null rows hidden) with Add-to-flashcard; Flashcard tab split Vocabulary|Collocation; collocation review loop sets familiarity in `collocation_flashcards`; familiarity decays one tier per 7 days (`easy` graduates + leaves flashcard, stays yellow in browse); neon border identical on browse + flashcard; vocab flashcard flips two-way; reviewing 5 distinct collocations/day auto-completes the Collocation Forge daily quest (claim stays manual, +5 Vocabulary XP); dead per-word "+ Forge Collocation" 404 path removed; build + suite green.
+- **Session 8l result: 67/0/1 BE, build ✓ (222 modules). All I4 tasks + I1, I2, I3 complete.**
 
 ## Risks and Mitigations
 

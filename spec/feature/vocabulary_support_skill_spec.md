@@ -2,18 +2,24 @@
 
 _For IELTS Quest Dashboard / Solo-Leveling-inspired gamified learning system_
 
+> **Last updated:** 2026-06-10 (session 8n+1 — gap-checked against code; all sections corrected to match actual implementation)
+>
+> **Implementation status:** Phases I1–I4 **complete**. All core modules exist in code. Remaining work is frontend visualization (Word Network Tree), UI polish for stub modules, and boss/error-dungeon completion.
+
+---
+
 ## 0. Purpose
 
-This document describes the proposed **Vocabulary Support Skill** module for the IELTS Quest Dashboard. It is written so an agent code CLI can load context, ground the repository, lock the task contract, plan broad work, execute in small slices, verify changes, update docs/trackers, and close the session cleanly.
+This document describes the **Vocabulary Support Skill** module for the IELTS Quest Dashboard. It is the living spec that agents and developers load to understand what exists, what the rules are, and what remains to build.
 
-Target stack:
+Target stack (actual, not proposed):
 
 ```text
-Frontend: React
-Backend: FastAPI
-Database: MySQL
-Runtime: Docker / Docker Compose
-Theme: Solo-Leveling-inspired IELTS learning dashboard
+Frontend: React 18 + Vite — raw JSX + src/styles.css (no TypeScript, no CSS framework)
+Backend: FastAPI + SQLAlchemy 2 (sync sessions) + Alembic migrations
+Database: MySQL 8.4 (port 3307 external / 3306 internal)
+Runtime: Docker Compose — backend volume-mounts ./backend for hot-reload
+Auth: JWT (access token in localStorage, refresh token in httpOnly cookie)
 ```
 
 ---
@@ -22,1715 +28,556 @@ Theme: Solo-Leveling-inspired IELTS learning dashboard
 
 ### 1.1. Learning sources
 
-This spec is based on two vocabulary-learning sources:
+This spec is grounded in two vocabulary-learning textbooks:
 
 1. `effective-vocabulary-learning-pre-Intermediate.pdf`
 2. `effective-vocabulary-learning-upper-Intermediate.pdf`
 
 ### 1.2. Source-based learning principles
 
-The pre-intermediate source supports these learning behaviours:
+Pre-intermediate supports:
 
-- Build a weekly routine for studying one unit.
-- Build a daily routine for revision.
-- Learn actively by saying words aloud, repeating silently, highlighting important words, writing words down, and writing example sentences.
-- Revise by covering the meaning and testing memory.
+- Build a daily and weekly revision routine.
+- Learn actively: say words aloud, highlight, write down, write example sentences.
+- Revise by covering meaning and testing memory.
 - Use a vocabulary notebook.
 - Organize words by topic.
-- Add translation, English meaning, drawings, synonyms, opposites, word family, pronunciation, and common word partners.
+- Add translation, English meaning, synonyms, opposites, word family, pronunciation, common word partners.
 - Guess meaning first, then check with a dictionary.
-- Use diagrams to organize vocabulary.
 
-The upper-intermediate source supports these learning behaviours:
+Upper-intermediate supports:
 
 - Learn words in phrases, not in isolation.
 - Learn collocations, grammar characteristics, pronunciation, stress, and register.
 - Group words by topic, grammar feature, word root, or meaning.
-- Use pictures, charts, tables, and network diagrams.
-- Record synonyms, antonyms, word class, word family, and stress.
-- Record typical learner errors.
-- Use dictionary information such as pronunciation, stress, grammar pattern, synonym, antonym, collocation, countable/uncountable, transitive/intransitive, and visual thesaurus.
+- Use diagrams, charts, tables, and network diagrams.
+- Record synonyms, antonyms, word class, word family, stress, and typical learner errors.
+- Use dictionary information: pronunciation, grammar pattern, synonym, antonym, collocation, register.
 - Guess meaning from context using visual clues, surrounding words, grammar clues, background knowledge, prefixes/suffixes, and similarity to known words.
 
-### 1.3. Important interpretation
+### 1.3. Mapping to implemented features
 
-The sources do **not** directly use the word `flashcard`, but the pre-intermediate source describes the same mechanism:
-
-```text
-look at a word → cover the meaning → recall → check → review again later
-```
-
-Therefore, **Flashcard Gate** is a valid gamified version of the source-based active recall method.
-
-The sources also support **tree / node / network** features through:
-
-- diagrams;
-- topic grouping;
-- network diagrams;
-- visual thesaurus;
-- word family;
-- synonyms/antonyms;
-- collocation networks.
+| Source idea | Implemented game feature |
+|---|---|
+| Vocabulary notebook | Codex Archive (`vocabulary_items`) |
+| Cover meaning → recall → check | Flashcard Gate (tap-to-flip card, again/hard/good/easy) |
+| Network / diagram | Word Network Tree (`vocabulary_topics/nodes/edges`) |
+| Collocations | Collocation Forge (`collocation_*` tables, browser + flashcard) |
+| Word family | Word Family Evolution (`vocabulary_relations`) |
+| Synonym / antonym | Shadow Duel |
+| Pronunciation / stress | Echo Chamber |
+| Guess meaning from context | Context Hunt (not started) |
+| Typical errors | Error Dungeon (`vocabulary_errors`) |
+| Checkpoint test | Vocabulary Boss (`VocabularyBoss.jsx`) |
 
 ---
 
-# 2. Overall Product Idea
+## 2. System Overview
 
-## 2.1. Core idea
-
-Vocabulary should be a true **Support Skill**, not just a word list. It should buff the main IELTS skills:
-
-- Reading
-- Listening
-- Writing
-- Speaking
-- Collocation
-- Grammar
-
-## 2.2. Recommended system name
+### 2.1. System name
 
 ```text
 Lexical Awakening System
 ```
 
-## 2.3. Main module structure
+### 2.2. Entry point
+
+`VocabularyWorkspace` is a full-page view (`.vocab-shell`) launched from `App.jsx` via `currentView === 'vocabulary'`. It is **not** a route — it replaces the dashboard view state. Tabs within the workspace use local `activeTab` state (no React Router).
+
+### 2.3. Module structure (actual)
 
 ```text
-Vocabulary System Overlay
-├── Codex Archive
-├── Flashcard Gate
-├── Word Network Tree
-├── Collocation Forge
-├── Word Family Evolution
-├── Shadow Duel
-├── Echo Chamber
-├── Context Hunt
-├── Error Dungeon
-└── Boss: Lexical Awakening
+VocabularyWorkspace (full-page shell, App.jsx)
+├── Codex Archive              — vocabulary_items CRUD + examples
+├── Flashcard Gate             — activeTab === 'flashcard' in VocabularyWorkspace
+│   ├── Vocabulary sub-tab     — due flashcards from flashcards table (SRS)
+│   └── Collocation sub-tab    — collocation_flashcards table (familiarity model)
+├── Collocation Forge          — CollocationForge.jsx, own tab
+│   ├── Browser layer 1        — section accordion
+│   ├── Browser layer 2        — topic progress boxes (neon % fill)
+│   └── Browser layer 3        — collocation items + add/remove flashcard
+├── Word Network Tree          — WordNetworkTree.jsx (backend live, UI stub)
+├── Word Family Evolution      — WordFamilyEvolution.jsx (schema live, UI stub)
+├── Shadow Duel                — ShadowDuel.jsx (backend partially live, UI stub)
+├── Echo Chamber               — EchoChamber.jsx (backend stub, UI stub)
+├── Error Dungeon              — ErrorDungeon.jsx (partially live)
+└── Vocabulary Boss            — VocabularyBoss.jsx (backend partially live, UI thin)
 ```
 
-## 2.4. Main game loop
+### 2.4. Main game loop (implemented)
 
 ```text
 Discover word
-→ Save to Codex
-→ Add meaning / pronunciation / part of speech
-→ Add example sentence
-→ Add collocation / synonym / antonym / word family
-→ Generate flashcards
-→ Review in Flashcard Gate
-→ Unlock node in Word Network Tree
-→ Use word in Writing/Speaking
-→ Defeat Error Dungeon monsters
-→ Clear Boss Battle
-→ Gain Vocabulary XP and rank up
+→ Add to Codex (vocabulary_items)
+→ Add meaning / pronunciation / part of speech / example
+→ Add to flashcard deck (auto-generates Flashcard row)
+→ Review in Flashcard Gate (tap card → flip → grade again/hard/good/easy)
+→ Vocabulary XP is recomputed from aggregate data — see §2.6
+→ Browse Collocation Forge sections → add collocation flashcards
+→ Review collocation flashcards (same flip UI, familiarity + decay)
+→ 5 distinct collocation reviews/day → auto-complete "Collocation Forge" daily quest
+  (daily_slot_code = "vocab_collocation")
+→ Error Dungeon / Shadow Duel / Echo Chamber / Word Tree for depth
+→ Vocabulary Boss for monthly checkpoint
 ```
 
-## 2.5. Vocabulary rank system
+### 2.5. Rank system
 
-Use the existing rank style:
+Uses the existing system-wide rank scale:
 
 ```text
 F → E → D → C → B → A → S
 ```
 
-| Rank | Meaning |
-|---|---|
-| F | Word discovered, meaning not stable |
-| E | Meaning known, but usage still weak |
-| D | Meaning + part of speech + pronunciation known |
-| C | Collocation or phrase usage known |
-| B | Word family / synonym / antonym network created |
-| A | Word used correctly in Writing or Speaking |
-| S | Word reviewed repeatedly and used naturally |
+XP thresholds (seeded in `rank_exam_pools.xp_threshold`):
 
----
-
-# 3. Features to Add
-
-## 3.1. Feature 1 — Codex Archive
-
-### Concept
-
-The **Codex Archive** is the gamified vocabulary notebook. It stores every word or phrase the learner discovers.
-
-### Game UI language
-
-```text
-SYSTEM MODULE: CODEX ARCHIVE
-Purpose: Store and awaken discovered lexical items.
-```
-
-### Main user actions
-
-- Add a new word or phrase.
-- Add English meaning.
-- Add Vietnamese meaning.
-- Add part of speech.
-- Add pronunciation / IPA.
-- Add word stress.
-- Add personal example sentence.
-- Add collocation.
-- Add synonym / antonym.
-- Add word family.
-- Assign IELTS topic.
-- Generate flashcards from the entry.
-
-### XP rules
-
-| Action | XP |
+| Target Rank | XP Required |
 |---|---:|
-| Add new word | +2 |
-| Add English/Vietnamese meaning | +2 |
-| Add part of speech | +2 |
-| Add pronunciation/stress | +3 |
-| Add personal example | +5 |
-| Add collocation | +5 |
-| Add synonym/antonym | +3 |
-| Add word family | +5 |
-| Use word in Writing/Speaking task | +10 |
+| E | 500 |
+| D | 1 200 |
+| C | 2 500 |
+| B | 4 500 |
+| A | 7 000 |
+| S | 10 000 |
 
-### Data needed
+### 2.6. Vocabulary XP model — recompute, not per-event
 
-- `vocabulary_items`
-- `vocabulary_examples`
-- `vocabulary_collocations`
-- `vocabulary_relations`
-- `xp_transactions`
+Vocabulary skill XP is **not** awarded per flashcard review. It is **recomputed** each time `refresh_progress_state()` is called, via `compute_vocabulary_xp()` in `services.py`.
 
----
+The recompute aggregates:
 
-## 3.2. Feature 2 — Flashcard Gate
-
-### Concept
-
-The **Flashcard Gate** is the daily active recall battle system.
-
-### Game UI language
-
-```text
-DAILY GATE: MEMORY RECALL
-Mission: Review due cards before the gate closes.
-```
-
-### Card types
-
-| Card Type | Purpose |
+| Source | XP formula |
 |---|---|
-| `meaning_recall` | English word → recall meaning |
-| `reverse_recall` | Vietnamese meaning → recall English word |
-| `sentence_gap` | Fill word into sentence |
-| `collocation` | Choose correct word partner |
-| `pronunciation` | Identify pronunciation/stress |
-| `register` | Choose formal/informal/neutral |
-| `word_family` | Convert noun/verb/adjective forms |
-| `synonym_antonym` | Choose synonym or opposite |
+| Each `vocabulary_item` | Base 2 XP + data-completeness XP (capped at 40) + mastery_score (capped at 50) |
+| `player_collocation_progress` rows | 5 XP per completed collocation (legacy table) |
+| `vocabulary_errors` logged | +1 XP per error logged |
+| `vocabulary_errors` corrected | +5 XP per `defeated_count` tick |
+| `vocabulary_errors` defeated | +20 XP per defeated error |
+| Vocabulary skill confirmed rank | +60 XP if `confirmed_rank` ∈ {E–S} |
+| Badge: Memory Streak Badge I | +80 XP |
+| Badge: Writing Lexical Buff | +100 XP |
+| Badge: Lexical Awakener | +200 XP |
 
-### Review buttons
+**There is no per-review XP for flashcard grading (again/hard/good/easy).** Flashcard reviews affect `familiarity` state and `due_date` only. Vocabulary XP grows through adding words, enriching them, correcting errors, and earning badges — not through review repetition.
 
-```text
-Again / Hard / Good / Easy
-```
+Quest claim XP (e.g. Collocation Forge daily) flows through the normal quest claim → `award_skill_xp` path and is additive on top of the recomputed base.
 
-### Simple spaced repetition rule for MVP
+---
 
-| Result | Next Review |
+## 3. Feature Status
+
+### 3.1. Codex Archive ✅ LIVE
+
+**What exists:**
+- `vocabulary_items` table: `word`, `normalized_word`, `part_of_speech`, `cefr_level`, `ielts_topic`, `meaning_en`, `meaning_vi`, `pronunciation_ipa`, `word_stress`, `source_type`, `source_reference`.
+- `vocabulary_examples` table: linked to `vocabulary_item_id`.
+- `flashcards` table: auto-created from vocabulary items; `card_type`, `front_text`, `back_text`, `hint`, `difficulty`, `status`.
+- `vocabulary_relations` table: `source_word_id`, `target_word_id`, `target_text`, `relation_type` (`synonym/antonym/word_family/derived_form/related_meaning/register_alternative`). Backend CRUD API exists (see §6.1); no UI yet.
+- CRUD API for items, examples, and relations (see §6.1).
+- Frontend: tab "codex" in `VocabularyWorkspace.jsx` with search, add form, edit form, example list.
+
+**What is NOT implemented:**
+- Synonym/antonym/word-family CRUD from the Codex UI form (relations exist in DB + API, not wired to form).
+- Word stress marking UI.
+- CSV import.
+
+---
+
+### 3.2. Flashcard Gate ✅ LIVE
+
+**What exists:**
+- `flashcards` + `spaced_repetition_states` tables.
+- SRS: grade → `interval_days` offset (`again`→0, `hard`→1, `good`→3, `easy`→7). No SM-2 ease factor in active use.
+- Vocabulary sub-tab: tap anywhere on card to flip (two-way toggle); 4 grade buttons with `e.stopPropagation()`; no "Reveal"/"Recall" buttons.
+- Card dimensions: `width: 100%` (fills main content panel, sidebar excluded) × `min(560px, 70vh)`.
+- Collocation sub-tab: topic picker → `CollocationFlashcard` review with same flip UI and familiarity model.
+- Familiarity decay: `effective_familiarity()` in `services.py` — one tier per 7 days (`easy` never decays).
+- `easy` graduates from active deck (stays visible in browse as yellow neon).
+- Re-adding a graduated card resets to `again`.
+
+**Familiarity states:**
+
+| State | Neon color | Counts as "completed" for % |
+|---|---|---|
+| `new` (not added) | none | No |
+| `again` | grey | No |
+| `hard` | cyan | Yes |
+| `good` | blue | Yes |
+| `easy` | gold | Yes (graduated) |
+
+**Completion % rule (Collocation Forge topic boxes):**
+`completed_count / item_count` where `completed_count` = flashcards with `effective_familiarity ∈ {hard, good, easy}`.
+
+**Collocation auto-complete quest rule:**
+Reviewing 5 **distinct** collocation items in one calendar day triggers `try_autocomplete_collocation_forge()`, which sets `completed=True` on today's quest where `daily_slot_code = "vocab_collocation"`. Reward claim remains manual.
+
+**Card types (actual implemented):**
+
+| Type | Where |
 |---|---|
-| Again | Same day or next day |
-| Hard | 1 day |
-| Good | 3 days |
-| Easy | 7 days |
+| `meaning_recall` | Vocabulary Flashcard Gate |
+| Collocation phrase | Collocation Flashcard sub-tab |
 
-### XP rules
+Full multi-type card support (`reverse_recall`, `sentence_gap`, etc.) is **not yet implemented**.
 
-| Review Result | XP |
-|---|---:|
-| Again | +0 |
-| Hard | +1 |
-| Good | +2 |
-| Easy | +3 |
-| Complete daily gate | +20 to +40 |
-
-### Data needed
-
-- `flashcards`
-- `flashcard_reviews`
-- `spaced_repetition_state`
-- `xp_transactions`
+**XP:** No per-review XP. See §2.6 for how Vocabulary XP is computed.
 
 ---
 
-## 3.3. Feature 3 — Word Network Tree
+### 3.3. Collocation Forge ✅ LIVE
 
-### Concept
+**What exists:**
 
-The **Word Network Tree** is a graph-based vocabulary map. Each word, phrase, collocation, synonym, antonym, and word family item becomes a node.
+**Database tables (actual names):**
 
-### Recommended visualization
-
-Use `React Flow` for the first implementation.
-
-### Node statuses
-
-| Status | Meaning |
+| Table | Role |
 |---|---|
-| `locked` | Not available yet |
-| `discovered` | Seen or added |
-| `activated` | Meaning known |
-| `stabilized` | Reviewed correctly |
-| `mastered` | Used in a correct sentence |
-| `awakened` | Used in IELTS Writing/Speaking or passed boss check |
+| `collocation_collections` | A Cambridge book unit group (e.g. "Campaign 1–3 Month 3–6") |
+| `collocation_sections` | Section within a collection — 10 sections; `section_order`, `title` |
+| `collocation_topics` | Topic within a section — 60 topics per collection; `topic_order`, `topic_number` |
+| `collocation_items` | Individual collocation entry — 1409 unique items (global dedup within collection) |
+| `campaign_collocation_links` | Many-to-many: campaigns ↔ collections |
+| `player_collocation_progress` | Legacy progress table (superseded by `collocation_flashcards` for review tracking) |
+| `collocation_flashcards` | Per-player/campaign flashcard state: `familiarity`, `familiarity_set_at` |
 
-### Node types
+**Seeding:**
+- Source file: `material/vocabularies/month1-6/English_Collocations_campaign1-3_3-6_polished.md`
+- Parser: `_Section: X_` → `CollocationSection`; `## N. Title` → `CollocationTopic`
+- Global dedup per collection by phrase (cross-topic duplicates skipped; first occurrence wins)
+- Volume mount: `./material/vocabularies:/app/material/vocabularies:ro`
 
-| Node Type | Example |
-|---|---|
-| `core` | education |
-| `topic` | environment |
-| `word` | significant |
-| `collocation` | significant difference |
-| `synonym` | important |
-| `antonym` | insignificant |
-| `word_family` | significance / significantly |
-| `grammar_pattern` | suggest + clause |
-| `register` | kids → informal, children → neutral/formal |
+**Browser UI (`CollocationForge.jsx`):**
+- Layer 1: Section accordion (click to expand, chevron, topic count badge)
+- Layer 2: Topic progress box grid (2 columns) — each box shows title, `%`, `done/total`, bottom-up fill animation, neon halo scaling with `--coll-ratio` (0→1), `cursor: pointer`
+- Layer 3: Collocation item cards (neon color = `effective_familiarity`), Add/Remove flashcard buttons
+- Post-mutation refresh: both item list and topic progress counts update live
 
-### Example tree
-
-```text
-Education
-├── school
-├── teacher
-├── student
-├── exam
-├── assignment
-├── scholarship
-├── academic performance
-└── higher education
-```
-
-### Unlock rule example
-
-A node becomes `activated` when:
+**API endpoints (actual):**
 
 ```text
-meaning exists
-AND part_of_speech exists
-AND at least 1 example sentence exists
-```
-
-A node becomes `mastered` when:
-
-```text
-review_count >= 3
-AND successful_review_rate >= 80%
-AND at least 1 collocation exists
-```
-
-### Data needed
-
-- `vocabulary_topics`
-- `vocabulary_nodes`
-- `vocabulary_edges`
-- `vocabulary_items`
-- `vocabulary_relations`
-
----
-
-## 3.4. Feature 4 — Collocation Forge
-
-### Concept
-
-The **Collocation Forge** turns isolated words into usable phrases.
-
-### Game UI language
-
-```text
-FORGE MODULE: COLLOCATION FORGE
-Base word detected. Forge usable IELTS phrases.
-```
-
-### Gameplay
-
-Learner matches or creates correct combinations:
-
-```text
-express + an opinion
-make + a mistake
-take + a break
-gain + an advantage
-strong + argument
-significant + difference
-```
-
-### Collocation types
-
-- adjective + noun
-- verb + noun
-- noun + preposition
-- adjective + preposition
-- fixed phrase
-- IELTS phrase
-
-### XP rules
-
-| Action | XP |
-|---|---:|
-| Add collocation | +5 |
-| Match collocation correctly | +3 |
-| Write sentence with collocation | +7 |
-| Use collocation in Writing/Speaking | +15 |
-
-### Data needed
-
-- `vocabulary_collocations`
-- `vocabulary_examples`
-- `xp_transactions`
-
----
-
-## 3.5. Feature 5 — Word Family Evolution
-
-### Concept
-
-The **Word Family Evolution** feature lets a word evolve into related forms.
-
-### Example
-
-```text
-communicate
-├── communication
-├── communicative
-├── communicator
-└── miscommunication
-```
-
-Another example:
-
-```text
-produce
-├── product
-├── production
-├── productive
-├── productivity
-└── producer
-```
-
-### Gameplay
-
-- Learner starts with a base word.
-- Learner unlocks derived forms.
-- Each derived form can become a new Codex item.
-- Completing a family gives a bonus.
-
-### XP rules
-
-| Action | XP |
-|---|---:|
-| Add derived form | +4 |
-| Identify correct word class | +3 |
-| Complete word family set | +20 |
-
-### Data needed
-
-- `vocabulary_relations`
-- `vocabulary_items`
-- `xp_transactions`
-
----
-
-## 3.6. Feature 6 — Shadow Duel
-
-### Concept
-
-The **Shadow Duel** is a synonym/antonym and register battle.
-
-### Gameplay
-
-Example synonym duel:
-
-```text
-Word: pleased
-Choose synonym:
-A. glad
-B. cold
-C. narrow
-D. heavy
-```
-
-Example antonym duel:
-
-```text
-Word: urban
-Choose opposite:
-A. rural
-B. modern
-C. formal
-D. crowded
-```
-
-Example register duel:
-
-```text
-Word: guys
-Register: informal
-Better IELTS Writing option: people / individuals
-```
-
-### XP rules
-
-| Action | XP |
-|---|---:|
-| Correct synonym | +2 |
-| Correct antonym | +2 |
-| Correct register | +3 |
-| 10-duel win streak | +20 |
-
-### Data needed
-
-- `vocabulary_relations`
-- `vocabulary_items`
-- `flashcards`
-- `xp_transactions`
-
----
-
-## 3.7. Feature 7 — Echo Chamber
-
-### Concept
-
-The **Echo Chamber** trains pronunciation, IPA, silent letters, and stress.
-
-### Gameplay
-
-- Choose correct stress.
-- Identify silent letter.
-- Listen and choose word.
-- Mark syllables.
-- Optional later: record pronunciation.
-
-### Example
-
-```text
-record
-Noun: REcord
-Verb: reCORD
-```
-
-### XP rules
-
-| Action | XP |
-|---|---:|
-| Mark stress correctly | +3 |
-| Identify silent letter | +3 |
-| Listen and choose word | +5 |
-| Record pronunciation attempt | +10 |
-
-### Data needed
-
-- `vocabulary_items`
-- `flashcards`
-- `flashcard_reviews`
-- optional future: `pronunciation_attempts`
-
----
-
-## 3.8. Feature 8 — Context Hunt
-
-### Concept
-
-The **Context Hunt** trains learners to guess meaning before checking the dictionary.
-
-### Gameplay
-
-```text
-Read sentence
-→ Guess meaning
-→ Select clue type
-→ Check dictionary result
-→ Save to Codex
-```
-
-### Clue types
-
-- visual clue
-- background knowledge
-- surrounding words
-- grammar clue
-- prefix/suffix
-- similarity to known word
-- similarity to another language
-- false friend warning
-
-### Example
-
-```text
-Sentence:
-The number of students increased significantly after the new policy.
-
-Target word:
-significantly
-
-Guess:
-noticeably / importantly
-```
-
-### XP rules
-
-| Action | XP |
-|---|---:|
-| Guess before dictionary | +3 |
-| Correct guess | +5 |
-| Identify clue type | +3 |
-| Save word to Codex | +2 |
-
-### Data needed
-
-- `context_hunt_attempts`
-- `vocabulary_items`
-- `xp_transactions`
-
----
-
-## 3.9. Feature 9 — Dictionary Scanner
-
-### Concept
-
-The **Dictionary Scanner** is a checklist-based scanner for new words.
-
-### Scanner checklist
-
-```text
-[ ] Meaning
-[ ] Vietnamese meaning
-[ ] Part of speech
-[ ] Pronunciation / IPA
-[ ] Word stress
-[ ] Example sentence
-[ ] Collocation
-[ ] Synonym
-[ ] Antonym
-[ ] Word family
-[ ] Register
-[ ] Grammar pattern
-[ ] Countable/uncountable
-[ ] Transitive/intransitive
-```
-
-### Rank calculation idea
-
-| Completed Fields | Suggested Rank |
-|---|---|
-| meaning only | F |
-| meaning + example | E |
-| + pronunciation + part of speech | D |
-| + collocation | C |
-| + word family/synonym/antonym | B |
-| + used in writing/speaking | A |
-| + repeated correct reviews | S |
-
-### Data needed
-
-- `vocabulary_items`
-- `vocabulary_examples`
-- `vocabulary_collocations`
-- `vocabulary_relations`
-
----
-
-## 3.10. Feature 10 — Error Dungeon
-
-### Concept
-
-The **Error Dungeon** stores recurring vocabulary mistakes as monsters.
-
-### Monster types
-
-| Monster Type | Example |
-|---|---|
-| `wrong_collocation` | make homework → do homework |
-| `wrong_meaning` | use word with wrong meaning |
-| `wrong_register` | guys in formal Writing |
-| `wrong_word_form` | success vs successful |
-| `wrong_preposition` | depend of → depend on |
-| `wrong_grammar_pattern` | suggest to do → suggest doing / suggest that |
-
-### Defeat rule
-
-A monster is defeated when the learner corrects it successfully multiple times.
-
-Example:
-
-```text
-corrected_count >= 3
-AND last_mistake_at older than 7 days
-```
-
-### XP rules
-
-| Action | XP |
-|---|---:|
-| Log error | +1 |
-| Correct error | +5 |
-| Defeat monster | +20 |
-| Clear 10 monsters | Badge unlock |
-
-### Data needed
-
-- `vocabulary_errors`
-- `xp_transactions`
-
----
-
-# 4. Integration with Current UI
-
-The current UI already contains:
-
-- Mission Gates
-- Boss Battles
-- Quest Board
-- Skill Matrix
-- Rank F → S
-- XP
-- Daily / Weekly / Archive tabs
-- Boss Timeline
-- Streak / Shield
-- Main Quest / Daily Quest / Weekly Quest
-- Badge Wall
-
-## 4.1. Add to Mission Gates
-
-Add a new section:
-
-```text
-Vocabulary System
-├── Codex
-├── Flashcard Gate
-├── Word Tree
-├── Collocation Forge
-├── Context Hunt
-└── Error Dungeon
-```
-
-## 4.2. Add to Skill Matrix
-
-Vocabulary already exists as a Support Skill. Expand it to show:
-
-```text
-SUPPORT SKILL
-Vocabulary
-Level: Lv.2
-Rank: E
-XP: 145 / 250
-
-Current Buff:
-+5% Reading comprehension
-+3% Writing lexical resource
-+3% Speaking lexical range
-```
-
-## 4.3. Add Vocabulary Panel to Dashboard
-
-Recommended dashboard cards:
-
-```text
-Vocabulary Today
-- Due cards: 20
-- New words: 5
-- Weak words: 8
-- Active errors: 3
-- Current tree: Education
-```
-
-```text
-Lexical Mastery
-- Total words: 320
-- Mastered words: 75
-- Active nodes: 180
-- Awakened nodes: 12
-```
-
-## 4.4. Add Quest Board vocabulary integration
-
-Daily tab should include:
-
-```text
-Daily Vocabulary Gate
-- Review due cards
-- Add new words
-- Forge collocations
-- Write example sentences
-```
-
-Weekly tab should include:
-
-```text
-Weekly Lexical Expansion
-- Complete one topic tree
-- Master 30 words
-- Defeat 10 error monsters
-```
-
-Archive tab should preserve completed vocabulary quests for review.
-
----
-
-# 5. Daily Quest Samples for Vocabulary
-
-## 5.1. Daily Quest — Memory Gate
-
-```text
-Daily Quest: Memory Gate
-
-Tasks:
-1. Review 20 due flashcards.
-2. Add 5 new words to Codex.
-3. Write 3 personal example sentences.
-4. Forge 3 collocations.
-5. Unlock 1 node in Word Network Tree.
-
-Reward:
-+40 Vocabulary XP
-+10 Reading XP
-+1 Streak Point
-```
-
-## 5.2. Daily Quest — Collocation Forge
-
-```text
-Daily Quest: Collocation Forge
-
-Tasks:
-1. Select 5 base words from Codex.
-2. Add 2 collocations for each base word.
-3. Write 3 IELTS-style sentences.
-4. Review 10 collocation cards.
-
-Reward:
-+45 Vocabulary XP
-+15 Writing XP
-Badge progress: Collocation Hunter
-```
-
-## 5.3. Daily Quest — Context Hunt
-
-```text
-Daily Quest: Context Hunt
-
-Tasks:
-1. Read 1 short paragraph.
-2. Guess meaning of 5 unknown words.
-3. Identify clue type for each word.
-4. Check dictionary after guessing.
-5. Save useful words to Codex.
-
-Reward:
-+35 Vocabulary XP
-+15 Reading XP
-```
-
-## 5.4. Daily Quest — Error Dungeon
-
-```text
-Daily Quest: Error Dungeon
-
-Tasks:
-1. Review 3 active error monsters.
-2. Correct each wrong sentence.
-3. Write a new correct sentence.
-4. Mark defeated progress.
-
-Reward:
-+30 Vocabulary XP
-+10 Grammar XP
+GET    /api/collocations/topics                       — all topics with item_count + completed_count
+GET    /api/collocations/topics/{id}/items            — items with effective_familiarity + is_added
+POST   /api/collocations/{item_id}/flashcard          — add to deck (familiarity_set_at=None)
+DELETE /api/collocations/{item_id}/flashcard          — remove from deck
+POST   /api/collocations/{item_id}/flashcard/review   — grade (again/hard/good/easy) + autocomplete check
+GET    /api/collocations/flashcard/topics             — topics with non-graduated cards (for review picker)
+GET    /api/collocations/flashcard/topics/{id}        — cards for a topic (non-graduated only)
 ```
 
 ---
 
-# 6. Boss Battle for Vocabulary
+### 3.4. Word Network Tree ⚠️ BACKEND LIVE / UI STUB
 
-## 6.1. Boss 01 — Foundation Scan
+**What exists:**
+- `vocabulary_topics`, `vocabulary_nodes`, `vocabulary_edges` tables in DB.
+- Full backend CRUD API (see §6.3).
+- `WordNetworkTree.jsx` component (stub/early implementation — no React Flow).
 
-Designed for Month 1–3.
+**What is NOT implemented:**
+- React Flow visualization in the frontend.
+- Node unlock rules enforced end-to-end.
+
+---
+
+### 3.5. Word Family Evolution ⚠️ SCHEMA ONLY / UI STUB
+
+**What exists:**
+- `vocabulary_relations` table with CRUD API (see §6.1).
+- `WordFamilyEvolution.jsx` component (stub).
+
+**What is NOT implemented:**
+- UI for adding/browsing word families from Codex.
+- Dedicated API surface for relation browsing (reuses `/api/vocabulary/relations`).
+
+---
+
+### 3.6. Shadow Duel ⚠️ BACKEND PARTIALLY LIVE / UI STUB
+
+**What exists:**
+- `ShadowDuel.jsx` component (stub).
+- `GET /api/vocabulary/practice/shadow-duel` — returns question set generated from `vocabulary_relations` + fallback hardcoded pool.
+- `POST /api/vocabulary/practice/record-success` — records a correct answer.
+
+**What is NOT implemented:**
+- Full scoring flow wired to frontend.
+- XP award for shadow duel completion.
+
+---
+
+### 3.7. Echo Chamber ⚠️ BACKEND STUB / UI STUB
+
+**What exists:**
+- `EchoChamber.jsx` component (stub).
+- `GET /api/vocabulary/practice/echo-chamber` — returns minimal response.
+
+**What is NOT implemented:**
+- Pronunciation data, stress-marking gameplay, scoring.
+
+---
+
+### 3.8. Error Dungeon ⚠️ PARTIALLY LIVE
+
+**What exists:**
+- `vocabulary_errors` table: `error_type`, `wrong_text`, `corrected_text`, `explanation`, `status` (`active`/`defeated`), `defeated_count`.
+- `ErrorDungeon.jsx` component.
+- Full CRUD API including defeat endpoint (see §6.4).
+- `defeat_vocabulary_error()` service in `services.py`.
+
+**What is NOT implemented:**
+- Monster defeat animation / UI flow in `ErrorDungeon.jsx`.
+- Correction counter UI (tracking `defeated_count` increments).
+
+---
+
+### 3.9. Vocabulary Boss ⚠️ BACKEND PARTIALLY LIVE / UI THIN
+
+**What exists:**
+- `VocabularyBoss.jsx` component.
+- `GET /api/vocabulary/boss/status` — returns boss status list (locked/unlocked per boss ID).
+- `POST /api/vocabulary/boss/{boss_id}/challenge` — returns `VocabularyBossExam` question set.
+- `POST /api/vocabulary/boss/{boss_id}/submit` — accepts `score_pct`, runs `submit_vocabulary_boss_result()`.
+- 4 boss IDs supported (1–4).
+
+**What is NOT implemented:**
+- Boss requirements computed from real gameplay data (currently stub conditions).
+- Full reward + badge unlock flow wired to frontend.
+
+---
+
+### 3.10. Context Hunt ❌ NOT STARTED
+
+Planned future feature. No DB table, no component, no API. Low priority.
+
+---
+
+## 4. Architecture Decisions (Actual)
+
+### 4.1. Auth scope — Account/Player/Campaign, not user_id
+
+The spec originally proposed `user_id` as the root FK on all tables. **Actual implementation** uses a 3-level hierarchy:
 
 ```text
-Boss 01: Foundation Scan
-
-Requirements:
-- 100 words in Codex
-- 60 flashcards reviewed
-- 30 example sentences
-- 20 collocations
-- 5 topic nodes unlocked
-
-Boss Test:
-- 20 meaning recall questions
-- 10 collocation questions
-- 5 synonym/antonym questions
-- 5 sentence completion questions
-
-Reward:
-+60 Vocabulary XP
-Unlock:
-Vocabulary Rank E
+Account → Player → Campaign
 ```
 
-## 6.2. Boss 02 — Monthly Checkpoint
+- `accounts` = auth entity (email, JWT)
+- `players` = study profile (XP, level, streaks)
+- `campaigns` = active study run (all gameplay scoped here)
+
+All vocabulary and collocation data is scoped to `player_id` + `campaign_id`. The `vocabulary_items` and `flashcards` tables use `player_id` as FK (not `user_id`).
+
+### 4.2. Migrations — Alembic, not raw SQL
+
+All schema changes go through Alembic (`backend/alembic/versions/`). Naming: `YYYYMMDD_NN_description.py`. Do **not** write raw `CREATE TABLE` DDL directly.
+
+### 4.3. Spaced repetition — simple familiarity + interval, not SM-2
+
+The original spec proposed SM-2 ease factor. **Actual implementation** uses two parallel tracking mechanisms:
+
+**Vocabulary flashcards** (`spaced_repetition_states`):
+
+| Grade | `interval_days` | `status` |
+|---|---|---|
+| again | 0 | `reviewing` |
+| hard | 1 | `active` |
+| good | 3 | `active` |
+| easy | 7 | `active` |
+
+**Collocation flashcards** (`collocation_flashcards.familiarity`):
+
+| Grade | Familiarity stored | Decay rule |
+|---|---|---|
+| again | `again` | no decay (already worst) |
+| hard | `hard` | decays to `again` after 7 days |
+| good | `good` | decays to `hard` after 7 days |
+| easy | `easy` | never decays; graduates from active deck |
+
+`effective_familiarity(stored, set_at, now)` is a pure function in `services.py` — decay is computed on read, never stored back.
+
+### 4.4. Collocation progress — CollocationFlashcard, not PlayerCollocationProgress
+
+`player_collocation_progress` exists in DB but is **superseded** by `collocation_flashcards` for tracking review state. The `completed_count` for topic progress boxes reads from `collocation_flashcards.familiarity`. The legacy table still accumulates writes from the old `/api/collocation-items/{id}/progress` endpoint but is not used for any UI computation.
+
+### 4.5. Frontend routing — view state, not React Router
+
+No `react-router-dom`. Navigation is `currentView` state in `App.jsx`. `VocabularyWorkspace` is mounted when `currentView === 'vocabulary'`. Tabs within the workspace use local state (`activeTab`).
+
+### 4.6. Flashcard flip UX — tap-to-flip, no Reveal/Recall buttons
+
+Original spec proposed "Show Answer" button. **Actual implementation**: click anywhere on the card flips it (toggle both ways). Grade buttons use `e.stopPropagation()`. No "Reveal"/"Recall" button exists. Card width fills full main content panel (sidebar excluded).
+
+### 4.7. Vocabulary XP — recompute model, not per-event transactions
+
+Vocabulary skill XP is not written via `award_skill_xp` on each flashcard review. It is recomputed from aggregate data by `compute_vocabulary_xp()` every time `refresh_progress_state()` is called. See §2.6 for the full formula.
+
+---
+
+## 5. Database: Actual Tables
+
+### 5.1. Vocabulary system tables (live)
 
 ```text
-Boss 02: Monthly Checkpoint
-
-Requirements:
-- 150 words in Codex
-- 100 flashcard reviews
-- 30 words stabilized
-- 10 error monsters corrected
-
-Boss Test:
-- Due card accuracy >= 75%
-- Sentence completion accuracy >= 70%
-- Collocation accuracy >= 70%
-
-Reward:
-+80 Vocabulary XP
-Unlock:
-Memory Streak Badge I
+vocabulary_items          — word, meanings, pronunciation, source info
+vocabulary_examples       — personal example sentences per word
+vocabulary_relations      — synonym/antonym/word_family/derived_form links
+vocabulary_settings       — per-campaign vocabulary preferences
+vocabulary_topics         — topic nodes for Word Network Tree
+vocabulary_nodes          — graph nodes (backend CRUD live, UI stub)
+vocabulary_edges          — graph edges (backend CRUD live, UI stub)
+vocabulary_errors         — Error Dungeon monsters
+flashcards                — vocabulary flashcard decks
+spaced_repetition_states  — SRS state per flashcard
 ```
 
-## 6.3. Boss 03 — Collocation Hunter
+### 5.2. Collocation system tables (live)
 
 ```text
-Boss 03: Collocation Hunter
-
-Requirements:
-- 150 collocations forged
-- 30 fixed phrases learned
-- 20 IELTS topic words used in sentences
-
-Boss Test:
-- Match 30 collocations
-- Write 10 sentences using collocations
-- Identify 10 wrong collocations
-
-Reward:
-+100 Vocabulary XP
-+30 Writing XP
-Unlock:
-Writing Lexical Buff
-```
-
-## 6.4. Boss 04 — Lexical Awakening
-
-```text
-Boss 04: Lexical Awakening
-
-Requirements:
-- 500 words in Codex
-- 250 mastered words
-- 100 collocations
-- 50 word family relations
-- 30 error monsters defeated
-
-Boss Test:
-- 50 mixed flashcards
-- 20 collocation questions
-- 10 context guessing questions
-- 1 short IELTS-style paragraph using target vocabulary
-
-Reward:
-+200 Vocabulary XP
-Badge:
-Lexical Awakener
+collocation_collections      — book/unit groupings
+collocation_sections         — 10 sections per collection
+collocation_topics           — 60 topics per collection
+collocation_items            — 1409 unique collocation entries
+campaign_collocation_links   — campaign ↔ collection many-to-many
+player_collocation_progress  — legacy (superseded for review tracking)
+collocation_flashcards       — per-player/campaign flashcard state
 ```
 
 ---
 
-# 7. Database Proposal
+## 6. API Contracts (Actual Implemented)
 
-## 7.1. `vocabulary_items`
-
-```sql
-CREATE TABLE vocabulary_items (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    word VARCHAR(255) NOT NULL,
-    normalized_word VARCHAR(255),
-    part_of_speech VARCHAR(50),
-    cefr_level VARCHAR(10),
-    ielts_topic VARCHAR(100),
-    meaning_en TEXT,
-    meaning_vi TEXT,
-    register_label VARCHAR(50),
-    grammar_note TEXT,
-    pronunciation_ipa VARCHAR(255),
-    word_stress VARCHAR(255),
-    source_type VARCHAR(50),
-    source_reference VARCHAR(255),
-    mastery_rank VARCHAR(5) DEFAULT 'F',
-    mastery_score INT DEFAULT 0,
-    is_archived BOOLEAN DEFAULT FALSE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-```
-
-Recommended indexes:
-
-```sql
-CREATE INDEX idx_vocabulary_items_user_id ON vocabulary_items(user_id);
-CREATE INDEX idx_vocabulary_items_topic ON vocabulary_items(ielts_topic);
-CREATE INDEX idx_vocabulary_items_rank ON vocabulary_items(mastery_rank);
-CREATE INDEX idx_vocabulary_items_word ON vocabulary_items(normalized_word);
-```
-
-## 7.2. `vocabulary_examples`
-
-```sql
-CREATE TABLE vocabulary_examples (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    vocabulary_item_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
-    example_sentence TEXT NOT NULL,
-    example_type VARCHAR(50),
-    is_corrected BOOLEAN DEFAULT FALSE,
-    correction_note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-## 7.3. `vocabulary_collocations`
-
-```sql
-CREATE TABLE vocabulary_collocations (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    vocabulary_item_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
-    collocation VARCHAR(255) NOT NULL,
-    collocation_type VARCHAR(100),
-    example_sentence TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-## 7.4. `vocabulary_relations`
-
-```sql
-CREATE TABLE vocabulary_relations (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    source_word_id BIGINT NOT NULL,
-    target_word_id BIGINT NULL,
-    target_text VARCHAR(255),
-    relation_type VARCHAR(50),
-    note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Allowed `relation_type` values:
+### 6.1. Vocabulary Codex + Relations
 
 ```text
-synonym
-antonym
-word_family
-derived_form
-related_meaning
-register_alternative
+POST   /api/vocabulary                        — create item
+GET    /api/vocabulary                        — list items (player-scoped)
+GET    /api/vocabulary/{id}                   — get single item
+PUT    /api/vocabulary/{id}                   — update item
+DELETE /api/vocabulary/{id}                   — delete item
+POST   /api/vocabulary/{id}/examples          — add example sentence
+DELETE /api/vocabulary/examples/{id}          — delete example
+POST   /api/vocabulary/relations              — create relation (synonym/antonym/word_family/…)
+DELETE /api/vocabulary/relations/{id}         — delete relation
 ```
 
-## 7.5. `vocabulary_topics`
-
-```sql
-CREATE TABLE vocabulary_topics (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    topic_name VARCHAR(255) NOT NULL,
-    parent_topic_id BIGINT NULL,
-    description TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-## 7.6. `vocabulary_nodes`
-
-```sql
-CREATE TABLE vocabulary_nodes (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    topic_id BIGINT NOT NULL,
-    vocabulary_item_id BIGINT NULL,
-    node_label VARCHAR(255) NOT NULL,
-    node_type VARCHAR(50),
-    status VARCHAR(50) DEFAULT 'locked',
-    x_position FLOAT,
-    y_position FLOAT,
-    unlock_requirement TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Allowed `node_type` values:
+### 6.2. Vocabulary Flashcard Gate
 
 ```text
-core
-topic
-word
-collocation
-synonym
-antonym
-word_family
-grammar_pattern
-register
+GET    /api/flashcards                        — list all flashcards
+POST   /api/flashcards                        — create flashcard manually
+GET    /api/flashcards/due                    — due cards for today's review session
+POST   /api/flashcards/{id}/review            — grade a card (again/hard/good/easy)
 ```
 
-Allowed `status` values:
+**Note:** These endpoints use the prefix `/api/flashcards/`, NOT `/api/vocabulary/flashcards/`.
+
+### 6.3. Word Network Tree
 
 ```text
-locked
-discovered
-activated
-stabilized
-mastered
-awakened
+GET    /api/vocabulary/tree/topics            — list topics
+POST   /api/vocabulary/tree/topics            — create topic
+GET    /api/vocabulary/tree/{topic_id}        — get tree (nodes + edges) for topic
+POST   /api/vocabulary/tree/nodes             — create node
+PATCH  /api/vocabulary/tree/nodes/{id}        — update node
+POST   /api/vocabulary/tree/edges             — create edge
+DELETE /api/vocabulary/tree/edges/{id}        — delete edge
+POST   /api/vocabulary/tree/sync-all          — sync all vocabulary items to nodes
 ```
 
-## 7.7. `vocabulary_edges`
-
-```sql
-CREATE TABLE vocabulary_edges (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    source_node_id BIGINT NOT NULL,
-    target_node_id BIGINT NOT NULL,
-    edge_type VARCHAR(50),
-    strength INT DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Allowed `edge_type` values:
+### 6.4. Error Dungeon
 
 ```text
-topic_link
-synonym_link
-antonym_link
-family_link
-collocation_link
-grammar_link
-register_link
+POST   /api/vocabulary/errors                 — log a new error
+GET    /api/vocabulary/errors/active          — active monsters
+GET    /api/vocabulary/errors                 — all errors
+PATCH  /api/vocabulary/errors/{id}            — update error
+POST   /api/vocabulary/errors/{id}/defeat     — defeat monster (increments defeated_count, sets status=defeated)
 ```
 
-## 7.8. `flashcards`
-
-```sql
-CREATE TABLE flashcards (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    vocabulary_item_id BIGINT NOT NULL,
-    card_type VARCHAR(50),
-    front_text TEXT NOT NULL,
-    back_text TEXT NOT NULL,
-    hint TEXT,
-    difficulty INT DEFAULT 1,
-    status VARCHAR(50) DEFAULT 'new',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Allowed `card_type` values:
+### 6.5. Vocabulary Boss
 
 ```text
-meaning_recall
-reverse_recall
-sentence_gap
-collocation
-pronunciation
-register
-word_family
-synonym_antonym
+GET    /api/vocabulary/boss/status            — boss list with lock status
+POST   /api/vocabulary/boss/{id}/challenge    — start boss exam (returns question set)
+POST   /api/vocabulary/boss/{id}/submit       — submit score_pct, trigger result + reward
 ```
 
-## 7.9. `flashcard_reviews`
-
-```sql
-CREATE TABLE flashcard_reviews (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    flashcard_id BIGINT NOT NULL,
-    result VARCHAR(50),
-    response_time_ms INT,
-    reviewed_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Allowed `result` values:
+### 6.6. Practice endpoints
 
 ```text
-again
-hard
-good
-easy
+GET    /api/vocabulary/practice/collocations       — collocation practice set (legacy)
+GET    /api/vocabulary/practice/shadow-duel        — shadow duel question set
+GET    /api/vocabulary/practice/word-family        — word family practice set
+GET    /api/vocabulary/practice/echo-chamber       — echo chamber practice set
+POST   /api/vocabulary/practice/record-success     — record a correct practice answer
 ```
 
-## 7.10. `spaced_repetition_state`
-
-```sql
-CREATE TABLE spaced_repetition_state (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    flashcard_id BIGINT NOT NULL,
-    ease_factor FLOAT DEFAULT 2.5,
-    interval_days INT DEFAULT 0,
-    repetition_count INT DEFAULT 0,
-    due_date DATE,
-    last_reviewed_at DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-```
-
-## 7.11. `vocabulary_errors`
-
-```sql
-CREATE TABLE vocabulary_errors (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    vocabulary_item_id BIGINT NULL,
-    error_type VARCHAR(100),
-    wrong_text TEXT,
-    corrected_text TEXT,
-    explanation TEXT,
-    status VARCHAR(50) DEFAULT 'active',
-    defeated_count INT DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Allowed `error_type` values:
+### 6.7. Collocation Forge + Flashcard
 
 ```text
-wrong_collocation
-wrong_meaning
-wrong_register
-wrong_word_form
-wrong_preposition
-wrong_grammar_pattern
-```
-
-## 7.12. `context_hunt_attempts`
-
-```sql
-CREATE TABLE context_hunt_attempts (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    vocabulary_item_id BIGINT NULL,
-    sentence TEXT NOT NULL,
-    target_word VARCHAR(255) NOT NULL,
-    guessed_meaning TEXT,
-    correct_meaning TEXT,
-    clue_type VARCHAR(100),
-    is_correct BOOLEAN,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Allowed `clue_type` values:
-
-```text
-visual_clue
-background_knowledge
-surrounding_words
-grammar_clue
-prefix_suffix
-known_word_similarity
-other_language_similarity
-false_friend
-```
-
-## 7.13. `xp_transactions`
-
-```sql
-CREATE TABLE xp_transactions (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    skill_name VARCHAR(100),
-    source_type VARCHAR(100),
-    source_id BIGINT,
-    xp_amount INT NOT NULL,
-    description TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Allowed `skill_name` values should reuse the current system if it already exists:
-
-```text
-listening
-reading
-writing
-speaking
-vocabulary
-collocation
-grammar
+GET    /api/collocations/topics                       — all topics with item_count + completed_count
+GET    /api/collocations/topics/{id}/items            — items with effective_familiarity + is_added
+POST   /api/collocations/{item_id}/flashcard          — add to deck
+DELETE /api/collocations/{item_id}/flashcard          — remove from deck
+POST   /api/collocations/{item_id}/flashcard/review   — grade (triggers autocomplete check)
+GET    /api/collocations/flashcard/topics             — topics with active cards (for review)
+GET    /api/collocations/flashcard/topics/{id}        — cards in a topic for review
 ```
 
 ---
 
-# 8. Backend FastAPI Contract
+## 7. Frontend: Actual Components
 
-## 8.1. Vocabulary Codex API
-
-```text
-POST   /api/vocabulary/items
-GET    /api/vocabulary/items
-GET    /api/vocabulary/items/{id}
-PATCH  /api/vocabulary/items/{id}
-DELETE /api/vocabulary/items/{id}
-```
-
-### Create item request
-
-```json
-{
-  "word": "significant",
-  "part_of_speech": "adjective",
-  "meaning_en": "important or large enough to be noticed",
-  "meaning_vi": "quan trọng, đáng kể",
-  "ielts_topic": "education",
-  "register_label": "neutral",
-  "pronunciation_ipa": "/sɪɡˈnɪfɪkənt/",
-  "word_stress": "sig-NIF-i-cant"
-}
-```
-
-## 8.2. Example API
-
-```text
-POST   /api/vocabulary/items/{id}/examples
-GET    /api/vocabulary/items/{id}/examples
-PATCH  /api/vocabulary/examples/{example_id}
-DELETE /api/vocabulary/examples/{example_id}
-```
-
-## 8.3. Collocation API
-
-```text
-POST   /api/vocabulary/items/{id}/collocations
-GET    /api/vocabulary/items/{id}/collocations
-PATCH  /api/vocabulary/collocations/{collocation_id}
-DELETE /api/vocabulary/collocations/{collocation_id}
-POST   /api/vocabulary/collocations/practice
-```
-
-## 8.4. Relation API
-
-```text
-POST   /api/vocabulary/items/{id}/relations
-GET    /api/vocabulary/items/{id}/relations
-DELETE /api/vocabulary/relations/{relation_id}
-```
-
-## 8.5. Flashcard API
-
-```text
-POST /api/flashcards/generate/{vocabulary_item_id}
-GET  /api/flashcards/due
-POST /api/flashcards/{id}/review
-GET  /api/flashcards/stats
-```
-
-### Review request
-
-```json
-{
-  "result": "good",
-  "response_time_ms": 2400
-}
-```
-
-### Review response
-
-```json
-{
-  "flashcard_id": 123,
-  "result": "good",
-  "next_due_date": "2026-06-09",
-  "xp_awarded": 2,
-  "vocabulary_rank_changed": false
-}
-```
-
-## 8.6. Word Tree API
-
-```text
-GET    /api/vocabulary/tree/topics
-POST   /api/vocabulary/tree/topics
-GET    /api/vocabulary/tree/{topic_id}
-POST   /api/vocabulary/tree/nodes
-PATCH  /api/vocabulary/tree/nodes/{id}
-POST   /api/vocabulary/tree/edges
-DELETE /api/vocabulary/tree/edges/{id}
-PATCH  /api/vocabulary/tree/nodes/{id}/unlock
-```
-
-## 8.7. Context Hunt API
-
-```text
-POST /api/vocabulary/context-hunt/attempts
-GET  /api/vocabulary/context-hunt/history
-```
-
-## 8.8. Error Dungeon API
-
-```text
-POST  /api/vocabulary/errors
-GET   /api/vocabulary/errors/active
-GET   /api/vocabulary/errors
-PATCH /api/vocabulary/errors/{id}
-POST  /api/vocabulary/errors/{id}/defeat
-```
-
-## 8.9. XP / Skill Progress API
-
-Reuse current XP system if it already exists.
-
-Suggested endpoints if missing:
-
-```text
-POST /api/xp/award
-GET  /api/skills/vocabulary/progress
-GET  /api/skills/support/progress
-```
+| Component | File | Status |
+|---|---|---|
+| VocabularyWorkspace (shell + Codex + Flashcard tabs) | `VocabularyWorkspace.jsx` | ✅ Live |
+| CollocationForge (browser 2-layer + flashcard sub-tab) | `CollocationForge.jsx` | ✅ Live |
+| WordNetworkTree | `WordNetworkTree.jsx` | ⚠️ Stub (backend live) |
+| WordFamilyEvolution | `WordFamilyEvolution.jsx` | ⚠️ Stub |
+| ShadowDuel | `ShadowDuel.jsx` | ⚠️ Stub (backend partial) |
+| EchoChamber | `EchoChamber.jsx` | ⚠️ Stub |
+| ErrorDungeon | `ErrorDungeon.jsx` | ⚠️ Partial (defeat API exists, UI incomplete) |
+| VocabularyBoss | `VocabularyBoss.jsx` | ⚠️ Partial (challenge/submit API exists, UI thin) |
 
 ---
 
-# 9. Frontend React Screens
+## 8. Daily Quests (Actual Integration)
 
-## 9.1. Vocabulary Dashboard
+The quest seed in `seed.py` creates these daily quest types:
 
-Purpose: overview of Vocabulary Support Skill.
+| Quest display name | `daily_slot_code` | Completion trigger |
+|---|---|---|
+| Vocabulary Codex daily | _(manual)_ | Honor system (manual claim) |
+| Collocation Forge daily | `vocab_collocation` | **Auto-complete**: 5 distinct collocation reviews in one calendar day |
 
-Cards:
-
-```text
-Vocabulary Level
-Rank F → S
-Total words
-Words mastered
-Flashcards due today
-Weakest word type
-Current topic tree
-Active error monsters
-Current buff to IELTS skills
-```
-
-Recommended components:
-
-```text
-VocabularyDashboard
-VocabularyStatsPanel
-VocabularyBuffCard
-VocabularyDueReviewCard
-VocabularyWeaknessPanel
-```
-
-## 9.2. Codex Archive Screen
-
-Purpose: manage vocabulary notebook.
-
-Table columns:
-
-```text
-Word | Meaning | Topic | Part of Speech | Rank | Due Review | Actions
-```
-
-Filters:
-
-```text
-Topic
-Rank
-Part of speech
-IELTS topic
-Due today
-Weak words
-Archived
-```
-
-Recommended components:
-
-```text
-VocabularyCodexPage
-VocabularyItemTable
-VocabularyItemDrawer
-VocabularyItemForm
-VocabularyScannerChecklist
-```
-
-## 9.3. Flashcard Gate Screen
-
-Purpose: active recall review battle.
-
-UI style:
-
-```text
-Memory Gate
-Card 1 / 20
-HP: 20
-Combo: 4
-XP reward: +30
-```
-
-Controls:
-
-```text
-Show Answer
-Again / Hard / Good / Easy
-Skip
-End Gate
-```
-
-Recommended components:
-
-```text
-FlashcardGatePage
-FlashcardBattleCard
-FlashcardReviewControls
-FlashcardSessionSummary
-```
-
-## 9.4. Word Network Tree Screen
-
-Purpose: visual node/tree learning.
-
-Recommended library:
-
-```text
-React Flow
-```
-
-Node display:
-
-```text
-Node label
-Node type
-Status
-Rank
-Mastery score
-Connections
-```
-
-Recommended components:
-
-```text
-WordNetworkTreePage
-VocabularyNode
-VocabularyEdge
-NodeDetailPanel
-TopicTreeSelector
-```
-
-## 9.5. Collocation Forge Screen
-
-Purpose: train word combinations.
-
-Gameplay variants:
-
-```text
-Drag and match
-Multiple choice
-Fill missing partner
-Write sentence
-```
-
-Recommended components:
-
-```text
-CollocationForgePage
-CollocationMatchGame
-CollocationInputForm
-CollocationResultPanel
-```
-
-## 9.6. Word Family Evolution Screen
-
-Recommended components:
-
-```text
-WordFamilyEvolutionPage
-WordFamilyTree
-WordClassBadge
-DerivedFormCard
-```
-
-## 9.7. Shadow Duel Screen
-
-Recommended components:
-
-```text
-ShadowDuelPage
-SynonymDuelCard
-AntonymDuelCard
-RegisterDuelCard
-```
-
-## 9.8. Echo Chamber Screen
-
-Recommended components:
-
-```text
-EchoChamberPage
-PronunciationCard
-StressMarkerGame
-SilentLetterQuiz
-```
-
-## 9.9. Context Hunt Screen
-
-Recommended components:
-
-```text
-ContextHuntPage
-ContextSentenceCard
-ClueTypeSelector
-GuessMeaningForm
-ContextHuntResult
-```
-
-## 9.10. Error Dungeon Screen
-
-Recommended components:
-
-```text
-ErrorDungeonPage
-ErrorMonsterCard
-ErrorCorrectionForm
-ErrorDefeatProgress
-```
+Quest XP for collocation forge: seeded value in `quest.base_xp` / `quest.xp` (check `seed.py` for exact value). XP flows through the normal quest claim → `award_skill_xp` path.
 
 ---
 
-# 10. MVP Plan
+## 9. What Remains to Build
 
-Do **not** implement all features at once.
+### Priority 1 — Frontend for existing backend
 
-## 10.1. Phase 1 — Core Vocabulary System
+- **Word Network Tree** — wire `/api/vocabulary/tree/*` to React Flow visualization; implement node status transitions in UI.
+- **Word Family Evolution** — add UI to browse/add word family relations from Codex.
 
-Build first:
+### Priority 2 — Complete partial features
 
-1. Vocabulary Codex
-2. Flashcard Gate
-3. Simple spaced repetition
-4. Vocabulary XP transactions
-5. Daily Vocabulary Quest summary
+- **Error Dungeon defeat UI** — wire `POST /api/vocabulary/errors/{id}/defeat`; monster defeat animation; correction counter display.
+- **Vocabulary Boss full flow** — boss requirements from real data; reward + badge unlock UI.
+- **Shadow Duel scoring** — wire question set to frontend; XP award on completion.
 
-### Phase 1 Definition of Done
+### Priority 3 — New features
 
-- User can add vocabulary items.
-- User can add examples and collocations.
-- User can generate flashcards.
-- User can review due cards.
-- Review result updates next due date.
-- XP is awarded to Vocabulary Support Skill.
-- UI shows Vocabulary progress.
-
-## 10.2. Phase 2 — Word Network Tree
-
-Build second:
-
-1. Topic nodes
-2. Vocabulary nodes
-3. Node status
-4. Node edges
-5. React Flow visualization
-
-### Phase 2 Definition of Done
-
-- User can create topic tree.
-- User can see vocabulary nodes.
-- User can connect words by relation.
-- Node status changes based on learning progress.
-
-## 10.3. Phase 3 — IELTS Advanced Vocabulary
-
-Build third:
-
-1. Collocation Forge
-2. Word Family Evolution
-3. Synonym/Antonym Shadow Duel
-4. Register Checker
-
-### Phase 3 Definition of Done
-
-- User can practice collocation matching.
-- User can add and review word families.
-- User can practice synonym/antonym/register cards.
-- Writing/Speaking lexical buff can read from vocabulary progress.
-
-## 10.4. Phase 4 — Boss and Error System
-
-Build fourth:
-
-1. Monthly Vocabulary Boss
-2. Error Dungeon
-3. Boss timeline integration
-4. Badge unlocks
-
-### Phase 4 Definition of Done
-
-- User can start and complete Vocabulary Boss Battle.
-- Boss requirements are computed from actual data.
-- Error monsters can be logged, corrected, and defeated.
-- Badge progress updates.
+- **Reverse flashcard / sentence gap types** — extend flashcard generation to `reverse_recall`, `sentence_gap` card types.
+- **Relation CRUD in Codex UI** — synonym/antonym/word family form in the Codex word editor.
+- **Context Hunt** — DB table `context_hunt_attempts`, component, API.
+- **Echo Chamber gameplay** — pronunciation / stress marking, scoring.
 
 ---
 
-# 11. Best Final System Design
+## 10. Agent Workflow
 
-The best system for this dashboard is not “flashcards only”.
-
-The strongest design is:
-
-```text
-Codex Archive
-+ Flashcard Gate
-+ Word Network Tree
-+ Collocation Forge
-+ Error Dungeon
-```
-
-Why:
-
-| Source idea | Game feature |
-|---|---|
-| Vocabulary notebook | Codex Archive |
-| Cover meaning and test yourself | Flashcard Gate |
-| Diagrams / network diagram | Word Network Tree |
-| Collocations | Collocation Forge |
-| Word family | Word Family Evolution |
-| Synonym / antonym | Shadow Duel |
-| Pronunciation / stress | Echo Chamber |
-| Guess meaning from context | Context Hunt |
-| Typical errors | Error Dungeon |
-| Weekly/daily revision | Daily Gate / Weekly Mission |
-| Checkpoint test | Boss Battle |
-
-Recommended dashboard path:
-
-```text
-Mission Gates
-→ Vocabulary System
-→ Codex / Flashcard Gate / Word Tree / Forge / Dungeon
-```
-
----
-
-# 12. Agent Workflow for Implementation
-
-This section adapts the current project workflow for implementing Vocabulary Support Skill.
-
-## 12.1. Ground repo before doing work
-
-Before coding, the agent must read in this order:
+### 10.1. Context load order
 
 ```text
 1. AGENTS.md
@@ -1740,18 +587,14 @@ Before coding, the agent must read in this order:
 5. docs/current/CONTEXT_INDEX.md
 ```
 
-Stop loading context only when all four conditions are met:
+Then load only what the task needs:
+- Schema changes → `docs/current/DATABASE_SCHEMA.md` + `docs/current/SCHEMA_SEMANTICS.md`
+- Business logic → `docs/current/BUSINESS_RULES.md`
+- This spec → `spec/feature/vocabulary_support_skill_spec.md`
 
-```text
-- Task type is identified.
-- Files likely to be modified are identified.
-- Existing pattern to follow is identified.
-- Goal, constraints, and next steps are clear.
-```
+### 10.2. Task contract format
 
-## 12.2. Lock task contract before implementation
-
-Before touching files, define:
+Before editing, define:
 
 ```text
 Goal:
@@ -1762,283 +605,34 @@ Constraints:
 Risks:
 ```
 
-Example contract for Phase 1:
+### 10.3. Implementation constraints
+
+- Follow existing repo patterns before introducing new ones.
+- All schema changes go through Alembic (`backend/alembic/versions/`).
+- Do not use `user_id` as FK — use `player_id` + `campaign_id`.
+- Do not introduce React Router, Tailwind, or new CSS frameworks.
+- Keep frontend CSS in `frontend/src/styles.css`; use existing CSS variable tokens (`--cyan`, `--line`, `--text`, etc.).
+- Keep the app runnable with `docker compose up --build`.
+- Do not remove existing features unless explicitly requested.
+- Validate with `npm run build` (frontend) and `python -m pytest` (backend) after every meaningful change.
+
+### 10.4. Session close format
 
 ```text
-Goal:
-Add the MVP Vocabulary Codex and Flashcard Gate.
-
-Completion Criteria:
-- Vocabulary item CRUD works.
-- Flashcards can be generated from vocabulary items.
-- Due flashcards can be reviewed.
-- Review updates spaced repetition state.
-- Vocabulary XP increases after valid reviews.
-- Frontend has Codex and Flashcard Gate screens.
-- Basic smoke checks pass.
-
-In Scope:
-- Backend models/schemas/routes/services for vocabulary and flashcards.
-- MySQL migration or schema update.
-- Frontend pages/components for Codex and Flashcard Gate.
-- XP integration if existing pattern is clear.
-
-Out of Scope:
-- Word Network Tree.
-- Collocation Forge game UI.
-- Error Dungeon.
-- Boss Battle.
-- Voice pronunciation recording.
-- AI dictionary auto-fill.
-
-Constraints:
-- Follow existing repo patterns.
-- Do not rewrite unrelated dashboard code.
-- Keep slices small and verifiable.
-- Reuse existing XP/quest systems if available.
-
-Risks:
-- Schema may conflict with existing skill/XP tables.
-- Frontend routing may already have a different pattern.
-- Spaced repetition logic can become too complex.
-```
-
-## 12.3. Plan before broad tasks
-
-Plan first if the task:
-
-```text
-- touches multiple files;
-- changes backend behavior;
-- changes schema or API contract;
-- involves migrations;
-- requires clear sequencing or validation.
-```
-
-A good plan must be:
-
-```text
-- bounded;
-- decision-complete;
-- testable;
-- small enough for one focused session or worker slice.
-```
-
-## 12.4. Execute in small slices
-
-Recommended slices for Phase 1:
-
-```text
-Slice 1: Backend database models/migration
-Slice 2: Pydantic schemas and service layer
-Slice 3: Vocabulary Codex API
-Slice 4: Flashcard generation and review API
-Slice 5: XP integration
-Slice 6: Frontend Codex page
-Slice 7: Frontend Flashcard Gate page
-Slice 8: Smoke tests and docs update
-```
-
-Each slice must be independently verifiable.
-
-## 12.5. Verification priority
-
-Tasks are not done without evidence.
-
-Verify in this order:
-
-```text
-1. Syntax / type checks
-2. Focused smoke checks
-3. Tests for changed behavior
-4. Review for medium/high-risk tasks
-```
-
-Suggested checks:
-
-### Backend
-
-```bash
-python -m pytest
-python -m compileall .
-```
-
-or repo-specific commands if documented.
-
-### Frontend
-
-```bash
-npm run lint
-npm run build
-```
-
-or repo-specific commands if documented.
-
-### Docker
-
-```bash
-docker compose up --build
-```
-
-only if appropriate for the task and repo workflow.
-
-## 12.6. Documentation and tracker updates
-
-After meaningful changes, update:
-
-```text
-TASKS.md
-docs/history/TEST_REPORT.md
-docs/history/AGENT_NOTES.md
-docs/history/changelogs.md
-DECISIONS.md or ADR if there is a long-term decision
-```
-
-## 12.7. Session close format
-
-At the end of each session, output:
-
-```text
-What changed:
-- ...
-
-What was validated:
-- ...
-
-What is still open:
-- ...
-
-Next session should read first:
-- ...
+- Changed:
+- Validated:
+- Still open:
+- Next session should read:
 ```
 
 ---
 
-# 13. Ready-to-use Prompt for Code Agent
+## 11. Open Decisions
 
-Use this prompt when assigning the feature to a coding agent:
-
-```text
-You are working on the IELTS Quest Dashboard.
-
-Task:
-Implement the Vocabulary Support Skill MVP based on docs/current/vocabulary_support_skill_spec.md.
-
-Before coding:
-1. Ground the repo by reading:
-   - AGENTS.md
-   - README.md
-   - TASKS.md
-   - DECISIONS.md
-   - docs/current/CONTEXT_INDEX.md
-2. Stop loading context when:
-   - task type is identified;
-   - files likely to be modified are identified;
-   - existing pattern to follow is identified;
-   - goal, constraints, and next steps are clear.
-3. Lock the task contract:
-   - Goal
-   - Completion Criteria
-   - In Scope
-   - Out of Scope
-   - Constraints
-   - Risks
-
-Implementation rule:
-- Do not implement every feature at once.
-- Start with Phase 1 only:
-  - Vocabulary Codex
-  - Flashcard Gate
-  - Simple spaced repetition
-  - Vocabulary XP integration
-  - Daily vocabulary quest summary if it fits existing patterns.
-- Follow existing repo patterns.
-- Touch only necessary files.
-- Execute in small verifiable slices.
-- Validate after each meaningful slice.
-- Update docs and tracker files after meaningful changes.
-- End the session with:
-  - what changed;
-  - what was validated;
-  - what is still open;
-  - what to read first next session.
-```
-
----
-
-# 14. Implementation Notes
-
-## 14.1. Keep MVP simple
-
-Avoid adding complex AI dictionary auto-fill at first.
-
-For MVP, allow manual entry:
-
-```text
-word
-meaning
-part of speech
-example
-collocation
-flashcard generation
-review result
-next due date
-XP
-```
-
-## 14.2. Do not overbuild the graph first
-
-The Word Network Tree is valuable, but it should be Phase 2.
-
-Phase 1 should focus on the learning loop:
-
-```text
-Codex → Flashcard → Review → XP → Progress
-```
-
-## 14.3. Integrate with existing gamification
-
-Do not create a separate XP universe if the dashboard already has XP/skill tables.
-
-Prefer:
-
-```text
-Use existing user / skill / XP / quest models
-```
-
-Only add tables needed for vocabulary-specific data.
-
-## 14.4. Naming consistency
-
-Use these names consistently:
-
-```text
-Vocabulary Support Skill
-Codex Archive
-Flashcard Gate
-Word Network Tree
-Collocation Forge
-Error Dungeon
-Lexical Awakening System
-```
-
----
-
-# 15. Open Decisions for Agent
-
-Before implementation, inspect the repo and decide:
-
-```text
-1. Does the project already have user_id/auth?
-2. Does the project already have skill XP tables?
-3. Does the project already have quest tables?
-4. Is database migration handled by Alembic, raw SQL, or init scripts?
-5. What frontend router is used?
-6. What UI component pattern is used?
-7. Is React Query, Zustand, Redux, or plain fetch used?
-8. Is there an existing API client layer?
-9. Where should docs/current/vocabulary_support_skill_spec.md live?
-10. Should Phase 1 include only manual vocabulary input, or also CSV/import?
-```
-
-Until these are grounded in the repo, do not assume implementation details.
+| # | Decision | Status |
+|---|---|---|
+| 1 | Should `player_collocation_progress` be removed or kept as legacy? | Open — keep for now, no active writes post-I4 |
+| 2 | Should Word Network Tree use React Flow or a simpler SVG/canvas approach? | Open — React Flow was the original proposal; backend ready |
+| 3 | Should Context Hunt be a standalone tab or part of Codex? | Open |
+| 4 | Should Shadow Duel questions be generated from vocabulary_relations or seeded manually? | Open — backend already uses relation-based generation + fallback pool |
+| 5 | Should `compute_vocabulary_xp` eventually be replaced with event-driven XP transactions? | Open — current recompute model is simple but may drift from intent as features grow |

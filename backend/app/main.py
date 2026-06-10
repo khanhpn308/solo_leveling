@@ -2256,6 +2256,32 @@ def get_collocation_browse_topics(
         .all()
     )
 
+    # Completed counts per topic: a collocation counts toward progress when its
+    # effective_familiarity is hard/good/easy (not 'again'/'new'). Decay applied per row.
+    from datetime import datetime as _dt
+    now = _dt.utcnow()
+    fc_rows = (
+        db.query(
+            CollocationItem.topic_id,
+            CollocationFlashcard.familiarity,
+            CollocationFlashcard.familiarity_set_at,
+        )
+        .join(CollocationItem, CollocationItem.id == CollocationFlashcard.collocation_item_id)
+        .join(CollocationTopic, CollocationTopic.id == CollocationItem.topic_id)
+        .join(CollocationSection, CollocationSection.id == CollocationTopic.section_id)
+        .filter(
+            CollocationSection.collection_id.in_(link_ids),
+            CollocationFlashcard.player_id == player.id,
+            CollocationFlashcard.campaign_id == campaign.id,
+        )
+        .all()
+    )
+    completed_counts: dict[int, int] = {}
+    for topic_id, fam, set_at in fc_rows:
+        eff = services.effective_familiarity(fam, set_at, now)
+        if eff in ("hard", "good", "easy"):
+            completed_counts[topic_id] = completed_counts.get(topic_id, 0) + 1
+
     topics = (
         db.query(CollocationTopic)
         .join(CollocationSection, CollocationSection.id == CollocationTopic.section_id)
@@ -2272,6 +2298,7 @@ def get_collocation_browse_topics(
             section_title=t.section.title if t.section else "",
             section_order=t.section.section_order if t.section else 0,
             item_count=item_counts.get(t.id, 0),
+            completed_count=completed_counts.get(t.id, 0),
         ))
     return result
 
@@ -2345,9 +2372,9 @@ def add_collocation_flashcard(
     )
     if existing:
         if existing.familiarity == "easy":
-            # Re-add: graduate reset to again
+            # Re-add: graduate reset to again; clear familiarity_set_at (reset to unreviewed state)
             existing.familiarity = "again"
-            existing.familiarity_set_at = datetime.utcnow()
+            existing.familiarity_set_at = None
             db.commit()
         return {"detail": "flashcard exists", "familiarity": existing.familiarity}
     # Verify item exists
@@ -2359,7 +2386,7 @@ def add_collocation_flashcard(
         campaign_id=campaign.id,
         collocation_item_id=item_id,
         familiarity="again",
-        familiarity_set_at=datetime.utcnow(),
+        familiarity_set_at=None,  # Set only on first review, not on add
     )
     db.add(fc)
     db.commit()
