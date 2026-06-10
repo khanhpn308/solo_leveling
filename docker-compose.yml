@@ -38,6 +38,7 @@ services:
       - ./backend:/app
       - ./material/material.md:/app/material.md:ro
       - ./material/vocabularies:/app/material/vocabularies:ro
+      - ./material/collocation:/app/material/collocation:ro
 
   frontend:
     build: ./frontend
@@ -45,6 +46,8 @@ services:
     restart: unless-stopped
     environment:
       VITE_API_URL: http://127.0.0.1:8000/api
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "100"
     ports:
       - "5173:5173"
     depends_on:
@@ -52,6 +55,7 @@ services:
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
+      - ./frontend/vite.config.js:/app/vite.config.js:ro
 
 volumes:
   mysql_data:
