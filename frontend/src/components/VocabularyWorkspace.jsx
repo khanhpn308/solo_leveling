@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import WordNetworkTree from './WordNetworkTree'
 import CollocationForge from './CollocationForge'
 import ShadowDuel from './ShadowDuel'
@@ -241,6 +241,7 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
   const [vlFlashCardIndex, setVlFlashCardIndex] = useState(0)
   const [vlFlashShowAnswer, setVlFlashShowAnswer] = useState(false)
   const [vlFlashCompleted, setVlFlashCompleted] = useState(false)
+  const [vlFlashSelectedTopic, setVlFlashSelectedTopic] = useState(null) // {id, title, card_count} | null
 
   // Error dungeon and boss states
   const [activeErrors, setActiveErrors] = useState([])
@@ -424,6 +425,7 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
       setVlFlashLoading(true)
       const data = await api('/vocab-library/flashcards/due')
       setVlFlashCards(data)
+      setVlFlashSelectedTopic(null)
       setVlFlashCardIndex(0)
       setVlFlashShowAnswer(false)
       setVlFlashCompleted(false)
@@ -434,8 +436,44 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
     }
   }
 
+  // Group due cards by topic for the lobby (mirrors collocation flashcard flow)
+  const vlFlashTopics = useMemo(() => {
+    const byTopic = new Map()
+    for (const c of vlFlashCards) {
+      const id = c.topic_id || 0
+      if (!byTopic.has(id)) {
+        byTopic.set(id, { id, title: c.topic_title || 'Uncategorized', card_count: 0 })
+      }
+      byTopic.get(id).card_count += 1
+    }
+    return [...byTopic.values()].sort((a, b) => a.id - b.id)
+  }, [vlFlashCards])
+
+  // Cards belonging to the currently selected topic (the active review deck)
+  const vlActiveCards = useMemo(() => {
+    if (!vlFlashSelectedTopic) return []
+    return vlFlashCards.filter((c) => (c.topic_id || 0) === vlFlashSelectedTopic.id)
+  }, [vlFlashCards, vlFlashSelectedTopic])
+
+  function handleSelectVlTopic(topic) {
+    setVlFlashSelectedTopic(topic)
+    setVlFlashCardIndex(0)
+    setVlFlashShowAnswer(false)
+    setVlFlashCompleted(false)
+  }
+
+  function handleVlBackToTopics() {
+    setVlFlashSelectedTopic(null)
+    setVlFlashCardIndex(0)
+    setVlFlashShowAnswer(false)
+    setVlFlashCompleted(false)
+    // Refresh due cards so topic counts reflect cards just reviewed
+    loadVlFlashCards()
+  }
+
   async function handleVlReview(result) {
-    const card = vlFlashCards[vlFlashCardIndex]
+    const card = vlActiveCards[vlFlashCardIndex]
+    if (!card) return
     try {
       await api(`/vocab-library/words/${card.id}/flashcard/review`, {
         method: 'POST',
@@ -445,7 +483,7 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
       console.error('Failed to review vocab library flashcard', err)
     }
     const next = vlFlashCardIndex + 1
-    if (next >= vlFlashCards.length) {
+    if (next >= vlActiveCards.length) {
       setVlFlashCompleted(true)
     } else {
       setVlFlashCardIndex(next)
@@ -1011,30 +1049,62 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
             {flashSubTab === 'vocab-library' && (
               <div className="flashcard-gate-active">
                 {vlFlashLoading && <div className="vocab-loader">Loading Vocab Library cards…</div>}
-                {!vlFlashLoading && vlFlashCards.length === 0 && !vlFlashCompleted && (
+
+                {/* Empty state: no due cards at all */}
+                {!vlFlashLoading && vlFlashCards.length === 0 && (
                   <div className="flashcard-gate-empty">
                     <div className="gate-icon">📕</div>
                     <h4>No vocab library cards due</h4>
                     <p>Add words from <strong>Vocabulary Library</strong> to start reviewing.</p>
                   </div>
                 )}
-                {!vlFlashLoading && vlFlashCompleted && (
-                  <div className="gate-victory-screen">
-                    <div className="victory-badge">SESSION DONE</div>
-                    <h4>All Vocab Library cards reviewed!</h4>
-                    <button className="system-button system-button--primary gate-exit-btn" onClick={() => {
-                      setVlFlashCompleted(false)
-                      loadVlFlashCards()
-                    }}>Review Again</button>
+
+                {/* Topic lobby: choose a topic to review (mirrors collocation flow) */}
+                {!vlFlashLoading && vlFlashCards.length > 0 && !vlFlashSelectedTopic && (
+                  <div className="coll-flash-lobby">
+                    <div className="gate-crest">
+                      <span className="gate-crest-icon">📕</span>
+                      <h3>VOCAB LIBRARY REVIEW</h3>
+                      <p>Choose a topic to review your added vocabulary words.</p>
+                    </div>
+                    <div className="coll-flash-topic-grid">
+                      {vlFlashTopics.map(topic => (
+                        <button
+                          key={topic.id}
+                          className="coll-flash-topic-btn"
+                          onClick={() => handleSelectVlTopic(topic)}
+                        >
+                          <span className="coll-flash-topic-btn__title">{topic.title}</span>
+                          <span className="coll-flash-topic-btn__count">{topic.card_count} cards</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
-                {!vlFlashLoading && vlFlashCards.length > 0 && !vlFlashCompleted && (() => {
-                  const card = vlFlashCards[vlFlashCardIndex]
+
+                {/* Completed screen for the selected topic */}
+                {!vlFlashLoading && vlFlashSelectedTopic && vlFlashCompleted && (
+                  <div className="gate-victory-screen">
+                    <div className="victory-badge">SESSION COMPLETE</div>
+                    <h4>All cards reviewed!</h4>
+                    <p>You reviewed all cards in <strong>{vlFlashSelectedTopic.title}</strong>.</p>
+                    <button className="system-button system-button--primary gate-exit-btn" onClick={handleVlBackToTopics}>
+                      Back to Topics
+                    </button>
+                  </div>
+                )}
+
+                {/* Review loop for the selected topic */}
+                {!vlFlashLoading && vlFlashSelectedTopic && !vlFlashCompleted && vlActiveCards.length > 0 && (() => {
+                  const card = vlActiveCards[vlFlashCardIndex]
+                  if (!card) return null
                   return (
                     <div className="card-arena">
                       <div className="arena-header">
-                        <span>VOCAB LIBRARY REVIEW</span>
-                        <span>Card {vlFlashCardIndex + 1} of {vlFlashCards.length}</span>
+                        <button className="system-button" onClick={handleVlBackToTopics} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+                          ← Topics
+                        </button>
+                        <span>Card {vlFlashCardIndex + 1} of {vlActiveCards.length}</span>
                       </div>
                       <div
                         className={`flip-card ${vlFlashShowAnswer ? 'is-flipped' : ''}`}
@@ -1050,25 +1120,23 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                             <h2 className="card-vocab-word">{card.word}</h2>
                             {card.part_of_speech && <span className="card-pos-badge" style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', background: '#3b82f6', color: '#fff' }}>{card.part_of_speech}</span>}
                             {card.pronunciation_us && <p className="card-pronunciation" style={{ fontStyle: 'italic', color: '#9ca3af' }}>/{card.pronunciation_us}/</p>}
-                            <p style={{ marginTop: '12px', color: 'rgba(230,237,243,0.5)', fontSize: '0.8rem' }}>Tap to reveal meaning</p>
                           </div>
                           <div className="flip-card-back">
                             <div className="card-title">Meaning</div>
                             {card.meaning_vi && <p className="card-meaning-vi" style={{ fontSize: '1.1rem', marginBottom: '8px' }}>{card.meaning_vi}</p>}
                             {card.example_en && <p className="card-example" style={{ fontStyle: 'italic', color: '#9ca3af', fontSize: '0.85rem' }}>"{card.example_en}"</p>}
                             {card.level_name && <p style={{ fontSize: '0.75rem', color: 'rgba(230,237,243,0.4)', marginTop: '8px' }}>{card.level_name} · {card.section_title}</p>}
+                            {vlFlashShowAnswer && (
+                              <div className="difficulty-selectors">
+                                <button className="system-button review-act-btn again" onClick={e => { e.stopPropagation(); handleVlReview('again') }}>Again</button>
+                                <button className="system-button review-act-btn hard" onClick={e => { e.stopPropagation(); handleVlReview('hard') }}>Hard</button>
+                                <button className="system-button review-act-btn good" onClick={e => { e.stopPropagation(); handleVlReview('good') }}>Good</button>
+                                <button className="system-button review-act-btn easy" onClick={e => { e.stopPropagation(); handleVlReview('easy') }}>Easy ★</button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                      {vlFlashShowAnswer && (
-                        <div className="review-buttons">
-                          {['again', 'hard', 'good', 'easy'].map(r => (
-                            <button key={r} className={`review-btn review-btn--${r}`} onClick={() => handleVlReview(r)}>
-                              {r.charAt(0).toUpperCase() + r.slice(1)}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )
                 })()}

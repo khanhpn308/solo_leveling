@@ -2,6 +2,16 @@
 
 Newest first.
 
+## 2026-06-11 - Dependency note: react-router-dom v7.17.0
+
+- The frontend pins `react-router-dom: ^7.17.0` (`frontend/package.json`). The installed `react-router` core in `node_modules` is **v7.17.0** (its `CHANGELOG.md` is the upstream library log, not a project changelog — do not treat it as repo docs).
+- **Where it is used** (data-router v7, but as a plain SPA — no loaders/actions/framework mode): `frontend/src/main.jsx` wraps the app in `BrowserRouter` + `AuthProvider` + `Routes`; route guards in `frontend/src/auth/ProtectedRoute.jsx`; route pages `frontend/src/pages/Login.jsx`, `Register.jsx`, `Onboarding.jsx`; `App.jsx` uses the 401→`navigate('/login')` handler. Hooks in use are the classic `useNavigate` / `BrowserRouter` / `Routes` / `Route` set.
+- **Upstream highlights worth knowing for future upgrades** (from the bundled `react-router/CHANGELOG.md`):
+  - v7.17.0 ships a subset of official docs under `node_modules/react-router/docs` for local agent reference.
+  - v7.16.0 stabilized `future.v8_trailingSlashAwareDataRequests` (was `unstable_`).
+  - v7.15.1 introduced `unstable_useRouterState()` that may eventually deprecate `useLocation`/`useSearchParams`/`useParams`/`useMatches`/`useNavigationType`/`useNavigation` — **not used here** and unstable, so no action needed.
+- **Action for us:** none. This project only uses the stable classic router API; none of the v7.15–7.17 unstable/data-router features are wired in, so the `^7.17.0` range is safe to keep. Flagged here only so a future upgrade past v8 checks the trailing-slash and `useRouterState` migration notes first.
+
 ## 2026-06-09 - Phase 7: Writing/Speaking non-boss-gated (Task 12)
 
 - Added `boss_gated` field (`Boolean`, default `True`) to the `Skill` model in `models.py`.

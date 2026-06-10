@@ -24,11 +24,6 @@ function HomeTopBar({
         {hasPendingClaims ? <span className="system-notify-dot" aria-hidden="true" /> : null}
       </button>
 
-      <div className="home-topbar__brand">
-        <p>IELTS Quest Dashboard</p>
-        <strong>Solo-study command core</strong>
-      </div>
-
       <div className="topbar-cluster">
         <div className="topbar-level">
           <strong>{player.level}</strong>

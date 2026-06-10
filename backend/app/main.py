@@ -2849,7 +2849,8 @@ def vl_get_due_flashcards(
             continue
         section = item.section
         unit = section.unit if section else None
-        level = unit.topic.level if (unit and unit.topic) else None
+        topic = unit.topic if (unit and unit.topic) else None
+        level = topic.level if topic else None
         result.append(VocabFlashcardDueOut(
             id=item.id,
             section_id=item.section_id,
@@ -2867,5 +2868,7 @@ def vl_get_due_flashcards(
             section_title=section.title if section else "",
             unit_title=unit.title if unit else "",
             level_name=level.name if level else "",
+            topic_id=topic.id if topic else 0,
+            topic_title=topic.title if topic else "",
         ))
     return result

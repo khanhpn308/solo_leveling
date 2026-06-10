@@ -1268,3 +1268,5 @@ class VocabFlashcardDueOut(VocabWordOut):
     section_title: str = ""
     unit_title: str = ""
     level_name: str = ""
+    topic_id: int = 0
+    topic_title: str = ""

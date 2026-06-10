@@ -2,6 +2,44 @@
 
 Newest first.
 
+## [2026-06-10] Session — Status / Topbar / Roadmap / Lexical UI Refinement (Tasks 1-11)
+
+UI refinement follow-up after Mobile Responsive Redesign. Mostly CSS in the existing `@media (max-width: 599.98px)` block, plus 2 intentional JSX/backend changes confirmed with the user.
+
+### Flashcard fit + cleanup (desktop + mobile — follow-up tweak)
+- **`frontend/src/components/VocabularyWorkspace.jsx`** — removed the "Tap to reveal meaning" hint `<p>` from the Vocab Library flashcard front.
+- **`frontend/src/styles.css` (base)** — flashcard arena pulled up close to the sub-tab strip (`.flashcard-gate-active` gap `24px → 12px`, padding `24px 0 → 8px 0 16px`); `.flip-card` height `min(560px,70vh) → min(420px,56vh)`, min-height `320 → 280`; `.flip-card-front/back` padding `40 → 24`, gap `20 → 12`, back padding-top `32 → 20`. `.flip-card-back .difficulty-selectors` now `position: sticky; bottom: 0; margin-top: auto` with a fade background so the Again/Hard/Good/Easy buttons stay visible without scrolling past the meaning/examples — applies to all three flashcard types (Vocabulary, Collocation, Vocab Library).
+- **`frontend/src/styles.css` (mobile, MR-10)** — arena even tighter (`.flashcard-gate-active` gap `8px`, padding `6px 0 12px`), `.flip-card` `min(340px,44vh)`, `.flip-card-front/back` padding `16px` gap `8px`, back padding-top `14px`.
+- Verified @ 375px: gap sub-tabs→arena-header ~38px; "Good" button visible without scrolling on Vocabulary, Collocation, and Vocab Library flashcards (sticky difficulty-selectors); build ✓.
+
+### Status modal (desktop + mobile — confirmed contract change)
+- **`frontend/src/components/StatusModal.jsx`** — moved the eyebrow (`status-profile__eyebrow`) and name `<h3>` out of `.status-core` into `.status-portrait`, wrapped with `.status-avatar` in a new `.status-identity` row so avatar + eyebrow + name sit on one horizontal line on **all** viewports.
+- **`frontend/src/styles.css` (base)** — `.status-avatar { aspect-ratio: 1; width: 96px }` (always square, every viewport); new `.status-identity` flex-row + `.status-identity__text`; `.status-shell__hero` → single column; name shrunk to `clamp(22px, 2.4vw, 30px)`.
+- **`frontend/src/styles.css` (mobile `<600px`)** — removed `.status-core__metrics` / `.status-condition__grid` from the `1fr` group so Level/Rank/Target and Mood/Energy/Focus stay on one horizontal row, just shrunk (smaller box `min-height`, padding, neon-number `22px`); avatar `76px` on mobile.
+
+### Topbar + Roadmap (mobile-only CSS)
+- **`frontend/src/components/HomeTopBar.jsx`** — removed the `.home-topbar__brand` block ("IELTS Quest Dashboard" / "Solo-study command core") entirely (per user request).
+- **`frontend/src/styles.css` (base)** — topbar now `grid-template-columns: auto minmax(0,1fr)` (menu | cluster) with `.home-topbar .topbar-cluster { justify-self: end }` so the cluster stays right-aligned without the brand. Removed the two orphaned `.home-topbar__brand p` / `.home-topbar__brand strong` selectors.
+- **`frontend/src/styles.css` (mobile, MR-4)** — two-column row (`auto minmax(0,1fr)`, overriding the 640px stack rule); menu `align-self: start` (cluster is two rows tall). Cluster wraps: row 1 = level + avatar + bell tight against each other and right-aligned (`justify-content: flex-end`, no auto-margin), row 2 = clock under the avatar (`flex-basis: 100%`, right-aligned, smaller font).
+- **`frontend/src/styles.css` (mobile, MR-5)** — roadmap phase compact: title `<h2>` + subtitle `<strong>` rendered inline on one line (with ` /` separator), smaller box/padding — applied uniformly to all 5 phases.
+
+### Lexical Awakening — Vocab Library flashcard topic clustering (backend + frontend)
+- **`backend/app/schemas.py`** — added `topic_id: int = 0` + `topic_title: str = ""` to `VocabFlashcardDueOut` (no migration — derived from `item.section.unit.topic`).
+- **`backend/app/main.py` `vl_get_due_flashcards`** — populates `topic_id` / `topic_title` from `unit.topic`.
+- **`frontend/src/components/VocabularyWorkspace.jsx`** — VL flashcard now mirrors the collocation flow: `vlFlashSelectedTopic` state, `vlFlashTopics` (grouped by `topic_id` via `useMemo`), `vlActiveCards` (cards of the selected topic). Renders a topic lobby (`coll-flash-lobby` / `coll-flash-topic-grid` / `coll-flash-topic-btn`) → pick topic → review → "Back to Topics". Review buttons changed from `review-buttons`/`review-btn` to `difficulty-selectors`/`review-act-btn` (Again/Hard/Good/Easy ★) matching collocation, placed inside the flip-card back.
+
+### vocab-content layout (mobile-only CSS)
+- **`frontend/src/styles.css` (mobile, MR-8)** — `.level-block-grid` → single column (each level-block takes a full row); larger `level-block__name` (1.05rem) / `__pct` / `__stats`.
+- **`frontend/src/styles.css` (mobile, MR-9)** — `.coll-section-nav` `max-height: none` + `flex: 1` so the section list fills the page and scrolls via the overlay body (was capped at 220px).
+- **`frontend/src/styles.css` (mobile, MR-10)** — flashcard gate lobby compressed (smaller crest icon/heading, full-width status panel + ENTER button) so `ENTER THE GATE` is visible without scrolling; `.flip-card` height `min(360px, 46vh)` so review buttons fit.
+
+### Validated
+- `npm run build` ✓ (248 modules, no errors).
+- Backend `/openapi.json`: `VocabFlashcardDueOut` exposes `topic_id` + `topic_title`; `/api/vocab-library/flashcards/due` returns them (live data: topic "The World Around Us", 2 cards).
+- Chrome DevTools @ 375px: status hero one row + square avatar (76×76); metrics/condition 3-col; topbar bell right + clock under avatar + no x-overflow; roadmap h2+strong same row (all 5 phases); VL flashcard lobby → topic → review → Back works with difficulty-selectors buttons; level-block 1-col (347px, name 16.8px); coll-section-nav full height (312px, no 220px cap, 10 sections); ENTER THE GATE in viewport without scroll.
+- CSS leak check: mobile-only rules (`level-block-grid 1fr`, `coll-section-nav max-height:none`) confirmed inside the media block only; base-CSS changes limited to the 3 user-approved points (status-avatar square, status-identity row, name font).
+- Desktop ≥600px verified (Chrome @ 1536px, `mqMobile: false`): status modal avatar square 96×96 + name on one row (30px), metrics/condition `repeat(3, ~180px)`, Skill Matrix 2-col intact; dashboard topbar original 3-col grid with clock `flex-basis: auto` (not below avatar), roadmap track 5-col with phase `h2` `display: block`. No mobile rule leaked into desktop.
+
 ## [2026-06-10] Session 8l-C — Polished Collocation Seed (Tasks C-1, C-2)
 
 ### Changes

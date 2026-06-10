@@ -159,15 +159,18 @@ function StatusModal({
         <section className="status-shell">
           <div className="status-shell__hero">
             <div className="status-portrait">
-              <div className="status-avatar" aria-hidden="true">
-                <span>{player.displayName.slice(0, 1).toUpperCase()}</span>
+              <div className="status-identity">
+                <div className="status-avatar" aria-hidden="true">
+                  <span>{player.displayName.slice(0, 1).toUpperCase()}</span>
+                </div>
+                <div className="status-identity__text">
+                  <p className="status-profile__eyebrow">{player.title}</p>
+                  <h3>{player.displayName}</h3>
+                </div>
               </div>
             </div>
 
             <div className="status-core">
-              <p className="status-profile__eyebrow">{player.title}</p>
-              <h3>{player.displayName}</h3>
-
               <div className="status-core__metrics">
                 <article>
                   <span>Level</span>

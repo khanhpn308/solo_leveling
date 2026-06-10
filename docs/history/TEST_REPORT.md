@@ -2,6 +2,31 @@
 
 Newest first.
 
+## 2026-06-10 - Status / Topbar / Roadmap / Lexical UI Refinement (Tasks 1-11) Verification
+
+Status: `Passed` (mobile + build); desktop verified statically (see note).
+
+Verified via Chrome DevTools MCP @ 375px against live stack (`frontend :5173`, `backend :8000`):
+
+- **Status hero (Task 1, 2)**: `.status-identity` flex row — avatar + "QUEST RUNNER" + name on one line; avatar square (`avatarSquare: true`, 76×76 mobile); `.status-core__metrics` and `.status-condition__grid` both `repeat(3, 87.2px)` (Level/Rank/Target + Mood/Energy/Focus stay horizontal), metric box shrunk to 53px tall.
+- **Topbar (Task 3)**: bell pinned right (`right: 354`, ~21px from edge), clock dropped below avatar (`clockBelowAvatar: true`), no horizontal overflow (`bodyOverflowX: false`).
+- **Roadmap (Task 4)**: all 5 phase cards — `h2` `display: inline`, title + subtitle on same row (`h2strongSameRow: true`).
+- **Backend (Task 5)**: `/openapi.json` `VocabFlashcardDueOut` exposes `topic_id` + `topic_title`; `GET /api/vocab-library/flashcards/due` (status 200) returns live data grouped by topic ("The World Around Us", topic_id 1, 2 cards).
+- **VL flashcard lobby (Task 6, 7)**: sub-tab shows `coll-flash-lobby` with 1 topic button ("The World Around Us / 2 cards"); pick topic → `card-arena` "← Topics / Card 1 of 2"; flip → `.difficulty-selectors` with `review-act-btn again/hard/good/easy` (Again/Hard/Good/Easy ★) — matches collocation.
+- **level-block (Task 8)**: `.level-block-grid` single column (347px), 4 blocks full-width, name font 16.8px (1.05rem).
+- **coll-section-nav (Task 9)**: `max-height: none`, `flex: 1 0 0%`, fills body (312px = body height), 10 sections, no x-overflow (was capped 220px).
+- **Flashcard lobby fit (Task 10)**: `ENTER THE GATE` bottom = 594 ≤ viewport 594 — visible without scrolling.
+
+Build: `npm run build` ✓ 248 modules, 0 errors.
+
+CSS leak check (static): mobile-only rules confined to the `@media (max-width: 599.98px)` block; base-CSS changes limited to the 3 user-approved points (status-avatar square, status-identity row, name font).
+
+**Desktop ≥600px verified** (Chrome @ 1536px, `mqMobile: false`):
+- Status modal: avatar square 96×96 on one row with eyebrow + name (`sameRow: true`), name 30px; `.status-core__metrics` and `.status-condition__grid` both `repeat(3, ~180px)` (Level/Rank/Target + Mood/Energy/Focus 3-col); Skill Matrix 2-col intact.
+- Dashboard: topbar grid `48px / 986px / 379px` (original 3-col), clock `flex-basis: auto` and NOT below avatar (mobile-only rule off); roadmap track 5-col (`repeat(5, ~276px)`), phase `h2` `display: block` (not inline). No mobile rule leaked into desktop.
+
+---
+
 ## 2026-06-09 - Phase 7: Writing/Speaking non-boss-gated (Task 12) Verification
 
 Status: `Passed`

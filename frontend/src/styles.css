@@ -161,7 +161,7 @@ select:focus-visible {
 
 .home-topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 18px;
   align-items: center;
   padding: 18px 22px;
@@ -169,7 +169,11 @@ select:focus-visible {
   z-index: 10;
 }
 
-.home-topbar__brand p,
+/* Brand removed — cluster sits in column 2 and stays pinned to the right */
+.home-topbar .topbar-cluster {
+  justify-self: end;
+}
+
 .topbar-clock span,
 .topbar-level span,
 .hero-panel__eyebrow,
@@ -189,7 +193,6 @@ select:focus-visible {
   text-transform: uppercase;
 }
 
-.home-topbar__brand strong,
 .topbar-level strong,
 .topbar-clock strong {
   display: block;
@@ -2024,7 +2027,7 @@ select:focus-visible {
 
 .status-shell__hero {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: 18px;
   align-items: stretch;
 }
@@ -2033,9 +2036,26 @@ select:focus-visible {
   display: flex;
 }
 
-.status-avatar {
+/* Identity row: avatar (square) + eyebrow + name on one horizontal line */
+.status-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   width: 100%;
-  min-height: 100%;
+}
+
+.status-identity__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.status-avatar {
+  width: 96px;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  min-height: 0;
   border: 1px solid rgba(122, 240, 221, 0.3);
   border-radius: 24px;
   padding: 0;
@@ -2059,14 +2079,18 @@ select:focus-visible {
 }
 
 .status-avatar span {
-  font-size: 56px;
+  font-size: 44px;
 }
 
-.status-core h3 {
+.status-identity__text h3 {
   margin: 0;
   font-family: 'Rajdhani', sans-serif;
-  font-size: clamp(40px, 3.8vw, 54px);
-  line-height: 0.9;
+  font-size: clamp(22px, 2.4vw, 30px);
+  line-height: 1.05;
+}
+
+.status-identity__text .status-profile__eyebrow {
+  margin: 0;
 }
 
 .status-core__metrics {
@@ -3282,8 +3306,8 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 24px;
-  padding: 24px 0;
+  gap: 12px;
+  padding: 8px 0 16px;
 }
 
 /* Reduce side padding on the content panel when a flashcard session is active */
@@ -3306,8 +3330,8 @@ select:focus-visible {
 .flip-card {
   perspective: 1200px;
   width: 100%;
-  height: min(560px, 70vh);
-  min-height: 320px;
+  height: min(420px, 56vh);
+  min-height: 280px;
   cursor: pointer;
 }
 
@@ -3330,12 +3354,12 @@ select:focus-visible {
   border: 1px solid var(--line-strong);
   border-radius: 12px;
   background: linear-gradient(145deg, #051917 0%, #030e0d 100%);
-  padding: 40px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
   box-shadow: var(--shadow);
   transition: border-color 0.15s ease;
 }
@@ -3349,7 +3373,19 @@ select:focus-visible {
   transform: rotateY(180deg);
   overflow-y: auto;
   justify-content: flex-start;
-  padding-top: 32px;
+  gap: 8px;
+  padding-top: 20px;
+}
+
+/* Difficulty buttons inside the card back: pin to the bottom + always visible
+   so the user never has to scroll past the meaning/examples to pick a rating. */
+.flip-card-back .difficulty-selectors {
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  padding-top: 8px;
+  background: linear-gradient(180deg, transparent, #030e0d 30%);
 }
 
 .card-title {
@@ -5790,7 +5826,11 @@ select:focus-visible {
     padding-top: 6px;
   }
 
+  /* Two columns (menu | cluster); overrides the 640px rule that stacked the
+     bar. Menu pinned to the top of the row since the cluster is two rows tall. */
   .home-topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
     padding: 10px 12px;
     gap: 8px;
   }
@@ -5800,8 +5840,48 @@ select:focus-visible {
     min-width: 0;
   }
 
+  /* Cluster wraps: row 1 = level + avatar + bell all pinned right (sát nhau);
+     row 2 = clock under avatar. flex-end keeps level + avatar tight against the bell. */
   .topbar-cluster {
-    gap: 8px;
+    gap: 6px 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .topbar-level {
+    order: 1;
+  }
+
+  .avatar-trigger {
+    order: 2;
+  }
+
+  .topbar-cluster .inbox-cluster {
+    order: 3;
+  }
+
+  /* Clock drops to its own row, sitting under the avatar, smaller */
+  .topbar-clock {
+    order: 4;
+    flex-basis: 100%;
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .topbar-clock span {
+    font-size: 9px;
+  }
+
+  .topbar-clock strong {
+    display: inline;
+    font-size: 14px;
+  }
+
+  /* Menu pinned to the top of the row (cluster is two rows tall) */
+  .system-icon-button--menu {
+    align-self: start;
   }
 
   .inbox-dropdown {
@@ -5839,6 +5919,42 @@ select:focus-visible {
     padding: 14px;
   }
 
+  /* Roadmap phase compact: title (Month X-Y) + subtitle (Foundation) on one line,
+     smaller box. Applies uniformly to every phase card. */
+  .roadmap-phase {
+    padding: 12px 14px 12px;
+  }
+
+  .roadmap-phase p {
+    margin-bottom: 2px;
+  }
+
+  .roadmap-phase h2 {
+    display: inline;
+    font-size: 18px;
+  }
+
+  .roadmap-phase strong {
+    display: inline;
+    margin: 0 0 0 6px;
+    font-size: 14px;
+  }
+
+  .roadmap-phase h2::after {
+    content: ' /';
+    color: var(--muted);
+  }
+
+  .roadmap-phase span,
+  .roadmap-phase small {
+    display: block;
+    margin-top: 4px;
+  }
+
+  .roadmap-phase__progress {
+    margin-top: 8px;
+  }
+
   /* ── MR-6: Quest/roadmap nested panels ───────────────────────────── */
   .quest-summary {
     grid-template-columns: 1fr 1fr;
@@ -5863,8 +5979,6 @@ select:focus-visible {
 
   /* ── MR-7: Status / Boss / Certificate overlay bodies ────────────── */
   .status-modal--quad,
-  .status-condition__grid,
-  .status-core__metrics,
   .status-badge-grid {
     grid-template-columns: 1fr;
   }
@@ -5872,6 +5986,53 @@ select:focus-visible {
   .status-shell__hero {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  /* Keep Level/Rank/Target and Mood/Energy/Focus on one horizontal row,
+     just shrink the boxes + text so they fit a 360px viewport. */
+  .status-core__metrics,
+  .status-condition__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .status-core__metrics article,
+  .status-condition-card {
+    min-height: 0;
+    padding: 8px 4px;
+    border-radius: 12px;
+  }
+
+  .status-core__metrics article span,
+  .status-condition-card span {
+    margin-bottom: 4px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  .status-core__metrics article strong:not(.status-neon-number) {
+    font-size: 15px;
+  }
+
+  .status-modal .status-neon-number {
+    font-size: 22px;
+  }
+
+  .status-condition-card p {
+    font-size: 10px;
+  }
+
+  /* Identity row: shrink avatar + name a touch on mobile */
+  .status-avatar {
+    width: 76px;
+  }
+
+  .status-avatar span {
+    font-size: 34px;
+  }
+
+  .status-identity__text h3 {
+    font-size: 22px;
   }
 
   .boss-hero {
@@ -5885,6 +6046,25 @@ select:focus-visible {
   .certificate-card__scores {
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  /* Status modal minimal: base CSS hides all header children (including actions/close btn).
+     On mobile, restore the actions div so the × button is reachable. */
+  .overlay-frame--status-minimal .overlay-frame__header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 44px;
+    padding: 4px 12px;
+  }
+
+  .overlay-frame--status-minimal .overlay-frame__header > div {
+    display: none;
+  }
+
+  .overlay-frame--status-minimal .overlay-frame__actions {
+    display: flex !important;
+    align-items: center;
   }
 
   /* ── MR-8: Quest overlay tab-row + bodies ────────────────────────── */
@@ -5928,13 +6108,33 @@ select:focus-visible {
   }
 
   /* ── MR-10: Flashcard Gate ───────────────────────────────────────── */
+  /* Pull the arena (header + card) up close to the sub-tab strip */
+  .flashcard-gate-active {
+    gap: 8px;
+    padding: 6px 0 12px;
+  }
+
+  /* Card fits the viewport so the review buttons are visible without scrolling */
   .flip-card {
-    height: min(440px, 60vh);
+    height: min(340px, 44vh);
+    min-height: 0;
   }
 
   .arena-header {
     flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  /* Tighten the card back so meaning + buttons fit without scrolling */
+  .flip-card-front,
+  .flip-card-back {
+    padding: 16px;
     gap: 8px;
+  }
+
+  .flip-card-back {
+    padding-top: 14px;
   }
 
   .difficulty-selectors {
@@ -5942,8 +6142,37 @@ select:focus-visible {
     gap: 6px;
   }
 
-  .flashcard-gate-lobby {
-    padding: 16px;
+  /* Lobby compresses so ENTER THE GATE is visible without scrolling */
+  .flashcard-gate-lobby,
+  .coll-flash-lobby {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .gate-crest,
+  .coll-flash-lobby .gate-crest {
+    gap: 6px;
+  }
+
+  .gate-crest-icon {
+    font-size: 44px;
+  }
+
+  .gate-crest h3 {
+    font-size: 20px;
+  }
+
+  .gate-crest p {
+    font-size: 0.85rem;
+  }
+
+  .gate-status-panel {
+    padding: 10px 16px;
+    width: 100%;
+  }
+
+  .gate-enter-btn {
+    width: 100%;
   }
 
   /* ── MR-11: Collocation Forge browser (3 lớp) ───────────────────── */
@@ -5951,13 +6180,17 @@ select:focus-visible {
     flex-direction: column;
   }
 
+  /* MR-9 mobile: section list expands to fill the page (no 220px cap) so it
+     scrolls like the vocab-library topic grid. The overlay body owns the scroll. */
   .coll-section-nav {
     width: 100%;
+    flex: 1;
+    min-height: 0;
     flex-shrink: 0;
     border-right: none;
     border-bottom: 1px solid var(--line, rgba(255,255,255,0.07));
-    max-height: 220px;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
   }
 
   .coll-topic-box-grid {
@@ -5969,9 +6202,19 @@ select:focus-visible {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
 
+  /* MR-8 mobile: each level-block takes a full row + larger text */
   .level-block-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .level-block__name {
+    font-size: 1.05rem;
+  }
+
+  .level-block__pct,
+  .level-block__stats {
+    font-size: 0.9rem;
   }
 
   /* ── MR-12: Word Network Tree (react-flow + bottom-sheet) ────────── */
