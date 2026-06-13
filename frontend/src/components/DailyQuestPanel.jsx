@@ -102,9 +102,6 @@ function renderQuestCard(quest, onQuestAction, questPendingById, successQuestId,
         ) : null}
         <div className="quest-node__foot">
           <span>{quest.source}</span>
-          <span>
-            {isClaimReady ? '⚡ Reward waiting' : quest.status}
-          </span>
         </div>
       </div>
       <div className="quest-node__reward">

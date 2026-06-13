@@ -194,7 +194,6 @@ function PanelArchive({ quests, onQuestAction, questPendingById, successQuestId 
                   </p>
                 </div>
                 <div className="backlog-item__actions">
-                  <span>{quest.completed && !quest.rewardClaimed ? 'Reward waiting' : quest.statusLabel || quest.status}</span>
                   <button
                     className={`system-button quest-action-button quest-action-button--${actionMeta.tone}`}
                     type="button"

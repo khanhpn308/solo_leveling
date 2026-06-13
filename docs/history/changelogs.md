@@ -2,6 +2,110 @@
 
 Newest first.
 
+## [2026-06-13] Fix support-panel text run-together (bug C#2)
+
+**Problem:** Dashboard support panels (TODAY SYNC, VOCABULARY TODAY, BOSS STATUS) rendered the `<strong>` headline and the `<span>` detail on the same line with no separation ("Need check-in0 XP banked today"), on both desktop and mobile. Cause: `.support-panel strong` had `margin-bottom:8px` but was `display:inline` (vertical margin ignored) and `.support-panel span` was inline.
+
+**Changes:** `frontend/src/styles.css` — `.support-panel strong` → `display:block`; added `.support-panel > span { display:block }`.
+
+**Validated:** preview — TODAY SYNC / VOCABULARY TODAY now stack headline + detail on separate lines (inspect `display:block`, screenshot). `npm run build` ✓.
+
+## [2026-06-13] Mobile responsive sweep verified (MR-1..MR-14)
+
+**Problem:** MR-1..MR-13 mobile CSS (`styles.css` `@media (max-width:599.98px)`) was implemented in prior sessions but never sweep-verified, so all 14 MR checkboxes stayed `[ ]` and could not be archived.
+
+**Changes:** No new CSS needed — verification only (plus a small panel-hide tweak from bug A). MR-3 (mobile spacing var) skipped: no real duplication to dedup.
+
+**Validated:** preview sweep at 360/375/430px across dashboard, overlays (Status/Quest/Nav/Exam), and all 10 vocab tabs incl. Collocation 3-layer — zero horizontal overflow (`scrollWidth === clientWidth` everywhere); vocab tab-strip scrolls; desktop 1280px structurally unchanged; `npm run build` ✓ 225 modules. Details in TASKS.md "MR sweep verification — 2026-06-13". One out-of-scope display bug (TODAY SYNC panel text run-together, desktop+mobile) deferred to bug sweep C.
+
+## [2026-06-13] Fix floating panels covering Rank Exam + resume-exam 400 (bug A + C#1)
+
+**Problem:** While the Rank Exam screen was open, fixed-position floating UI covered the exam (on desktop partially, on mobile fully). Reproduced via preview: the seed-account `TestXpPanel` (`z-index:200`, fixed bottom-left) overlapped the exam's question navigator; `ToastRack` (`z-index:55`) also sat above the overlay shell (`z-index:40`) and had no manual dismiss. Separately, the inbox "Resume Exam" action called `POST /api/rank-exams/start`, which only accepted `boss_required` and returned **400** for an `in_progress` skill — the UI swallowed the error, so the exam never reopened (this blocked reproducing the cover bug).
+
+**Changes:**
+- `backend/app/main.py` — `start_rank_exam` now resumes: if the skill is `in_progress`, returns the live attempt (via new helper `_resume_in_progress_exam`, preferring `state.last_rank_exam_attempt_id` then the latest in-progress attempt) as a `RankExamStartOut` with its questions, instead of 400. Idempotent; no migration.
+- `frontend/src/components/TestXpPanel.jsx` + `App.jsx` — panel takes a `hidden` prop and returns null; App passes `hidden` when any overlay (exam/result/status/quest/boss/certificate) is open, so the dev panel never covers a modal.
+- `frontend/src/components/ToastRack.jsx` + `App.jsx` — each toast has a `×` close button wired to new `dismissToast(id)` (clears the auto-dismiss timer + removes from queue).
+- `frontend/src/styles.css` — `.toast-rack` z-index 55 → **39** (below the overlay shell, above dashboard); `.toast-card` relative + right padding for the close button; `.toast-card__close` style; mobile `<600px` block shrinks toast card padding + font.
+
+**Validated:** preview (seed account) — opened Rank Exam via Resume: panel gone (`document.querySelector('.test-xp-panel')` → null), exam nav 1–5 fully visible, desktop + 375px screenshots clean, no console errors. `POST /rank-exams/start` on an in_progress skill → 200 with attempt+questions (was 400). `npm run build` ✓ 225 modules. Backend `python -m unittest app.test_backend` → 68/68 OK.
+
+## [2026-06-13] P0 hygiene — gate dev endpoints, hard-fail JWT secret, clean Player.first() dead path
+
+**Problem:** App runs on a shared internet-facing server for a small group, but: `/api/dev/*` (incl. `reset` which wipes the whole DB) was unauthenticated; `JWT_SECRET_KEY` had a hardcoded weak fallback and was never set in compose; `Player.first()` dead helpers lingered. Scoped from the Small-Group Tool plan ([`docs/current/SMALL_GROUP_PLAN.md`](../current/SMALL_GROUP_PLAN.md)); PR-1..PR-14 SaaS plan dropped.
+
+**Changes:**
+- `backend/app/main.py` — added `ENABLE_DEV_ENDPOINTS` env flag (default off) + `require_dev_enabled` dependency (raises 404 when off); applied `dependencies=[Depends(require_dev_enabled)]` to all 5 dev routes (`reset`, `run_migrations`, `regenerate-quests`, `test-xp/skills`, `test-xp/award` — last two keep `require_test_account` as a 2nd layer). Removed dead helpers `get_player_or_404` + `get_campaign_or_404`; `regenerate_quests` now depends on `get_current_player`/`get_current_campaign` (account-scoped). Dropped unused `get_active_player` import.
+- `backend/app/auth_utils.py` — `SECRET_KEY` reads `JWT_SECRET_KEY` with **no fallback**; raises `RuntimeError` (pointing to README + `.env.example`) if unset. `create_jwt`/`decode_jwt` signatures unchanged (no PyJWT migration — out of scope).
+- `docker-compose.yml` — backend env now provides dev defaults: `JWT_SECRET_KEY` (`${JWT_SECRET_KEY:-dev-local-secret-change-me}`) + `ENABLE_DEV_ENDPOINTS` (`${ENABLE_DEV_ENDPOINTS:-true}`).
+- `.env.example` — added `JWT_SECRET_KEY` (required) + `ENABLE_DEV_ENDPOINTS` with notes.
+- `README.md` — new "Deploy / Environment" section (env var table, hard-fail explanation, `openssl rand -hex 32`).
+- `backend/app/test_backend.py` — sets test-only `JWT_SECRET_KEY`/`ENABLE_DEV_ENDPOINTS` before importing `app.*`.
+
+**Validated:** 68/68 backend unittest OK (in container). Guard introspection: all 5 dev routes carry `require_dev_enabled`; OFF→404, ON→pass. Hard-fail confirmed (container without `JWT_SECRET_KEY` crash-loops with the RuntimeError; recreating with the new compose env boots cleanly). grep `super-secret-key` and `get_player_or_404|get_campaign_or_404` → empty. API: register→login→`/auth/me` 200; token A→player#7, token B→player#8 (per-account scoping holds, no `Player.first()` bleed); no-token→401.
+
+## [2026-06-11] Boss notifications → Suggestion Inbox (remove floating RankBossNotif)
+
+**Problem:** `RankBossNotif` rendered a fixed bottom-right stack of boss-promotion banners (eligible→Unlock, boss_required→Start, in_progress→Resume). On mobile, several eligible skills stacked up and covered most of the dashboard. Moved all boss prompts into the existing Suggestion Inbox (bell dropdown).
+
+**Changes:**
+- `frontend/src/dashboard-data.js` `buildSuggestionInbox` — appends boss items derived from `skills` (`promotion_status ∈ {eligible, boss_required, in_progress}`) at the **top** of the inbox: `{type:'boss', bossState, skillObj, actionLabel, title:"Rank X → Y promotion", severity:'high'}`. One action label per state (Unlock Boss / Start Exam / Resume Exam).
+- `frontend/src/components/SuggestionInboxDropdown.jsx` — `item.type==='boss'` renders a **single** action button (`item.actionLabel`, `.suggestion-action--boss` amber) and no Dismiss; normal suggestions keep Apply/Dismiss.
+- `frontend/src/App.jsx` — new `handleBossInboxAction(item)`: routes `eligible → handleUnlockBoss`, else closes inbox + `handleStartExam`; manages `suggestionPendingByKey`. `onApplySuggestion` dispatches boss vs suggestion by `item.type`. Removed `<RankBossNotif>` render + import.
+- `frontend/src/components/RankBossNotif.jsx` — **deleted** (no remaining importer).
+- `frontend/src/styles.css` — `.suggestion-action--boss` accent. (`.rank-boss-notif*` rules left as dead CSS, harmless.)
+
+**Validated:**
+- `buildSuggestionInbox` (node): 3 boss states → 3 items with correct labels/titles; `promotion_status:'none'` excluded.
+- `npm run test:dashboard-data` 6/6 pass; `npm run build` ✓ 248 modules (no dangling RankBossNotif import).
+- Inbox badge (`inboxItems.length`) now counts boss items too — bell flags boss prompts.
+- Note: Chrome extension was disconnected during this change, so no live mobile screenshot; verified via build + unit test + static logic. The floating stack is gone (component deleted), so the dashboard is no longer covered.
+
+## [2026-06-11] Test XP tool — seed account ad00000@gmail.com only
+
+Add manual XP injection for every skill (5 matrix + 2 support) to fast-test level/rank/boss-promotion. Gated to the seed account on both server and client.
+
+**Root problem:** `recompute_skill_progress` (services.py:743) overwrites `state.xp` from quests/vocab/routing on every `refresh_progress_state`, so XP set via `award_skill_xp` is wiped on the next refresh. Fix = a persistent column that recompute folds back in.
+
+**Backend:**
+- `backend/app/models.py` — `CampaignSkillState`: new `manual_xp_bonus int default 0 not null`.
+- `backend/alembic/versions/20260611_23_add_manual_xp_bonus.py` — add column (server_default "0"), with `downgrade()`.
+- `backend/app/services.py` `recompute_skill_progress:743` — `state.xp = earned + routed + vocab + int(state.manual_xp_bonus or 0)` → manual XP survives every refresh.
+- `backend/app/main.py` — `TEST_ACCOUNT_EMAIL = "ad00000@gmail.com"`; dependency `require_test_account` (403 if `account.email_normalized != TEST_ACCOUNT_EMAIL`). Routes: `GET /api/dev/test-xp/skills` (all skills + xp/bonus/rank/level), `POST /api/dev/test-xp/award` (`{skill_id, delta, reset}` → `manual_xp_bonus = max(0, bonus+delta)` or 0 on reset → `refresh_progress_state` → return updated state).
+- `backend/app/schemas.py` — `TestXpSkillOut`, `TestXpAwardIn`.
+
+**Frontend:**
+- `frontend/src/api/testXp.js` — `getTestXpSkills()`, `awardTestXp(skillId, delta, reset)`.
+- `frontend/src/components/TestXpPanel.jsx` — floating bottom-left collapsible panel; per-skill `+XP` input + Add (delta) + Reset (bonus→0); refreshes summary via `onXpChange`.
+- `frontend/src/App.jsx` — `account` from `useAuth()`; render `<TestXpPanel>` only when `account?.email === 'ad00000@gmail.com'`.
+- `frontend/src/styles.css` — `.test-xp-panel` family (fixed bottom-left, z-200, amber toggle, scrollable body).
+
+**Validated:**
+- Migration applied (`alembic upgrade head` → 20260611_23); `manual_xp_bonus` column present.
+- Persistence: set bonus 5000 → Writing xp 5000 rank C → survives 2× `refresh_progress_state`.
+- Gate (Python): seed account PASS; other account → HTTPException 403. HTTP: no-token → 401.
+- Award (curl seed token): Reading +3000 → xp 3010 rank D level 23; reset → 10/F/1.
+- UI @ DevTools (logged in ad00000): panel visible, 7 skills (Listening/Reading/Writing/Speaking/Vocabulary/Collocation/Grammar); Listening +2000 → 2010 XP E18 bonus 2000, topbar level updated live; Reset → 10/F/1. Console clean. `npm run build` ✓ 248 modules.
+- Security: client gate only hides UI; **server `require_test_account` is the real gate** (403 for any non-seed account).
+
+## [2026-06-11] Vocab library seed — multi-letter section parser fix ("Words and grammar")
+
+**Symptom:** Topic "Words and grammar" (Units 86–91) existed in `material/vocabularies/pre-intermediate_intermediate/vocab.md` but was missing from the DB; Units 87/88/90/91 seeded with 0 items.
+
+**Root cause:** `parse_vocab_file`'s section regex `_re_sec = ^#{3,4}\s+([A-Z])\.\s+(.+)` only matched single-letter headings (`### A. Title`). Multi-letter headings — `### A & B. ...`, `### A, B & C. ...`, `### A, B, C, D, E & F. ...` — were skipped, so their tables were never attached to a section and the words were dropped. This affected many units across the whole file, not just "Words and grammar".
+
+**Fix (`backend/app/seed.py`):**
+- Widened `_re_sec` to `^#{3,4}\s+([A-Z](?:(?:,\s*|\s*&\s*)[A-Z])*)\.\s+(.+)` — group 1 now captures a single letter OR a letter list.
+- In the section-heading branch: `section_letter` stores the **first** letter (DB column is `String(5)`); the full letter list is kept in the visible `title` for multi-letter headings (single-letter headings keep title-only, preserving prior behaviour).
+- Verified parser yields no same-first-letter section collisions within any unit (dedup key `(unit_id, section_letter)` stays safe).
+
+**Result (idempotent `ensure_vocab_library` re-run, no reset needed):**
+- "Words and grammar" now seeds all 6 units (86–91) = **100 items** (was 33).
+- Whole-file recovery of previously-dropped letter-list sections: total `VocabLibraryItem` now **2184** across **210** sections (e.g. Phrase building 262, Style and register 136).
+- `seed.py` imports clean; `test_vocabulary_anti_farm_cap` PASS.
+
+**Known follow-up (pre-existing, NOT introduced here):** the file has two `# Topic: Word formation` headings (lines 2484, 2638); the seed dedups topics by title, so the second is merged into the first, leaving a gap/duplicate in `topic_order` (DB shows "Words and grammar" and "Connecting and linking" both at order 15, with 13 skipped). Data is complete; only display ordering is affected. Flagged for a future ordering fix.
+
 ## [2026-06-10] Session — Status / Topbar / Roadmap / Lexical UI Refinement (Tasks 1-11)
 
 UI refinement follow-up after Mobile Responsive Redesign. Mostly CSS in the existing `@media (max-width: 599.98px)` block, plus 2 intentional JSX/backend changes confirmed with the user.

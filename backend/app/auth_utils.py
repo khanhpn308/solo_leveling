@@ -5,7 +5,13 @@ import json
 import time
 import os
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "super-secret-key-change-in-prod-123456789")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "JWT_SECRET_KEY chưa được set — bắt buộc, không có fallback. "
+        "Đặt biến môi trường JWT_SECRET_KEY (vd: openssl rand -hex 32) trước khi chạy. "
+        "Xem mục 'Deploy / Environment' trong README.md và .env.example."
+    )
 
 def base64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b'=').decode('utf-8')

@@ -3171,6 +3171,154 @@ Word formation
 | **touch** | verb | /tʌtʃ/ | chạm vào | Don't touch the oven. | Đừng chạm vào cái lò nướng. |
 | **feel** | verb | /fiːl/ | sờ, cảm nhận | Just feel my feet. | Hãy thử sờ vào chân tôi xem. |
 
+# Topic: Words and grammar
+
+## Unit 86: Uncountable nouns
+
+### A. Common uncountable nouns & B. Uncountable nouns in dictionaries
+| collocation / từ vựng | từ loại | phiên âm (US) | nghĩa | ví dụ | nghĩa tiếng việt của ví dụ |
+| --- | --- | --- | --- | --- | --- |
+| **rubbish** | noun | /ˈrʌb.ɪʃ/ | rác rưởi | You can put all that rubbish in the bin over there. | Bạn có thể bỏ tất cả đống rác đó vào cái thùng đằng kia. |
+| **news** | noun | /nuːz/ | tin tức | Is there any more news about the man who was injured? | Có thêm tin tức gì về người đàn ông bị thương không? |
+| **advice** | noun | /ədˈvaɪs/ | lời khuyên | She gave me some good advice about buying a car. | Cô ấy đã cho tôi vài lời khuyên hay về việc mua xe hơi. |
+| **pocket money** | noun phrase | /ˈpɑː.kɪt ˈmʌn.i/ | tiền tiêu vặt | Do the children get pocket money? | Bọn trẻ có được cho tiền tiêu vặt không? |
+| **equipment** | noun | /ɪˈkwɪp.mənt/ | trang thiết bị | You need a lot of equipment for camping. | Bạn cần rất nhiều trang thiết bị để đi cắm trại. |
+| **furniture** | noun | /ˈfɝː.nɪ.tʃɚ/ | đồ nội thất | We sold the furniture. | Chúng tôi đã bán đồ nội thất. |
+| **scenery** | noun | /ˈsiː.nɚ.i/ | phong cảnh | The scenery is really beautiful. | Phong cảnh thực sự rất đẹp. |
+| **knowledge** | noun | /ˈnɑː.lɪdʒ/ | kiến thức | My knowledge of Russian is limited. | Kiến thức tiếng Nga của tôi có giới hạn. |
+| **make progress** | phrase | /meɪk ˈprɑː.ɡres/ | tiến bộ | She's worked very hard and I believe she is making progress. | Cô ấy đã làm việc rất chăm chỉ và tôi tin là cô ấy đang tiến bộ. |
+| **room** | noun | /ruːm/ | chỗ trống, không gian | We haven't got any room in our car. | Chúng tôi không còn chỗ trống nào trong xe hơi. |
+| **toast** | noun | /toʊst/ | bánh mì nướng | Would anyone like some more toast? | Có ai muốn thêm chút bánh mì nướng không? |
+| **behaviour** | noun | /bɪˈheɪ.vjɚ/ | hành vi, cách cư xử | The children's behaviour was terrible. | Hành vi của bọn trẻ thật tệ. |
+| **experience** | noun | /ɪkˈspɪr.i.əns/ | kinh nghiệm (không đếm được) / trải nghiệm (đếm được) | She's got a lot of experience of working with children. / I had so many fantastic experiences. | Cô ấy có nhiều kinh nghiệm làm việc với trẻ em. / Tôi đã có rất nhiều trải nghiệm tuyệt vời. |
+| **chance** | noun | /tʃæns/ | sự may rủi (không đếm được) / cơ hội (đếm được) | Lotto is a game of chance. / He's had several chances to go abroad. | Xổ số là một trò chơi may rủi. / Anh ấy đã có vài cơ hội ra nước ngoài. |
+
+---
+
+## Unit 87: Verb constructions 1
+
+### A, B & C. Verb constructions
+| collocation / từ vựng | từ loại | phiên âm (US) | nghĩa | ví dụ | nghĩa tiếng việt của ví dụ |
+| --- | --- | --- | --- | --- | --- |
+| **enjoy (+ -ing)** | verb | /ɪnˈdʒɔɪ/ | thích thú, tận hưởng | Do you enjoy studying? | Bạn có thích việc học không? |
+| **mind (+ -ing)** | verb | /maɪnd/ | bận tâm, phiền | Do you mind getting up early? | Bạn có ngại dậy sớm không? |
+| **dislike (+ -ing)** | verb | /dɪsˈlaɪk/ | không thích | Do you like or dislike having your photograph taken? | Bạn thích hay không thích việc bị chụp ảnh? |
+| **avoid (+ -ing)** | verb | /əˈvɔɪd/ | tránh | Do you usually avoid speaking to strangers at parties? | Bạn có thường tránh nói chuyện với người lạ ở các bữa tiệc không? |
+| **imagine (+ -ing)** | verb | /ɪˈmædʒ.ɪn/ | tưởng tượng | Can you imagine being without a car? | Bạn có thể tưởng tượng việc không có xe hơi không? |
+| **consider (+ -ing)** | verb | /kənˈsɪd.ɚ/ | cân nhắc, xem xét | Have you ever considered living in another country? | Bạn đã bao giờ cân nhắc việc sống ở một quốc gia khác chưa? |
+| **recommend (+ -ing)** | verb | /ˌrek.əˈmend/ | khuyên, giới thiệu | Would you recommend having a holiday in the capital city? | Bạn có khuyên nên đi nghỉ mát ở thành phố thủ đô không? |
+| **suggest (+ -ing)** | verb | /səˈdʒest/ | gợi ý, đề nghị | I would suggest going in spring. | Tôi đề nghị nên đi vào mùa xuân. |
+| **hope (+ to inf)** | verb | /hoʊp/ | hy vọng | I hope to see them next week. | Tôi hy vọng sẽ gặp họ vào tuần tới. |
+| **agree (+ to inf)** | verb | /əˈɡriː/ | đồng ý | They agreed to help me. | Họ đã đồng ý giúp tôi. |
+| **intend (+ to inf)** | verb | /ɪnˈtend/ | dự định | I intend to leave next month. | Tôi dự định sẽ rời đi vào tháng tới. |
+| **offer (+ to inf)** | verb | /ˈɑː.fɚ/ | đề nghị (giúp đỡ) | I offered to help them. | Tôi đã đề nghị giúp đỡ họ. |
+| **attempt (+ to inf)** | verb | /əˈtempt/ | nỗ lực, cố gắng | I attempted to cook the dinner, but it was terrible. | Tôi đã cố gắng nấu bữa tối, nhưng nó thật tệ. |
+| **promise (+ to inf)** | verb | /ˈprɑː.mɪs/ | hứa | I promised to bring her book back. | Tôi đã hứa sẽ mang sách của cô ấy trả lại. |
+| **demand (+ to inf)** | verb | /dɪˈmænd/ | yêu cầu | I demanded to see the manager. | Tôi đã yêu cầu được gặp quản lý. |
+| **ask for** | phrasal verb | /æsk fɔːr/ | xin, yêu cầu | Jo has just rung and asked me for advice. | Jo vừa gọi và xin tôi lời khuyên. |
+| **think of (+ -ing)** | phrasal verb | /θɪŋk əv/ | nghĩ về việc (có ý định) | They're thinking of going there. | Họ đang nghĩ đến việc đi tới đó. |
+| **blame sb for sth** | phrase | /bleɪm ... fɔːr/ | đổ lỗi cho ai về việc gì | They blamed you for the terrible holiday. | Họ đổ lỗi cho bạn về kỳ nghỉ tồi tệ. |
+| **insist on (+ -ing)** | phrasal verb | /ɪnˈsɪst ɑːn/ | khăng khăng | They insisted on going in the summer. | Họ khăng khăng đòi đi vào mùa hè. |
+
+---
+
+## Unit 88: Verb constructions 2
+
+### A & B. Verb constructions
+| collocation / từ vựng | từ loại | phiên âm (US) | nghĩa | ví dụ | nghĩa tiếng việt của ví dụ |
+| --- | --- | --- | --- | --- | --- |
+| **advise sb to do sth** | phrase | /ədˈvaɪz/ | khuyên ai đó làm gì | My best friend advised me to go. | Bạn thân nhất của tôi khuyên tôi nên đi. |
+| **persuade sb to do sth** | phrase | /pɚˈsweɪd/ | thuyết phục ai đó làm gì | He didn't try and persuade me not to go. | Ông ấy đã không cố thuyết phục tôi đừng đi. |
+| **warn sb (that/not to)** | phrase | /wɔːrn/ | cảnh báo ai đó | He warned me that it would be hard work. | Ông ấy cảnh báo tôi rằng đó sẽ là công việc vất vả. |
+| **remind sb (that/to do)** | phrase | /rɪˈmaɪnd/ | nhắc nhở ai đó | He reminded me that it was only three months. | Ông ấy nhắc nhở tôi rằng đó chỉ là ba tháng. |
+| **realise (that)** | phrase | /ˈriː.ə.laɪz/ | nhận ra | I realised that my girlfriend wasn't happy about it. | Tôi nhận ra rằng bạn gái tôi không vui về điều đó. |
+| **promise (sb) (that)** | phrase | /ˈprɑː.mɪs/ | hứa (với ai đó) | I promised her that I would phone every day. | Tôi đã hứa với cô ấy rằng tôi sẽ gọi điện mỗi ngày. |
+| **suggest (that)** | phrase | /səˈdʒest/ | gợi ý | I suggested that she could come out to Italy. | Tôi gợi ý rằng cô ấy có thể sang Ý. |
+| **mention (that)** | phrase | /ˈmen.ʃən/ | đề cập | I didn't mention that I was part of a small team. | Tôi đã không đề cập rằng tôi là một phần của nhóm nhỏ. |
+| **expect (that)** | phrase | /ɪkˈspekt/ | mong đợi | I expect that he'll ring us later. | Tôi mong là anh ấy sẽ gọi cho chúng ta sau. |
+| **convince sb (that)** | phrase | /kənˈvɪns/ | thuyết phục ai (tin vào điều gì) | He tried to convince me that I needed some new clothes. | Anh ấy đã cố thuyết phục tôi tin rằng tôi cần quần áo mới. |
+| **encourage sb to do sth** | phrase | /ɪnˈkɝː.ɪdʒ/ | khuyến khích ai làm gì | My parents encouraged me to read. | Bố mẹ khuyến khích tôi đọc sách. |
+
+---
+
+## Unit 89: Adjectives
+
+### A. Extreme adjectives & B. Adjectives ending in -ing and -ed
+| collocation / từ vựng | từ loại | phiên âm (US) | nghĩa | ví dụ | nghĩa tiếng việt của ví dụ |
+| --- | --- | --- | --- | --- | --- |
+| **marvellous** | adjective | /ˈmɑːr.vəl.əs/ | tuyệt vời | The weather was marvellous. | Thời tiết thật tuyệt vời. |
+| **awful** | adjective | /ˈɑː.fəl/ | tồi tệ, kinh khủng | Don't go and see that film – it's awful. | Đừng đi xem bộ phim đó – nó dở tệ. |
+| **delighted** | adjective | /dɪˈlaɪ.t̬ɪd/ | rất vui, hài lòng | I was delighted she passed her exam. | Tôi rất vui mừng vì cô ấy đã vượt qua kỳ thi. |
+| **tiny** | adjective | /ˈtaɪ.ni/ | nhỏ xíu | It's a nice modern flat, but it's absolutely tiny. | Đó là một căn hộ hiện đại đẹp, nhưng nhỏ xíu. |
+| **huge / enormous** | adjective | /hjuːdʒ/ / /əˈnɔːr.məs/ | khổng lồ, to lớn | They gave us a huge meal. | Họ đã cho chúng tôi một bữa ăn khổng lồ. |
+| **fascinating** | adjective | /ˈfæs.ən.eɪ.tɪŋ/ | cực kỳ thú vị | You'll find it absolutely fascinating. | Bạn sẽ thấy nó cực kỳ thú vị. |
+| **exhausted** | adjective | /ɪɡˈzɑː.stɪd/ | kiệt sức | Everyone was really exhausted by the end of the day. | Mọi người đều thực sự kiệt sức vào cuối ngày. |
+| **terrifying** | adjective | /ˈter.ə.faɪ.ɪŋ/ | đáng sợ | Bungee jumping is the most terrifying thing I've ever done. | Nhảy bungee là điều đáng sợ nhất tôi từng làm. |
+| **essential** | adjective | /ɪˈsen.ʃəl/ | thiết yếu, vô cùng quan trọng | Computers are an essential part of modern life. | Máy tính là một phần thiết yếu của cuộc sống hiện đại. |
+| **delicious** | adjective | /dɪˈlɪʃ.əs/ | cực kỳ ngon | The food was delicious. | Thức ăn rất ngon miệng. |
+| **bored / boring** | adjective | /bɔːrd/ / /ˈbɔːr.ɪŋ/ | buồn chán / gây chán nản | I don't know if other people were bored, but I thought it was a very boring lesson. | Tôi không biết những người khác có chán không, nhưng tôi thấy đó là một bài học rất tẻ nhạt. |
+| **depressed / depressing** | adjective | /dɪˈprest/ / /dɪˈpres.ɪŋ/ | chán nản / gây chán nản | The weather is so depressing... it's making everyone feel depressed. | Thời tiết thật ảm đạm... nó khiến mọi người cảm thấy chán nản. |
+| **tiring** | adjective | /ˈtaɪr.ɪŋ/ | gây mệt mỏi | It was really tiring going up that hill. | Thật sự rất mệt mỏi khi đi lên ngọn đồi đó. |
+| **amazed** | adjective | /əˈmeɪzd/ | kinh ngạc | I was amazed she could climb that wall. | Tôi đã rất ngạc nhiên khi cô ấy có thể leo lên bức tường đó. |
+| **disappointing** | adjective | /ˌdɪs.əˈpɔɪn.tɪŋ/ | đáng thất vọng | My exam results were very disappointing. | Kết quả thi của tôi rất đáng thất vọng. |
+| **annoyed** | adjective | /əˈnɔɪd/ | bực mình | She was annoyed that I forgot to tell her. | Cô ấy bực mình vì tôi quên nói với cô ấy. |
+| **embarrassed** | adjective | /ɪmˈber.əst/ | xấu hổ, bối rối | I was embarrassed when Ben told me her name was Angela. | Tôi đã bối rối khi Ben nói cho tôi biết tên cô ấy là Angela. |
+| **confusing** | adjective | /kənˈfjuː.zɪŋ/ | gây bối rối, khó hiểu | The map he gave us was very confusing. | Tấm bản đồ anh ấy đưa cho chúng tôi rất khó hiểu. |
+| **shocked** | adjective | /ʃɑːkt/ | bị sốc | We were shocked by the violence in the film. | Chúng tôi bị sốc vì bạo lực trong bộ phim. |
+
+---
+
+## Unit 90: Prepositions: place and movement
+
+### A, B & C. Prepositions of place and movement
+| collocation / từ vựng | từ loại | phiên âm (US) | nghĩa | ví dụ | nghĩa tiếng việt của ví dụ |
+| --- | --- | --- | --- | --- | --- |
+| **at** | preposition | /æt/ | ở, tại (một điểm, vị trí) | I met her at the bus stop. | Tôi gặp cô ấy ở trạm xe buýt. |
+| **on** | preposition | /ɑːn/ | trên (bề mặt) | The book's on the desk. | Cuốn sách ở trên bàn. |
+| **in** | preposition | /ɪn/ | trong (khu vực, không gian) | He's in the kitchen. | Anh ấy đang ở trong nhà bếp. |
+| **beyond** | preposition | /biˈjɑːnd/ | phía bên kia | Their house is beyond the farm. | Nhà của họ ở phía bên kia trang trại. |
+| **by / beside** | preposition | /baɪ/ / /bɪˈsaɪd/ | kế bên, cạnh | They've just bought a house beside/by the river. | Họ vừa mua một ngôi nhà ngay cạnh sông. |
+| **above** | preposition | /əˈbʌv/ | phía trên | Their office is above the shop. | Văn phòng của họ ở phía trên cửa hàng. |
+| **below** | preposition | /bɪˈloʊ/ | phía dưới | Their office is above the shop (opp below). | Văn phòng của họ ở phía trên cửa hàng (trái nghĩa với phía dưới). |
+| **before** | preposition | /bɪˈfɔːr/ | trước | I'm sure there's a chemist on the left before the bank. | Tôi chắc chắn có một hiệu thuốc bên trái trước ngân hàng. |
+| **against** | preposition | /əˈɡenst/ | tựa vào, dựa vào | I saw your bike in the back garden against the wall. | Tôi thấy xe đạp của bạn ở khu vườn phía sau tựa vào tường. |
+| **beneath / underneath** | preposition | /bɪˈniːθ/ / /ˌʌn.dɚˈniːθ/ | bên dưới | I found your phone on the sofa beneath/underneath a pile of cushions. | Tôi thấy điện thoại của bạn trên ghế sofa bên dưới một đống gối tựa. |
+| **among** | preposition | /əˈmʌŋ/ | ở giữa (nhiều thứ) | You can just see the top of the building among the trees. | Bạn chỉ có thể nhìn thấy nóc tòa nhà ở giữa những cái cây. |
+| **out of** | preposition | /aʊt əv/ | ra khỏi | The mouse ran out of the back door. | Con chuột chạy ra khỏi cửa sau. |
+| **towards** | preposition | /tɔːrdz/ | hướng về phía | The mouse ran... towards the gate. | Con chuột chạy... hướng về phía cổng. |
+| **down** | preposition | /daʊn/ | xuống | The mouse... disappeared down a hole. | Con chuột... biến mất xuống một cái lỗ. |
+| **over** | preposition | /ˈoʊ.vɚ/ | qua, vòng qua | We came over the bridge. | Chúng tôi đi qua cây cầu. |
+| **through** | preposition | /θruː/ | xuyên qua | We came over the bridge, then through the tunnel. | Chúng tôi qua cầu, rồi xuyên qua đường hầm. |
+| **round** | preposition | /raʊnd/ | vòng quanh | ...and round the lake. | ...và đi vòng quanh hồ. |
+| **after** | preposition | /ˈæf.tɚ/ | theo sau, rượt theo | The woman came after us. | Người phụ nữ chạy đuổi theo chúng tôi. |
+| **past** | preposition | /pæst/ | ngang qua | Fortunately she went past the van and didn't see us. | Thật may là cô ấy đi ngang qua xe tải và không thấy chúng tôi. |
+
+---
+
+## Unit 91: Adverbs
+
+### A, B & C. Adverbs
+| collocation / từ vựng | từ loại | phiên âm (US) | nghĩa | ví dụ | nghĩa tiếng việt của ví dụ |
+| --- | --- | --- | --- | --- | --- |
+| **occasionally** | adverb | /əˈkeɪ.ʒən.əl.i/ | thỉnh thoảng | I occasionally go to the theatre. | Thỉnh thoảng tôi đi xem kịch. |
+| **hardly ever** | adverb | /ˈhɑːrd.li ˈev.ɚ/ | hầu như không bao giờ | She hardly ever plays tennis now. | Bây giờ cô ấy hầu như không bao giờ chơi quần vợt. |
+| **frequently** | adverb | /ˈfriː.kwənt.li/ | thường xuyên | We see them quite frequently. | Chúng tôi gặp họ khá thường xuyên. |
+| **rarely / seldom** | adverb | /ˈrer.li/ / /ˈsel.dəm/ | hiếm khi | He rarely works at weekends. | Anh ấy hiếm khi làm việc vào cuối tuần. |
+| **slightly** | adverb | /ˈslaɪt.li/ | hơi, một chút | She was slightly nervous. | Cô ấy hơi lo lắng. |
+| **fairly** | adverb | /ˈfer.li/ | khá | The food was fairly boring. | Đồ ăn khá tẻ nhạt. |
+| **rather** | adverb | /ˈræð.ɚ/ | khá là | I was rather annoyed I missed the film. | Tôi khá bực mình vì đã lỡ bộ phim. |
+| **pretty** | adverb | /ˈprɪt̬.i/ | khá | The weather was pretty good. | Thời tiết khá tốt. |
+| **completely / totally** | adverb | /kəmˈpliːt.li/ / /ˈtoʊ.t̬əl.i/ | hoàn toàn | I totally/completely agree with you. | Tôi hoàn toàn đồng ý với bạn. |
+| **extremely** | adverb | /ɪkˈstriːm.li/ | cực kỳ | We had an extremely interesting trip. | Chúng tôi đã có một chuyến đi cực kỳ thú vị. |
+| **incredibly** | adverb | /ɪnˈkred.ə.bli/ | đáng kinh ngạc, cực kỳ | It's an incredibly good book. | Đó là một cuốn sách cực kỳ hay. |
+| **secretly** | adverb | /ˈsiː.krət.li/ | một cách bí mật | Nora had secretly put all of the letters into her bag. | Nora đã bí mật bỏ tất cả các bức thư vào túi của cô ấy. |
+| **suddenly** | adverb | /ˈsʌd.ən.li/ | đột nhiên | I suddenly realised I wasn't alone. | Đột nhiên tôi nhận ra mình không ở một mình. |
+| **urgently** | adverb | /ˈɝː.dʒənt.li/ | khẩn cấp | Penelope was in pain, and I could see she needed help urgently. | Penelope đang bị đau, và tôi thấy cô ấy cần giúp đỡ khẩn cấp. |
+| **briefly** | adverb | /ˈbriːf.li/ | một cách ngắn gọn | I spoke to Charles briefly this morning. | Tôi đã nói chuyện ngắn gọn với Charles sáng nay. |
+| **quietly** | adverb | /ˈkwaɪ.ət.li/ | một cách yên lặng | I went in and shut the door quietly. | Tôi bước vào và đóng cửa lại một cách nhẹ nhàng. |
+| **politely** | adverb | /pəˈlaɪt.li/ | một cách lịch sự | I asked him very politely. | Tôi đã yêu cầu anh ấy rất lịch sự. |
+| **angrily** | adverb | /ˈæŋ.ɡrə.li/ | một cách tức giận | He reacted quite angrily and walked off. | Anh ấy phản ứng khá tức giận và bỏ đi. |
+
 # Topic: Connecting and linking
 
 ## Unit 92: Time and sequence

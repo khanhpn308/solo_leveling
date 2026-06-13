@@ -764,12 +764,41 @@ export function buildSuggestionInbox(rankSuggestions = [], weaknessSuggestions =
 
   // Keep only the most recent suggestion per (skill, type)
   const seen = new Set()
-  return sorted.filter((item) => {
+  const deduped = sorted.filter((item) => {
     const dedupKey = `${item.type}-${item.skillId}`
     if (seen.has(dedupKey)) return false
     seen.add(dedupKey)
     return true
   })
+
+  // Boss promotion items (replaces the old floating RankBossNotif). One action
+  // button per state; no Dismiss. Prepended so they sit at the top of the inbox.
+  const BOSS_META = {
+    eligible: { actionLabel: 'Unlock Boss', detail: (s) => `Rank ${s.confirmed_rank} → ${s.pending_rank} promotion available.` },
+    boss_required: { actionLabel: 'Start Exam', detail: (s) => `Boss Exam ready — Rank ${s.confirmed_rank} → ${s.pending_rank}.` },
+    in_progress: { actionLabel: 'Resume Exam', detail: () => 'Exam in progress — resume before time runs out.' },
+  }
+  const bossItems = skills
+    .filter((s) => ['eligible', 'boss_required', 'in_progress'].includes(s.promotion_status))
+    .map((s) => {
+      const meta = BOSS_META[s.promotion_status]
+      return {
+        key: `boss-${s.id}`,
+        id: s.id,
+        type: 'boss',
+        bossState: s.promotion_status,
+        skillId: s.id,
+        skillName: s.name,
+        skillObj: s,
+        title: `Rank ${s.confirmed_rank ?? ''} → ${s.pending_rank ?? ''} promotion`,
+        detail: meta.detail(s),
+        actionLabel: meta.actionLabel,
+        severity: 'high',
+        status: 'pending',
+      }
+    })
+
+  return [...bossItems, ...deduped]
 }
 
 export function filterCertificateRecords(records = []) {

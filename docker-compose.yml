@@ -28,6 +28,8 @@ services:
       APP_START_DATE: "2026-06-04"
       MATERIAL_PLAN_PATH: /app/material.md
       CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://18.141.232.235:5173"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:-dev-local-secret-change-me}"
+      ENABLE_DEV_ENDPOINTS: "${ENABLE_DEV_ENDPOINTS:-true}"
       PYTHONUNBUFFERED: "1"
     ports:
       - "8000:8000"

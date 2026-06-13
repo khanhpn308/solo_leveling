@@ -516,6 +516,7 @@ class CampaignSkillState(Base):
     campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"))
     skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id"))
     xp: Mapped[int] = mapped_column(Integer, default=0)
+    manual_xp_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     rank: Mapped[str] = mapped_column(String(2), default="F")
     confirmed_rank: Mapped[str] = mapped_column(String(2), default="F")
     level: Mapped[int] = mapped_column(Integer, default=1)

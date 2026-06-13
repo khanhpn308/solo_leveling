@@ -88,6 +88,8 @@ from .schemas import (
     CampaignOut,
     CheckInIn,
     CheckInOut,
+    TestXpSkillOut,
+    TestXpAwardIn,
     ErrorLogIn,
     ErrorLogOut,
     MockTestIn,
@@ -194,7 +196,6 @@ from .services import (
     ensure_weakness_suggestions,
     estimate_band_from_mock,
     get_active_campaign,
-    get_active_player,
     get_campaign_skill_state_map,
     MATRIX_SKILLS,
     SUPPORT_ROUTING,
@@ -253,6 +254,26 @@ def get_current_account(
             detail="Account is inactive"
         )
     return account
+
+
+# Test-only XP tool: gated to the seed account.
+TEST_ACCOUNT_EMAIL = "ad00000@gmail.com"
+
+
+def require_test_account(account: Account = Depends(get_current_account)) -> Account:
+    if account.email_normalized != TEST_ACCOUNT_EMAIL:
+        raise HTTPException(status_code=403, detail="Test tools are restricted to the seed account")
+    return account
+
+
+# Dev endpoints (reset / migrate / regenerate / test-xp) are disabled by default.
+# Enable only on trusted dev environments via ENABLE_DEV_ENDPOINTS=true.
+ENABLE_DEV_ENDPOINTS = os.getenv("ENABLE_DEV_ENDPOINTS", "").lower() in ("1", "true", "yes")
+
+
+def require_dev_enabled() -> None:
+    if not ENABLE_DEV_ENDPOINTS:
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 def get_current_player(
@@ -412,20 +433,6 @@ def get_campaign_badge_outputs(db: Session, player: Player, campaign: Campaign) 
         )
         for badge in badges
     ]
-
-
-def get_player_or_404(db: Session) -> Player:
-    try:
-        return get_active_player(db)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-def get_campaign_or_404(db: Session, player: Player | None = None) -> Campaign:
-    try:
-        return get_active_campaign(db, player)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.on_event("startup")
@@ -1495,7 +1502,7 @@ def post_dismiss_weakness_suggestion(suggestion_id: int, campaign: Campaign = De
     return dismiss_weakness_suggestion(db, suggestion)
 
 
-@app.post("/api/dev/reset")
+@app.post("/api/dev/reset", dependencies=[Depends(require_dev_enabled)])
 def reset_database(db: Session = Depends(get_db)):
     from sqlalchemy import text
     db.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
@@ -1584,7 +1591,7 @@ def reset_database(db: Session = Depends(get_db)):
     return {"status": "reset", "message": "Database has been reset and seeded again.", "quest_templates": template_count, "weekly_missions": weekly_count}
 
 
-@app.post("/api/dev/run_migrations")
+@app.post("/api/dev/run_migrations", dependencies=[Depends(require_dev_enabled)])
 def run_migrations(db: Session = Depends(get_db)):
     """Run Alembic migrations (dev-only)."""
     try:
@@ -1593,6 +1600,76 @@ def run_migrations(db: Session = Depends(get_db)):
         return {"status": "ok", "message": "Migrations applied (head)."}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# --- Test XP Tool (seed account ad00000@gmail.com only) ---
+
+@app.get("/api/dev/test-xp/skills", response_model=list[TestXpSkillOut], dependencies=[Depends(require_dev_enabled)])
+def get_test_xp_skills(
+    account: Account = Depends(require_test_account),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """List every skill with its current xp + manual_xp_bonus for the test panel."""
+    refresh_progress_state(db)
+    rows = (
+        db.query(CampaignSkillState, Skill)
+        .join(Skill, Skill.id == CampaignSkillState.skill_id)
+        .filter(CampaignSkillState.campaign_id == campaign.id)
+        .order_by(Skill.id)
+        .all()
+    )
+    return [
+        TestXpSkillOut(
+            skill_id=state.skill_id,
+            name=skill.name,
+            xp=state.xp or 0,
+            manual_xp_bonus=state.manual_xp_bonus or 0,
+            rank=state.rank,
+            level=state.level,
+        )
+        for state, skill in rows
+    ]
+
+
+@app.post("/api/dev/test-xp/award", response_model=TestXpSkillOut, dependencies=[Depends(require_dev_enabled)])
+def award_test_xp(
+    payload: TestXpAwardIn,
+    account: Account = Depends(require_test_account),
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Add `delta` to a skill's manual_xp_bonus (floor 0), or reset it to 0.
+    Survives refresh_progress_state via recompute_skill_progress."""
+    state = (
+        db.query(CampaignSkillState)
+        .filter(
+            CampaignSkillState.campaign_id == campaign.id,
+            CampaignSkillState.skill_id == payload.skill_id,
+        )
+        .first()
+    )
+    if not state:
+        raise HTTPException(status_code=404, detail="Skill state not found for this campaign")
+
+    if payload.reset:
+        state.manual_xp_bonus = 0
+    else:
+        state.manual_xp_bonus = max(0, (state.manual_xp_bonus or 0) + payload.delta)
+    db.flush()
+    refresh_progress_state(db, player, campaign)
+    db.refresh(state)
+
+    skill = db.query(Skill).filter(Skill.id == state.skill_id).first()
+    return TestXpSkillOut(
+        skill_id=state.skill_id,
+        name=skill.name if skill else "",
+        xp=state.xp or 0,
+        manual_xp_bonus=state.manual_xp_bonus or 0,
+        rank=state.rank,
+        level=state.level,
+    )
 
 
 # --- Rank Exam Routes ---
@@ -1621,9 +1698,58 @@ def unlock_rank_exam(payload: RankExamStartIn, campaign: Campaign = Depends(get_
     return {"skill_id": payload.skill_id, "promotion_status": "boss_required", "pending_rank": state.pending_rank}
 
 
+def _resume_in_progress_exam(db: Session, campaign: Campaign, state: CampaignSkillState) -> RankExamStartOut | None:
+    """Return the live in-progress attempt for a skill as a RankExamStartOut, or None
+    if no resumable attempt exists. Prefers the attempt the state points at, else the
+    most recent in_progress one. Used so "Resume Exam" re-opens the running exam."""
+    attempt = None
+    if getattr(state, "last_rank_exam_attempt_id", None):
+        attempt = db.query(RankExamAttempt).filter(
+            RankExamAttempt.id == state.last_rank_exam_attempt_id,
+            RankExamAttempt.campaign_id == campaign.id,
+            RankExamAttempt.status == "in_progress",
+        ).first()
+    if not attempt:
+        attempt = (
+            db.query(RankExamAttempt)
+            .filter(
+                RankExamAttempt.campaign_id == campaign.id,
+                RankExamAttempt.skill_id == state.skill_id,
+                RankExamAttempt.status == "in_progress",
+            )
+            .order_by(RankExamAttempt.started_at.desc(), RankExamAttempt.id.desc())
+            .first()
+        )
+    if not attempt:
+        return None
+
+    questions = db.query(RankExamQuestion).filter(
+        RankExamQuestion.exam_version_id == attempt.exam_version_id,
+    ).order_by(RankExamQuestion.order_index).all()
+
+    return RankExamStartOut(
+        attempt_id=attempt.id,
+        skill_id=attempt.skill_id,
+        from_rank=attempt.from_rank,
+        to_rank=attempt.to_rank,
+        time_limit_minutes=attempt.time_limit_minutes,
+        expires_at=attempt.expires_at,
+        questions=[
+            RankExamQuestionOut(
+                id=q.id,
+                question_type=q.question_type,
+                prompt=q.prompt,
+                instruction=q.instruction,
+                options_json=q.options_json,
+            ) for q in questions
+        ],
+    )
+
+
 @app.post("/api/rank-exams/start", response_model=RankExamStartOut)
 def start_rank_exam(payload: RankExamStartIn, campaign: Campaign = Depends(get_current_campaign), db: Session = Depends(get_db)):
-    """Transition boss_required -> in_progress. Creates exam attempt, enforces 2/day cap."""
+    """Transition boss_required -> in_progress. Creates exam attempt, enforces 2/day cap.
+    If the skill is already in_progress, resumes (returns the live attempt) instead of erroring."""
 
     state = db.query(CampaignSkillState).filter(
         CampaignSkillState.campaign_id == campaign.id,
@@ -1631,6 +1757,16 @@ def start_rank_exam(payload: RankExamStartIn, campaign: Campaign = Depends(get_c
     ).first()
     if not state:
         raise HTTPException(status_code=404, detail="Skill state not found")
+
+    # Resume: an exam already in progress returns its current attempt instead of
+    # erroring, so the "Resume Exam" action can re-open the live exam screen.
+    if state.promotion_status == "in_progress":
+        resume = _resume_in_progress_exam(db, campaign, state)
+        if resume is not None:
+            return resume
+        # No live attempt found despite the in_progress flag — fall through and
+        # treat it as a fresh start (defensive; keeps the skill unblockable).
+
     if state.promotion_status != "boss_required":
         raise HTTPException(status_code=400, detail=f"Exam not unlocked for this skill (current: {state.promotion_status})")
     if not state.pending_rank or not state.confirmed_rank:
@@ -1874,11 +2010,13 @@ def submit_rank_exam(attempt_id: int, payload: RankExamSubmitIn, player: Player 
     )
 
 
-@app.post("/api/dev/regenerate-quests")
-def regenerate_quests(db: Session = Depends(get_db)):
-    """Re-run daily quest generator for the active campaign without resetting the DB (dev-only)."""
-    player = get_player_or_404(db)
-    campaign = services.get_active_campaign(db, player)
+@app.post("/api/dev/regenerate-quests", dependencies=[Depends(require_dev_enabled)])
+def regenerate_quests(
+    player: Player = Depends(get_current_player),
+    campaign: Campaign = Depends(get_current_campaign),
+    db: Session = Depends(get_db),
+):
+    """Re-run daily quest generator for the logged-in user's active campaign (dev-only)."""
     skill_by_name = ensure_skills(db)
     phase_by_code = ensure_roadmap_phases(db, campaign)
     material_by_title = {m.title: m for m in db.query(StudyMaterial).all()}

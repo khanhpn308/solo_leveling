@@ -740,7 +740,7 @@ def recompute_skill_progress(db: Session, campaign: Campaign, state: CampaignSki
     if skill_name == "Vocabulary":
         vocab_xp = compute_vocabulary_xp(db, campaign.player_id)
 
-    state.xp = int(earned) + int(routed_earned) + vocab_xp
+    state.xp = int(earned) + int(routed_earned) + vocab_xp + int(state.manual_xp_bonus or 0)
     # Ensure XP never drops below the confirmed_rank minimum (from certificate apply)
     confirmed_min_xp = 0
     try:

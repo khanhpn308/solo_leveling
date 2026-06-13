@@ -61,20 +61,33 @@ function SuggestionInboxDropdown({
                           <span>{item.detail}</span>
                         </div>
                         <div className="suggestion-actions">
-                          <button
-                            type="button"
-                            disabled={Boolean(pendingByKey[item.key])}
-                            onClick={() => onApply(item)}
-                          >
-                            {pendingByKey[item.key] === 'apply' ? 'Applying...' : 'Apply'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={Boolean(pendingByKey[item.key])}
-                            onClick={() => onDismiss(item)}
-                          >
-                            {pendingByKey[item.key] === 'dismiss' ? 'Dismissing...' : 'Dismiss'}
-                          </button>
+                          {item.type === 'boss' ? (
+                            <button
+                              type="button"
+                              className="suggestion-action--boss"
+                              disabled={Boolean(pendingByKey[item.key])}
+                              onClick={() => onApply(item)}
+                            >
+                              {pendingByKey[item.key] === 'apply' ? 'Working...' : item.actionLabel}
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                disabled={Boolean(pendingByKey[item.key])}
+                                onClick={() => onApply(item)}
+                              >
+                                {pendingByKey[item.key] === 'apply' ? 'Applying...' : 'Apply'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={Boolean(pendingByKey[item.key])}
+                                onClick={() => onDismiss(item)}
+                              >
+                                {pendingByKey[item.key] === 'dismiss' ? 'Dismissing...' : 'Dismiss'}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </article>
                     ))}

@@ -38,6 +38,33 @@ Local URLs:
 - MySQL host: `localhost`
 - MySQL port: `3307`
 
+## Deploy / Environment
+
+The backend reads configuration from environment variables (see [`.env.example`](.env.example)).
+
+**`JWT_SECRET_KEY` is required — the app hard-fails on startup if it is unset** (no fallback;
+see `backend/app/auth_utils.py`). Generate a real secret before running on any shared/internet-facing
+host:
+
+```bash
+openssl rand -hex 32
+```
+
+Set it (and the other vars) in the environment that runs the backend — e.g. a root `.env` consumed by
+`docker compose`, or the host's secret store.
+
+| Variable | Required | Notes |
+|---|---|---|
+| `JWT_SECRET_KEY` | **Yes** | Signs JWTs. App refuses to boot if missing. Never commit the real value. |
+| `ENABLE_DEV_ENDPOINTS` | No (default off) | When `true`, exposes `/api/dev/*` (reset, run_migrations, regenerate-quests, test-xp). **Leave unset/off in production** — `/api/dev/reset` wipes the whole DB. |
+| `DATABASE_URL` | No (dev default) | MySQL DSN. |
+| `CORS_ORIGINS` | No | Comma-separated allowed origins. |
+| `APP_START_DATE` | No | Campaign start date. |
+
+The committed `docker-compose.yml` provides dev-only defaults (`JWT_SECRET_KEY` falls back to a
+throwaway value, `ENABLE_DEV_ENDPOINTS` defaults to `true`) so local dev boots without setup. **Do not
+reuse those defaults on a shared server** — set real values there.
+
 ## Context Load Order
 
 For a new engineering session, read files in this order:

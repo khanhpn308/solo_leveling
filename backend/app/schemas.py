@@ -1270,3 +1270,25 @@ class VocabFlashcardDueOut(VocabWordOut):
     level_name: str = ""
     topic_id: int = 0
     topic_title: str = ""
+
+
+# ── Test-only XP tool (seed account ad00000@gmail.com only) ──────────────────
+class TestXpSkillOut(BaseModel):
+    """A skill row for the test XP panel."""
+    skill_id: int
+    name: str
+    xp: int
+    manual_xp_bonus: int
+    rank: str
+    level: int
+
+    class Config:
+        from_attributes = True
+
+
+class TestXpAwardIn(BaseModel):
+    """Award test XP to a skill. delta is added to manual_xp_bonus (floor 0).
+    reset=True zeroes the manual bonus regardless of delta."""
+    skill_id: int
+    delta: int = 0
+    reset: bool = False

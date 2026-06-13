@@ -1,3 +1,9 @@
+import os
+# Test-only env: app.auth_utils hard-fails without JWT_SECRET_KEY. Must be set
+# before importing app.* below. Throwaway values, never used in production.
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key")
+os.environ.setdefault("ENABLE_DEV_ENDPOINTS", "true")
+
 import unittest
 from datetime import date, datetime, timedelta
 from sqlalchemy import create_engine

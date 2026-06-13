@@ -87,6 +87,10 @@ All schema changes go through Alembic (`backend/alembic/versions/`). Migration f
 - `docs/history/` = changelogs, test reports, migration notes, old plans, session notes.
 - Do not treat history docs as current truth unless a canonical doc points to them.
 
+## Code Reading
+
+**Always use codegraph when reading the codebase.** Before Read/Grep/Glob, query the codegraph MCP (`codegraph_explore` for an area/flow/"how does X work", `codegraph_search` to locate a symbol, `codegraph_node` for one symbol's full body, `codegraph_callers`/`codegraph_callees`/`codegraph_impact` for dependencies). It returns verbatim line-numbered source plus the call graph in one call — faster and more complete than manual file walking. Fall back to raw Read/Grep only to confirm a specific detail codegraph did not cover.
+
 ## Workflow
 
 1. **Ground the repo** — understand current state before editing.

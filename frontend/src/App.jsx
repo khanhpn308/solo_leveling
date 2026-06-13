@@ -6,7 +6,7 @@ import { unlockRankExam, startRankExam } from './api/rankExam'
 import HomeTopBar from './components/HomeTopBar'
 import NavigationDrawer from './components/NavigationDrawer'
 import OverlayShellFallback from './components/OverlayShellFallback'
-import RankBossNotif from './components/RankBossNotif'
+import TestXpPanel from './components/TestXpPanel'
 import RankExamScreen from './components/RankExamScreen'
 import RankExamResultScreen from './components/RankExamResultScreen'
 import RoadmapHero from './components/RoadmapHero'
@@ -136,7 +136,7 @@ function App() {
   const [isExamResultOpen, setIsExamResultOpen] = useState(false)
 
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { logout, account } = useAuth()
 
   const handleLogout = useCallback(async () => {
     await logout()
@@ -356,6 +356,15 @@ function App() {
     }, 2600)
 
     toastTimersRef.current.set(id, timer)
+  }
+
+  function dismissToast(id) {
+    const timer = toastTimersRef.current.get(id)
+    if (timer) {
+      window.clearTimeout(timer)
+      toastTimersRef.current.delete(id)
+    }
+    setToastQueue((current) => current.filter((toast) => toast.id !== id))
   }
 
   function markQuestRewardClaimed(quest) {
@@ -675,6 +684,26 @@ function App() {
     }
   }
 
+  // Inbox boss item action: route by state. eligible → unlock; otherwise start/resume exam.
+  async function handleBossInboxAction(item) {
+    if (suggestionPendingByKey[item.key]) return
+    setSuggestionPendingByKey((current) => ({ ...current, [item.key]: 'apply' }))
+    try {
+      if (item.bossState === 'eligible') {
+        await handleUnlockBoss(item.skillObj)
+      } else {
+        setIsInboxOpen(false)
+        await handleStartExam(item.skillObj)
+      }
+    } finally {
+      setSuggestionPendingByKey((current) => {
+        const next = { ...current }
+        delete next[item.key]
+        return next
+      })
+    }
+  }
+
   function handleExamResult(result) {
     setExamResult(result)
     setIsExamOpen(false)
@@ -797,7 +826,7 @@ function App() {
             onLoadData={() => loadInitialData({ transition: true, silent: true })}
           />
         </Suspense>
-        <ToastRack toasts={toastQueue} />
+        <ToastRack toasts={toastQueue} onDismiss={dismissToast} />
       </main>
     )
   }
@@ -844,7 +873,9 @@ function App() {
         suggestionPendingByKey={suggestionPendingByKey}
         onToggleInbox={() => setIsInboxOpen((current) => !current)}
         onCloseInbox={() => setIsInboxOpen(false)}
-        onApplySuggestion={(item) => handleSuggestionAction(item, 'apply')}
+        onApplySuggestion={(item) =>
+          item.type === 'boss' ? handleBossInboxAction(item) : handleSuggestionAction(item, 'apply')
+        }
         onDismissSuggestion={(item) => handleSuggestionAction(item, 'dismiss')}
         hasPendingClaims={pendingClaimCount > 0}
         onOpenNav={() => {
@@ -999,11 +1030,12 @@ function App() {
 
 
 
-      <RankBossNotif
-        skills={view?.skills ?? []}
-        onUnlock={handleUnlockBoss}
-        onStartExam={handleStartExam}
-      />
+      {account?.email === 'ad00000@gmail.com' && (
+        <TestXpPanel
+          hidden={isNavOpen || isExamOpen || isExamResultOpen || isStatusOpen || isQuestOpen || isBossOpen || isCertificateOpen}
+          onXpChange={() => loadInitialData({ transition: true, silent: true })}
+        />
+      )}
 
       <RankExamScreen
         open={isExamOpen}
@@ -1021,7 +1053,7 @@ function App() {
         onRetry={() => examSkill && handleStartExam(examSkill)}
       />
 
-      <ToastRack toasts={toastQueue} />
+      <ToastRack toasts={toastQueue} onDismiss={dismissToast} />
     </main>
   )
 }

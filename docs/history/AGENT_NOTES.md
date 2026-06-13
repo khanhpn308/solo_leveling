@@ -2,6 +2,12 @@
 
 Newest first.
 
+## 2026-06-11 - Test XP tool (seed account only)
+
+- New `CampaignSkillState.manual_xp_bonus` column (migration `20260611_23`). `recompute_skill_progress` (services.py:743) adds it into `state.xp` so manually-injected test XP survives `refresh_progress_state` (which otherwise recomputes xp purely from quests/vocab/routing — `award_skill_xp`'s direct `state.xp` write does NOT survive, that's why the column was needed).
+- Routes `GET/POST /api/dev/test-xp/...` gated by `require_test_account` (main.py) → 403 unless `account.email_normalized == "ad00000@gmail.com"` (`TEST_ACCOUNT_EMAIL`). Frontend `TestXpPanel` only renders for that email, but the server gate is the real protection.
+- To raise/lower a skill for testing: use the panel (delta add / reset) or `POST /api/dev/test-xp/award {skill_id, delta|reset}`. Manual bonus floors at 0.
+
 ## 2026-06-11 - Dependency note: react-router-dom v7.17.0
 
 - The frontend pins `react-router-dom: ^7.17.0` (`frontend/package.json`). The installed `react-router` core in `node_modules` is **v7.17.0** (its `CHANGELOG.md` is the upstream library log, not a project changelog — do not treat it as repo docs).

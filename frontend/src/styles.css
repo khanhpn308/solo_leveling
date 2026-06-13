@@ -819,7 +819,12 @@ select:focus-visible {
 }
 
 .support-panel strong {
+  display: block;
   margin-bottom: 8px;
+}
+
+.support-panel > span {
+  display: block;
 }
 
 .support-panel--button {
@@ -1789,6 +1794,14 @@ select:focus-visible {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
+/* Boss promotion action (moved from the old floating RankBossNotif) */
+.suggestion-action--boss {
+  border-color: rgba(244, 193, 93, 0.4) !important;
+  background: rgba(244, 193, 93, 0.14) !important;
+  color: #ffe1a6 !important;
+  font-weight: 700;
+}
+
 .tracker-node button {
   align-self: center;
 }
@@ -2478,14 +2491,17 @@ select:focus-visible {
   position: fixed;
   right: 22px;
   bottom: 20px;
-  z-index: 55;
+  /* Below the overlay/drawer shell (z-index 40) so toasts never cover an open
+     modal such as the Rank Exam screen, but above ordinary dashboard content. */
+  z-index: 39;
   display: grid;
   gap: 10px;
   width: min(360px, calc(100vw - 28px));
 }
 
 .toast-card {
-  padding: 12px 14px;
+  position: relative;
+  padding: 12px 36px 12px 14px;
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent),
@@ -2510,6 +2526,30 @@ select:focus-visible {
 .toast-card span {
   color: var(--muted);
   font-size: 13px;
+}
+
+.toast-card__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--motion-enter) var(--motion-ease), border-color var(--motion-enter) var(--motion-ease);
+}
+
+.toast-card__close:hover {
+  color: var(--text);
+  border-color: var(--cyan);
 }
 
 .toast-card--success {
@@ -5201,6 +5241,142 @@ select:focus-visible {
   width: calc(100vw - 40px);
 }
 
+/* ── Test XP panel (seed account only) — floating bottom-left ── */
+.test-xp-panel {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 200;
+  max-width: 320px;
+  width: calc(100vw - 40px);
+  font-family: 'Rajdhani', sans-serif;
+}
+
+.test-xp-panel__toggle {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(244, 193, 93, 0.4);
+  background: rgba(244, 193, 93, 0.14);
+  color: #ffe1a6;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.test-xp-panel__body {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-1, #161b22);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.test-xp-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.test-xp-panel__refresh {
+  background: transparent;
+  border: 1px solid var(--line, rgba(255,255,255,0.12));
+  border-radius: 6px;
+  color: var(--text, #e6edf3);
+  cursor: pointer;
+  padding: 2px 8px;
+}
+
+.test-xp-panel__error {
+  color: #ff9b9b;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.test-xp-panel__empty {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.test-xp-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.test-xp-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.test-xp-row__info {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.test-xp-row__name {
+  font-weight: 700;
+  color: var(--text, #e6edf3);
+}
+
+.test-xp-row__meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.test-xp-row__controls {
+  display: flex;
+  gap: 6px;
+}
+
+.test-xp-row__input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line, rgba(255,255,255,0.12));
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text, #e6edf3);
+}
+
+.test-xp-row__add,
+.test-xp-row__reset {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.test-xp-row__add {
+  border-color: rgba(122, 240, 221, 0.4);
+  background: rgba(122, 240, 221, 0.12);
+  color: var(--cyan, #7af0dd);
+}
+
+.test-xp-row__reset {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: var(--muted);
+}
+
+.test-xp-row__add:disabled,
+.test-xp-row__reset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .rank-boss-notif {
   display: flex;
   align-items: center;
@@ -5738,7 +5914,21 @@ select:focus-visible {
     right: 12px;
     bottom: 12px;
     left: 12px;
+    width: auto;
     max-width: calc(100vw - 24px);
+  }
+
+  .toast-card {
+    padding: 9px 32px 9px 12px;
+  }
+
+  .toast-card strong {
+    font-size: 15px;
+    margin-bottom: 3px;
+  }
+
+  .toast-card span {
+    font-size: 12px;
   }
 
   /* ── MR-2: Vocab shell → tab-strip cuộn ngang ───────────────────── */
@@ -5958,6 +6148,41 @@ select:focus-visible {
   /* ── MR-6: Quest/roadmap nested panels ───────────────────────────── */
   .quest-summary {
     grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  /* Compact summary cards: label + number on one horizontal row */
+  .quest-summary__card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .quest-summary__card strong {
+    display: inline;
+    margin-top: 0;
+    font-size: 20px;
+  }
+
+  /* Quest skill filter: exactly 3 buttons per row, compact */
+  .quest-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 14px;
+    padding: 6px;
+  }
+
+  .quest-tab-button {
+    padding: 6px 4px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .current-main-quest {
@@ -5970,11 +6195,45 @@ select:focus-visible {
     gap: 8px;
   }
 
+  /* Reward row: +N XP hugs the left, CLAIM button hugs the right, same line */
   .quest-node__reward {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
     border-left: none;
     border-top: 1px solid var(--line);
     padding-top: 10px;
     padding-left: 0;
+  }
+
+  .quest-node__reward strong,
+  .quest-node__reward span {
+    text-align: left;
+  }
+
+  .quest-node__reward strong {
+    font-size: 22px;
+  }
+
+  .quest-node__reward span {
+    font-size: 12px;
+  }
+
+  /* Skill name drops to its own full-width line below */
+  .quest-node__reward .quest-reward-skill {
+    order: 4;
+    flex-basis: 100%;
+  }
+
+  /* CLAIM button pinned to the right, same row as the XP label */
+  .quest-node__reward .quest-action-button {
+    order: 3;
+    width: auto;
+    margin-left: auto;
+    min-width: 96px;
+    padding: 6px 12px;
+    font-size: 14px;
   }
 
   /* ── MR-7: Status / Boss / Certificate overlay bodies ────────────── */

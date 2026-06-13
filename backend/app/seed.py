@@ -2393,7 +2393,11 @@ _VOCAB_HEADER_FIRST_COL = "collocation / từ vựng"
 _re_bold = re.compile(r"\*\*(.+?)\*\*")
 _re_topic = re.compile(r"^#{1,2}\s+(?:Vocabulary\s+)?Topic:\s+(.+)", re.IGNORECASE)
 _re_unit  = re.compile(r"^#{2,3}\s+Unit\s+(\d+):\s+(.+)", re.IGNORECASE)
-_re_sec   = re.compile(r"^#{3,4}\s+([A-Z])\.\s+(.+)")
+# Section heading: a single letter ("A.") or a letter-list ("A & B.", "A, B & C.",
+# "A, B, C, D, E & F.") followed by ". Title". Group 1 captures the full letter list;
+# the first letter is used as `section_letter` (DB column is 5 chars) and the whole
+# list is kept in the section title for display.
+_re_sec   = re.compile(r"^#{3,4}\s+([A-Z](?:(?:,\s*|\s*&\s*)[A-Z])*)\.\s+(.+)")
 
 
 def _strip_bold(text: str) -> str:
@@ -2474,9 +2478,14 @@ def parse_vocab_file(filepath: Path, level_name: str) -> dict:
                 continue
             section_order_counter += 1
             item_order_counter = 0
+            letters = m.group(1).strip()          # e.g. "A" or "A, B & C"
+            sec_title = m.group(2).strip()
+            # For multi-letter headings keep the letter list in the visible title
+            # (single "A." headings stay title-only, matching the prior behaviour).
+            display_title = sec_title if letters == letters[0] else f"{letters}. {sec_title}"
             current_section = {
-                "title": m.group(2).strip(),
-                "section_letter": m.group(1),
+                "title": display_title,
+                "section_letter": letters[0],     # DB column is 5 chars; store first letter
                 "section_order": section_order_counter,
                 "items": [],
             }
