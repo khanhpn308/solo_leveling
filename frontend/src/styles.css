@@ -5820,6 +5820,43 @@ select:focus-visible {
 .vl-drill-grid .coll-topic-box__pct { font-size: 1.05rem; }
 .vl-drill-grid .coll-topic-box__frac { font-size: 0.72rem; }
 
+/* ===== SpeakButton — IPA pronunciation playback (Web Speech API) ===== */
+.speak-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  margin-left: 6px;
+  vertical-align: middle;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--motion-enter) var(--motion-ease),
+    background var(--motion-enter) var(--motion-ease),
+    transform var(--motion-enter) var(--motion-ease);
+}
+
+.speak-button:hover {
+  border-color: var(--cyan);
+  background: rgba(0, 243, 191, 0.08);
+}
+
+.speak-button:active {
+  transform: scale(0.92);
+}
+
+.speak-button.is-speaking {
+  border-color: var(--cyan);
+  background: rgba(0, 243, 191, 0.16);
+  box-shadow: 0 0 8px rgba(0, 243, 191, 0.35);
+}
+
 /* ===== MOBILE COMPACT (<600px) — content-based, not device-based =====
    Strategy: adapt existing layout (A1-A8). No JSX changes.
    All rules here cascade after the 640px block above.

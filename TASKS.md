@@ -107,6 +107,27 @@ No further bugs found. (SM-2 SRS is intentionally simplified per SMALL_GROUP_PLA
 
 ---
 
+# Implementation Plan: IPA Pronunciation (SpeakButton) — 2026-06-13
+
+**Owner:** khanhpn308 · **Grilled + locked** (7 questions) · **Type:** Frontend only · **Branch:** `feat/ipa-pronunciation`
+
+## Goal
+
+Add a 🔊 pronunciation button next to words/collocations everywhere IPA is shown, using the browser's Web Speech API (no backend, no audio files — also works for user-created words). Locked decisions: (1) Web Speech API; (2) reusable `<SpeakButton>` backed by `utils/speak.js`; (3) speaks the raw word/collocation, NOT the IPA text; (4) 6+ spots; (5) cancel-then-replay, active-icon on speak, hidden when unsupported, cached voices + `voiceschanged`; (6) fixed `en-US`/rate 1 (opts overridable for future settings).
+
+## Tasks
+
+- [x] **IPA-1 — `frontend/src/utils/speak.js`** *(gap-check [x])* — `speak(text, opts)` + `isSpeechSupported()`; caches voices, refreshes on `voiceschanged`; defaults en-US/rate 1/pitch 1; `onStart`/`onEnd` callbacks; cancels prior utterance.
+- [x] **IPA-2 — `frontend/src/components/SpeakButton.jsx`** *(gap-check [x])* — 🔊 button; `is-speaking` state (🔈) via onStart/onEnd; returns null when unsupported; `e.stopPropagation()` so it never flips/opens its parent card; aria-label. CSS `.speak-button` in `styles.css`.
+- [x] **IPA-3 — Wire into all spots** *(gap-check [x])* — Codex card + flashcards (`VocabularyWorkspace.jsx`: vocab card, collocation flashcard, vocab flashcard, VL flashcard), Vocabulary Library (`VocabularyLibrary.jsx`), Collocation (`CollocationForge.jsx`), Word Network Tree node drawer (`WordNetworkTree.jsx`). Text = `word`/`collocation`/`node.word`. (`VocabularyOverlay.jsx` skipped — dead component, not imported.)
+
+### Checkpoint IPA *(gap-check [x])*
+- [x] `npm run build` ✓ 225 modules. Console clean.
+- [x] Preview verify: Codex 🔊 → `speak()` called with `{text:"meticulous", lang:"en-US", rate:1}`. Collocation → 26 buttons, speaks full phrase "ancient monument", stopPropagation holds (card not opened). Buttons render 26×26 next to IPA.
+- [ ] **Owner to confirm audio + active-icon on a real device** (headless preview can't play audio / fire onstart).
+
+---
+
 
 ## Where To Read More
 

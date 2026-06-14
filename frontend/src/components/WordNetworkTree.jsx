@@ -11,6 +11,7 @@ import ReactFlow, {
   Position,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import SpeakButton from './SpeakButton'
 
 // Custom node component with Solo Leveling glowing borders
 const CustomVocabNode = ({ data }) => {
@@ -468,7 +469,7 @@ function WordNetworkTree({ api, vocabularyItems, onLoadData }) {
 
           <div className="drawer-content">
             <div className="node-badge-row">
-              <h4>{selectedNode.node.node_label}</h4>
+              <h4>{selectedNode.node.node_label}<SpeakButton text={selectedNode.item?.word || selectedNode.node.node_label} /></h4>
               <span className={`node-badge status-${selectedNode.node.status}`}>
                 {selectedNode.node.status}
               </span>

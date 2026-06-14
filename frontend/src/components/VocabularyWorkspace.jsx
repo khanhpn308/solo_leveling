@@ -7,6 +7,7 @@ import EchoChamber from './EchoChamber'
 import ErrorDungeon from './ErrorDungeon'
 import VocabularyBoss from './VocabularyBoss'
 import VocabularyLibrary from './VocabularyLibrary'
+import SpeakButton from './SpeakButton'
 
 const INITIAL_FORM = {
   word: '',
@@ -175,7 +176,7 @@ function CollocationFlashcardReview({
         <div className="flip-card-inner">
           <div className="flip-card-front">
             <div className="card-title">Collocation</div>
-            <h2 className="card-vocab-word">{item.collocation}</h2>
+            <h2 className="card-vocab-word">{item.collocation}<SpeakButton text={item.collocation} /></h2>
             {item.pronunciation_us && (
               <p style={{ fontStyle: 'italic', color: '#9ca3af', margin: '4px 0' }}>/{item.pronunciation_us}/</p>
             )}
@@ -737,7 +738,7 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                 <div key={item.id} className="codex-card">
                   <div className="codex-card-header">
                     <div>
-                      <h4>{item.word}</h4>
+                      <h4>{item.word}<SpeakButton text={item.word} /></h4>
                       <span className="vocab-tag tag-speech">{item.part_of_speech}</span>
                       {item.cefr_level && <span className="vocab-tag tag-level">{item.cefr_level}</span>}
                       {item.ielts_topic && <span className="vocab-tag tag-topic">{item.ielts_topic}</span>}
@@ -893,6 +894,7 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                                 <div className="card-vocab-details">
                                   <h2 className="card-vocab-word">
                                     {activeReview.cards[activeReview.currentIndex].vocabulary_item.word}
+                                    <SpeakButton text={activeReview.cards[activeReview.currentIndex].vocabulary_item.word} />
                                   </h2>
                                   <div className="card-metadata-row" style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
                                     {activeReview.cards[activeReview.currentIndex].vocabulary_item.part_of_speech && (
@@ -1117,7 +1119,7 @@ function VocabularyWorkspace({ onClose, api, vocabularyItems, dueFlashcards, onL
                         <div className="flip-card-inner">
                           <div className="flip-card-front">
                             <div className="card-title">Vocabulary Library</div>
-                            <h2 className="card-vocab-word">{card.word}</h2>
+                            <h2 className="card-vocab-word">{card.word}<SpeakButton text={card.word} /></h2>
                             {card.part_of_speech && <span className="card-pos-badge" style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', background: '#3b82f6', color: '#fff' }}>{card.part_of_speech}</span>}
                             {card.pronunciation_us && <p className="card-pronunciation" style={{ fontStyle: 'italic', color: '#9ca3af' }}>/{card.pronunciation_us}/</p>}
                           </div>

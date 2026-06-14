@@ -2,6 +2,18 @@
 
 Newest first.
 
+## [2026-06-13] IPA pronunciation — SpeakButton (Web Speech API)
+
+**Feature:** A 🔊 button next to every word/collocation that has IPA shown, reading it aloud via the browser's Web Speech API. No backend, no audio files — works for user-created words too. (Grilled + locked over 7 questions.)
+
+**Changes:**
+- `frontend/src/utils/speak.js` (new) — `speak(text, opts)` + `isSpeechSupported()`; caches voices and refreshes on `voiceschanged` (fixes the first-call empty-voices gap EchoChamber had); defaults `en-US` / rate 1 / pitch 1; cancels any in-flight utterance; `onStart`/`onEnd` hooks.
+- `frontend/src/components/SpeakButton.jsx` (new) — reusable 🔊 button; shows 🔈 while speaking; `return null` when unsupported; `e.stopPropagation()` so it never flips/opens the card it sits on; aria-label.
+- `frontend/src/styles.css` — `.speak-button` style + `.is-speaking` glow.
+- Wired into: Codex card + all 3 flashcard front faces (`VocabularyWorkspace.jsx`), Vocabulary Library card (`VocabularyLibrary.jsx`), Collocation item card (`CollocationForge.jsx`), Word Network Tree node drawer (`WordNetworkTree.jsx`). Speaks the raw `word`/`collocation` (IPA stays display-only). `VocabularyOverlay.jsx` skipped — dead component (not imported anywhere).
+
+**Validated:** `npm run build` ✓ 225 modules; console clean. Preview: Codex 🔊 → `speechSynthesis.speak` called with `{text:"meticulous", lang:"en-US", rate:1}`; Collocation topic → 26 buttons, speaks full phrase "ancient monument", stopPropagation holds. Audio playback + active-icon to be confirmed by owner on a real device (headless preview can't play audio).
+
 ## [2026-06-13] Fix support-panel text run-together (bug C#2)
 
 **Problem:** Dashboard support panels (TODAY SYNC, VOCABULARY TODAY, BOSS STATUS) rendered the `<strong>` headline and the `<span>` detail on the same line with no separation ("Need check-in0 XP banked today"), on both desktop and mobile. Cause: `.support-panel strong` had `margin-bottom:8px` but was `display:inline` (vertical margin ignored) and `.support-panel span` was inline.

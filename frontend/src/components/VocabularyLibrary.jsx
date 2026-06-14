@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react"
 import LevelBlock from "./LevelBlock"
+import SpeakButton from "./SpeakButton"
 
 // ── Neon box (reuse collocation pattern) for Topic/Unit/Section ──────────
 function DrillBox({ item, label, pct, done, total, isActive, onSelect }) {
@@ -46,7 +47,7 @@ function WordCard({ word, onAdd, onRemove, loading }) {
   return (
     <div className={`coll-item-card ${neonClass(word.effective_familiarity)}`}>
       <div className="coll-item-card__header">
-        <h4 className="coll-item-card__word">{word.word}</h4>
+        <h4 className="coll-item-card__word">{word.word}<SpeakButton text={word.word} /></h4>
         <div className="coll-item-card__badges">
           {word.part_of_speech && <span className="coll-tag coll-tag--type">{word.part_of_speech}</span>}
           {word.is_added && (

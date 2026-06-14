@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import LevelBlock from './LevelBlock'
+import SpeakButton from './SpeakButton'
 
 // Familiarity → neon CSS class
 function neonClass(familiarity) {
@@ -292,7 +293,7 @@ function CollocationForge({ api }) {
                     className={`coll-item-card ${neonClass(item.effective_familiarity)}`}
                   >
                     <div className="coll-item-card__header">
-                      <h4 className="coll-item-card__word">{item.collocation}</h4>
+                      <h4 className="coll-item-card__word">{item.collocation}<SpeakButton text={item.collocation} /></h4>
                       <div className="coll-item-card__badges">
                         {item.collocation_type && (
                           <span className="coll-tag coll-tag--type">{item.collocation_type}</span>
