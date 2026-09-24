@@ -19,10 +19,10 @@ abstraction, no serializers module, no state container, no cache, no query layer
 | # | Layer | File | What it owns |
 | --- | --- | --- | --- |
 | L1 | MySQL tables | `backend/alembic/versions/*` (31 revisions) | persistence |
-| L2 | ORM models | `backend/app/models.py` (57 models) | column definitions, relationships |
+| L2 | ORM models | `backend/app/models.py` (72 models; MF-09) | column definitions, relationships |
 | L3 | Domain/derivation | `backend/app/services.py` (3267 lines) | XP ledger, recompute chains, scoring, progression |
-| L4 | HTTP routes | `backend/app/main.py` (2874 lines, 121 paths) | auth dependency, scoping, response assembly |
-| L5 | Response schemas | `backend/app/schemas.py` | Pydantic output shapes (100 of 121 paths) |
+| L4 | HTTP routes | `backend/app/main.py` (2874 lines, 121 paths — MF-01, MF-11) | auth dependency, scoping, response assembly |
+| L5 | Response schemas | `backend/app/schemas.py` | Pydantic output shapes (100 of 121 paths; MF-08) |
 | L6 | API client | `frontend/src/api/client.js` (78 lines) | base URL, bearer token, 401→refresh→retry |
 | L7 | View models + render | `frontend/src/App.jsx` (1029 lines), `dashboard-data.js` (817 lines) | client-side derivation, then React components |
 
@@ -266,7 +266,7 @@ App.jsx:641-683
 
 `[DERIVED]` The exam is the strictest contract in the product: the correct answers never leave the
 server, scoring is server-side, and the pass threshold is stored per pool (`attempt.pass_percent`).
-It is also the flow most damaged by the `question_type` mismatch recorded in `06` §D-11a and `07`
+It is also the flow most damaged by the `question_type` mismatch recorded in `06` §3 D-11 item (a) and `07`
 §6.1: the client's only MCQ branch tests `'mcq'` while the server emits `'multiple_choice'`, so every
 question renders as a free-text box whose string cannot equal the stored answer.
 
@@ -322,7 +322,7 @@ choice or unfinished optimisation is `[UNRESOLVED]` (U-32).
 
 ## 6. Derived state recomputed or written on read
 
-### 6.1 `refresh_progress_state` runs on 8 GET routes
+### 6.1 `refresh_progress_state` runs on 8 GET routes (MF-12, MF-13)
 
 `refresh_progress_state` (`services.py:804-816`) is called from 32 route sites plus startup
 (`main.py:438`). Eight of those are **plain GETs** — reading them writes:
@@ -464,14 +464,14 @@ ambiguity first.
 
 ### 7.6 Shape gaps already measured in pass 3
 
-- **21 of 121 paths declare no `response_model`** (`07` §6.1) — including
+- **21 of 121 paths declare no `response_model`** (MF-08; `07` §6.1) — including
   `GET /api/vocabulary/boss/status`, whose nested `bosses[]` shape is read by `main.py:2228` and
   rendered by `VocabularyBoss.jsx` with no schema between them.
 - **`SummaryOut.player` is a raw `dict`** (`07` §6.2).
 - **One route's purpose is undocumented**: `POST /api/onboarding/activate-campaign` returns
   `{"detail": …}` while performing the most consequential onboarding write (`main.py:707-762`).
 - **Aliased duplicates**: three handlers carry two decorators each (`main.py:1290-1291, 1307-1308,
-  1325-1326`), which is why the OpenAPI document lists 121 paths for 118 functions.
+  1325-1326`), which is why the OpenAPI document lists 121 paths (MF-01) for 118 functions (MF-02).
 
 ---
 
@@ -524,7 +524,8 @@ pattern, review XP) the client owns the fact itself because no server counterpar
   not measurements.
 - **Whether the client's private derivation tables ever agreed with the server.** No changelog,
   comment or test records a value for `SKILL_XP_THRESHOLDS` other than the current one; U-05 is
-  narrowed here (see `03-unresolved.md` §G) but the *history* is not recoverable from the repo.
+  narrowed here (see `03-unresolved.md` §4, entry U-05) but the *history* is not recoverable from the
+  repo.
 - **Whether the recompute-on-read frequency is load-bearing.** `[UNRESOLVED]` whether removing the
   8 GET-side refreshes would change any observable behaviour — that requires running the stack.
 - **The four `/api/dev/*` and the unauthenticated collocation-collection writes** are traced

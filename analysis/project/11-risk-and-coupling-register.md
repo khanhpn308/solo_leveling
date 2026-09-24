@@ -13,19 +13,21 @@ Discovery only: no recommendations, no target design. Evidence convention in `RE
 All counts below are mechanical over files that were read. The commands, once, so any number can be
 reproduced:
 
-| Measurement | Command |
-| --- | --- |
-| Module size | `wc -l backend/app/{main,services,seed}.py` → 2874 / 3267 / 2784 |
-| Function fan-in | `grep -c "\b<name>\b" main.py services.py seed.py` per name |
-| Write sites | `grep -c 'db.commit()'` and `db.flush()`; `grep -rn '<obj>\.<col> ='` per column |
-| Route inventory | decorator + signature extraction (`07` §1) |
-| Client field usage | `grep -rho "\bquest\.[a-z_]*" frontend/src` and the same for `profile.`/`skill.` |
-| Component state | `grep -c "useState("` per component; `ls components/*.jsx \| wc -l` → 40 |
-| Dead code | import-graph reachability (`05` §4) |
-| Tracked artifacts | `git ls-files \| grep -c <pattern>` |
+| Measurement | Command | Canonical ID |
+| --- | --- | --- |
+| Module size | `wc -l backend/app/{main,services,seed}.py` → 2874 / 3267 / 2784 | MF-11 |
+| Function fan-in | `grep -c "\b<name>\b" main.py services.py seed.py` per name | per-name, no ID |
+| Write sites | `grep -c 'db.commit()'` and `db.flush()`; the six-column `campaign_skill_states` scan | MF-15, MF-14 |
+| Route inventory | decorator + signature extraction (`07` §1) | MF-01, MF-02, MF-05, MF-08 |
+| Client field usage | `grep -rho "\bquest\.[a-z_]*" frontend/src` and the same for `profile.`/`skill.` | per-field, no ID |
+| Component state | `grep -c "useState("` per component; `ls components/*.jsx \| wc -l` | MF-19 |
+| Dead code | import-graph reachability (`05` §4) | MF-19, MF-21 |
+| Tracked artifacts | `git ls-files \| grep -c <pattern>` | MF-23 |
 
 Module line counts: `main.py` **2874**, `services.py` **3267**, `seed.py` **2784**,
-`models.py` **1559**, `dashboard-data.js` **817**, `styles.css` **6276**.
+`models.py` **1559**, `dashboard-data.js` **817**, `styles.css` **6276** — all **MF-11** / **MF-20**.
+Every other count this register states is owned by the `MF-nn` IDs in `README.md` §Canonical measured
+facts; the rows below cite them instead of re-deriving the number.
 
 ---
 
@@ -37,10 +39,10 @@ Module line counts: `main.py` **2874**, `services.py` **3267**, `seed.py` **2784
 brings quest status, weekly mission counters, skill state, badge unlocks and player counters up to
 date, and it is called at the top of 8 plain GET routes plus 24 write routes plus startup (`08` §6.1).
 
-**Measured.** 38 references: **34 in `main.py`** (1 import + **33 call sites**) and 4 in
+**Measured.** 38 references (**MF-12**): **34 in `main.py`** (1 import + **33 call sites**) and 4 in
 `services.py` (1 definition + 3 internal calls). `refresh_progress_state` runs 5 recompute steps and
 one `db.commit()` each time (`services.py:815`). Write sites overall: `db.commit()` × 35 in
-`main.py`, × 37 in `services.py`.
+`main.py`, × 37 in `services.py` (**MF-15**).
 
 **Coupled to.** Everything the dashboard shows. Changing any derivation rule means auditing 33 call
 sites, of which 8 are reads a user performs by opening a page.
@@ -55,29 +57,32 @@ nothing else would refresh those columns.
 
 ---
 
-### R-2 — One table of shared mutable progression state has six independent writers across two files (LOAD-BEARING, multiplicity ACCIDENTAL)
+### R-2 — One table of shared mutable progression state has seven independent writers across two files (LOAD-BEARING, multiplicity ACCIDENTAL)
 
 **What it is.** `campaign_skill_states` holds `xp`, `rank`, `level`, `confirmed_rank`, `pending_rank`
-and `promotion_status` — the product's core progression row — and it is mutated from six functions:
+and `promotion_status` — the product's core progression row — and it is mutated from seven functions
+(**MF-14**: 32 attribute-write lines, counted across `main.py` + `services.py`, attributed to the
+enclosing `def`):
 
 | Owner | Mutation sites | Line anchors |
 | --- | --- | --- |
-| `services.recompute_skill_progress` | **13** | `services.py:743, 756-757, 761-762, 767-769, 790-791, 799-800` |
-| `services.apply_rank_suggestion` | **5** | `services.py:1457, 1460-1461, 1464-1465` |
+| `services.recompute_skill_progress` | **12** | `services.py:743, 756-757, 761-762, 767-769, 790-791, 799-800` |
+| `services.apply_rank_suggestion` | **8** | `services.py:1438, 1452, 1456-1457, 1460-1461, 1464-1465` |
 | `services.award_skill_xp` | 2 | `services.py:1411-1412` |
 | `services.submit_vocabulary_boss_result` | 1 | `services.py:3015` |
 | `main.submit_rank_exam` | **7** | `main.py:1828-1831, 1853, 1856, 1864` |
-| `main.unlock_rank_exam`, `main.start_rank_exam` | 1 each | `main.py:1619`, `:1702` |
+| `main.unlock_rank_exam` | 1 | `main.py:1619` |
+| `main.start_rank_exam` | 1 | `main.py:1702` |
 
 **Coupled to.** XP, rank, promotion gating, badges (read the same map), player XP (a mean of five of
 these rows), and `SkillRankHistory`.
 
-**Breaks together.** Changing what `xp` means touches 13 recompute sites and 9 hand-written mutation
-sites; the recompute is also the mechanism that *undoes* manual writes, which is why
+**Breaks together.** Changing what `xp` means touches 12 recompute sites and 20 hand-written mutation
+sites (32 in total — **MF-14**); the recompute is also the mechanism that *undoes* manual writes, which is why
 `main.py:1859-1866` applies the −50 XP exam penalty **after** a refresh (the comment says so).
 
-**Load-bearing.** Yes — but note the asymmetry: 13 of the 30 sites are one function recomputing from
-source, while 17 are direct writes that the next recompute can overwrite unless ordered carefully.
+**Load-bearing.** Yes — but note the asymmetry: 12 of the 32 sites are one function recomputing from
+source, while 20 are direct writes that the next recompute can overwrite unless ordered carefully.
 `[DERIVED]` Two of the direct writers already rely on that ordering (`apply_rank_suggestion` writes an
 XP floor the recompute must respect, `services.py:1451-1452` and `:737-748`).
 
@@ -105,20 +110,21 @@ shows awareness of it in one place only.
 
 ---
 
-### R-4 — One 2874-line module owns every route, and the largest handlers are 105 lines (ACCIDENTAL)
+### R-4 — One 2874-line module owns every route, and the largest handlers are 103 lines (ACCIDENTAL)
 
 **Measured.** `main.py`: 121 path decorators, 118 handler functions, 100 with `response_model`, 35
-`db.commit()`, 12 `db.flush()`. Longest handlers: `submit_rank_exam` **105 lines**,
-`start_rank_exam` **105**, `reset_database` **88**, `register` **76**, `get_collocation_levels` 68,
-`get_summary` 67, `login` 64, `activate_campaign` 56.
+`db.commit()`, 12 `db.flush()` (**MF-01, MF-02, MF-08, MF-15**). Longest handlers, measured as the line
+span from the handler's `def` line to its last non-blank body line: `start_rank_exam` **103**,
+`submit_rank_exam` **103**, `reset_database` **86**, `register` **74**, `get_collocation_levels` 66,
+`get_summary` 65, `login` 62, `activate_campaign` 54.
 
 **Coupled to.** Every contract in the product: there is no router package, no service interface, no
 dependency-injection layer, so a change to any response shape, auth level or status literal is an
 edit in this one file. Fan-in of the session concern alone: 121 decorators.
 
 **Breaks together.** Any change to the auth dependency chain, since it is declared per handler rather
-than globally (`main.py:208` has no `dependencies=[...]`) — 107 handlers opt in by hand and 14 do
-not (`09` §7).
+than globally (`main.py:208` has no `dependencies=[...]`) — 107 of the 121 method+path decorators opt
+in by hand and 14 do not, i.e. 104 of the 118 handler functions (**MF-05, MF-06**; `09` §7).
 
 **Load-bearing.** The routes are load-bearing; the single-module shape is accidental accumulation.
 
@@ -148,8 +154,8 @@ unaffected.
 `material/collocation/English_Collocations_campaign1-3_3-6_polished.md`. `backend/material.md`
 tracked as **0 bytes** by commit `05c92ab`.
 
-**Load-bearing.** The markdown *is* the curriculum (`README`/`01` §materials) — the app stores no
-lesson content. So the resolution order is load-bearing and the empty fallback file is accidental.
+**Load-bearing.** The markdown *is* the curriculum (`01` §6, "Seed data source is markdown on disk";
+`04` §1.3) — the app stores no lesson content. So the resolution order is load-bearing and the empty fallback file is accidental.
 
 **This closes U-09** ("which copy is authoritative, and do they agree"): they do not agree, one is
 empty, and the compose path never reaches it.
@@ -161,10 +167,11 @@ empty, and the compose path never reaches it.
 **What it is.** `@app.on_event("startup")` (`main.py:431-441`) runs: wait for the DB (30 retries ×
 2 s, `database.py:23-35`) → `run_database_bootstrap` (either `create_all` + `alembic stamp head` on
 an empty database, or `alembic upgrade head` on every boot, `database.py:39-57`) → `seed_database`
-(**52 functions, 23 of them `ensure_*`**, `seed.py:2685-2707`) → `refresh_progress_state`.
+(**52 functions, 23 of them `ensure_*`** — MF-16, `seed.py:2685-2707`) → `refresh_progress_state`.
 
-**Measured.** `seed.py`: 2784 lines, 52 top-level functions, 23 `ensure_*`, **43 `db.flush()` calls,
-1 `db.commit()`** — so an exception mid-seed rolls back the whole seed. 31 Alembic revisions exist.
+**Measured.** `seed.py`: 2784 lines, 52 top-level functions, 23 `ensure_*` (MF-16), **43 `db.flush()`
+calls, 1 `db.commit()`** (MF-15) — so an exception mid-seed rolls back the whole seed. 31 Alembic
+revisions exist (MF-17).
 
 **Coupled to.** Schema, reference data, all content, and the `material/*.md` files (R-5). Also to the
 two unauthenticated dev routes that re-run parts of it at runtime (`main.py:1587`, `:1877`).
@@ -222,9 +229,9 @@ places or acknowledged as one-sided.
 ### R-9 — The only automated test that runs here locks in a duplication, and the larger suite cannot run (ACCIDENTAL, worsens every risk above)
 
 **Measured.** Frontend: **1 test file** (`frontend/src/dashboard-data.test.js`), 6 tests, all passing
-(`README` §verified). Its assertions cover `getQuestStatus`, `getCompletionMode`, `getQuestEarnedXp`,
+(`README` §What was actually verified by execution). Its assertions cover `getQuestStatus`, `getCompletionMode`, `getQuestEarnedXp`,
 `getPlayerXpProgress`, `getCalendarDayDiff` — i.e. four of the CLIENT-ONLY rules of R-7 and the
-duplicated level curve of R-8. Backend: **68 tests across 11 classes** in `test_backend.py`, **read
+duplicated level curve of R-8. Backend: **68 tests across 11 classes** (**MF-18**) in `test_backend.py`, **read
 but never executed** here (no Python interpreter; U-04), and they run on in-memory SQLite, so they
 cannot validate the MySQL path or the 31 Alembic revisions either.
 
@@ -238,7 +245,7 @@ must keep).
 
 ### R-10 — Auth is a chain of single points that every route depends on (LOAD-BEARING)
 
-**Measured.** 118 authenticated paths depend on `get_current_account`, which depends on
+**Measured.** 107 authenticated path decorators (**MF-06**) depend on `get_current_account`, which depends on
 `decode_jwt` (`auth_utils.py:32-55`, signature + `exp` only) and on the **`JWT_SECRET_KEY`
 fallback literal** (`auth_utils.py:8`) that is absent from `.env.example` and `docker-compose.yml`
 (`09` §2.3). Refresh rotation replaces the stored hash in place (`main.py:637-639`) with no grace
@@ -247,7 +254,7 @@ client returns `undefined` instead of throwing (`App.jsx:152-155`).
 
 **Coupled to.** Every route, the client's loader error handling, and the "logged in" state of the SPA.
 
-**Breaks together.** A token-format or cookie change breaks all 118 routes and the silent-retry path
+**Breaks together.** A token-format or cookie change breaks all 107 authenticated routes (MF-06) and the silent-retry path
 at once; a second account breaks nothing today (U-03) but the rotation race might (U-37).
 
 **Load-bearing.** Entirely. This is the densest single point in the repository.
@@ -280,10 +287,10 @@ accidental and inconsistent — the rank-exam path in the same codebase does the
 ### R-12 — Generated artifacts and dead code are committed beside live code, with no `.gitignore` (makes the audit harder; one part changes behaviour if deleted)
 
 **Measured.** Tracked: **1533 files under `frontend/node_modules/`, 11 under `frontend/dist/`,
-35 `__pycache__` files**; there is no `.gitignore` in the repository root. Dead code: **9 of 40
-components (1285 lines)** unreachable by any code path (`05` §4.1), **5 exported API wrappers** with
-zero references (§4.2), **49 of 121 routes** with no client consumer (`07` §4), and the four tracker
-domains with full server CRUD and no renderer (`06` §D-09).
+35 `__pycache__` files** (**MF-23**); there is no `.gitignore` in the repository root. Dead code:
+**9 of 40 components (1285 lines)** unreachable by any code path (**MF-19**; `05` §4.1), **5 exported
+API wrappers** with zero references (§4.2), **49 of 121 routes** with no client consumer (**MF-21**;
+`07` §4), and the four tracker domains with full server CRUD and no renderer (`06` §3 D-09).
 
 **Coupled to.** Nothing at runtime — except two things that matter. `VocabularyOverlay.jsx:142,
 :161` are the **only written record of two endpoints that do not exist**, i.e. the only evidence of an
@@ -294,7 +301,8 @@ alongside current source (U-02).
 current source.
 
 **Load-bearing.** No for the shipped product; yes for the audit's completeness. This is the entry
-that most inflates the size of everything else: 1533 of 1741 tracked files are `node_modules`.
+that most inflates the size of everything else: 1533 of 1754 tracked files are `node_modules`
+(**MF-23**).
 
 ---
 
@@ -369,7 +377,7 @@ listener; the refresh cookie is scoped `path=/api/auth`; `error.sessionExpired` 
 | Load-bearing (removing it changes what the product does) | Accidental (removing it changes only how the code is arranged) |
 | --- | --- |
 | R-1 recompute-on-read and its 33 call sites | R-1's *frequency* (8 of them being GETs) |
-| R-2 `campaign_skill_states` writers as a set | R-2's *multiplicity* (17 direct writes vs 1 recompute) |
+| R-2 `campaign_skill_states` writers as a set | R-2's *multiplicity* (20 direct writes vs 12 recompute — MF-14) |
 | R-3 the recompute rules | R-3's *inconsistency* about which account |
 | R-4 the routes and auth per handler | R-4's single-module shape |
 | R-5 the markdown curriculum as the content source | R-5's resolution order landing on an empty file |
@@ -387,12 +395,13 @@ listener; the refresh cookie is scoped `path=/api/auth`; `error.sessionExpired` 
 
 **Would break a redesign if not honoured** (these are load-bearing couplings with measured fan-in):
 
-1. **R-1 + R-2 + R-3** — 33 recompute call sites and 30 mutation sites on the progression row. A
+1. **R-1 + R-2 + R-3** — 33 recompute call sites (MF-12) and 32 attribute-write sites on the
+   progression row (MF-14). A
    redesign that writes progression directly will be overwritten by the next read.
 2. **R-5 + R-6** — the curriculum is file content parsed at boot; a redesign that assumes content
    lives in the database will seed an empty plan.
 3. **R-7** — thirteen rules exist only in the browser; a UI replacement deletes them.
-4. **R-10** — 118 routes depend on one token chain, a public fallback secret, and a rotation rule
+4. **R-10** — 107 authenticated routes (MF-06) depend on one token chain, a public fallback secret, and a rotation rule
    with no grace window.
 5. **R-11** — the server stores progression derived from client-posted values; a client that stops
    sending them changes the data.
@@ -400,7 +409,7 @@ listener; the refresh cookie is scoped `path=/api/auth`; `error.sessionExpired` 
 
 **Only makes the audit harder** (no runtime consequence):
 
-1. **R-12** — dead UI, dead wrappers, 49 unconsumed routes, and 1579 tracked generated files with no
+1. **R-12** — dead UI, dead wrappers, 49 unconsumed routes (MF-21), and 1579 tracked generated files with no
    `.gitignore`; also the `dist/` vs source question (U-02) and the two phantom endpoints whose only
    record is dead code.
 2. **R-8** — the four duplicated tables: they confuse ownership but only two of them currently change
@@ -442,5 +451,5 @@ listener; the refresh cookie is scoped `path=/api/auth`; `error.sessionExpired` 
   was not measured.
 - **Nothing about deployment topology** beyond the compose file (U-01, U-36), so R-15's real
   exposure and R-10's real key are bounded by what the repository shows.
-- **Concurrency is wholly untested.** R-2's 30 mutation sites and R-10's rotation both raise racing
+- **Concurrency is wholly untested.** R-2's 32 attribute-write sites (MF-14) and R-10's rotation both raise racing
   questions that static reading cannot answer (U-19, U-37).

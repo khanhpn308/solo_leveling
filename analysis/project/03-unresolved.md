@@ -15,7 +15,9 @@ redesign:
 | **§3 Outside the repository** (deployment, ops, non-repo files) | 7 | the answer is not in this checkout at all |
 | **§4 Closed during the audit** | 4 | resolved, with the evidence recorded |
 
-IDs (`U-01`…`U-42`) are stable and cited by `07`, `08`, `09`, `10` and `11`.
+IDs (`U-01`…`U-42`) are stable and cited by `07`, `08`, `09`, `10` and `11`. Measurement IDs
+(`MF-01`…`MF-23`), which own every count more than one document states, live in `README.md`
+§Canonical measured facts and are cited the same way.
 
 ---
 
@@ -54,7 +56,8 @@ styling and `vi-VN` for the host clock. *Settle by:* intent — is a settings su
 **U-21 — Is the rank-exam `mcq` / `multiple_choice` mismatch known?**
 *Known:* behaviour is certain — `RankExamScreen.jsx:162` tests `question_type === 'mcq'` while the
 backend only emits `"multiple_choice"` (`seed.py:2048`, `main.py:1718`), and neither string appears on
-the other side (`06` §D-11a). *Settle by:* intent — known-broken MVP slice, or unnoticed regression.
+the other side (`06` §3 D-11 item (a)). *Settle by:* intent — known-broken MVP slice, or unnoticed
+regression.
 
 **U-22 — Are the empty vocabulary levels expected?**
 *Known:* `_VOCAB_LEVELS_META` creates and links all four canonical levels on every boot

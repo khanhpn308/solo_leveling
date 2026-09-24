@@ -120,7 +120,7 @@ There is exactly **one role**, and it is not enforced:
 | `accounts.role` (`String(30)`, default `"user"`) | `backend/app/models.py:22` | Written at registration (`main.py:485`) and in two seeders (`seed.py:918`, `:933`); **never read** anywhere (`01-discovery-inventory.md` S-9). No route, dependency or service branches on it. |
 | `accounts.status` (`active` / `locked`) | `models.py:21` | Enforced — `get_current_account` raises 403 when `status != "active"` (`main.py:254-258`), and login sets `locked` after 5 failures (`main.py:562-565`). |
 | `account_preferences` | `models.py:94-103` | Written on registration; never read by any route that was opened. `[UNRESOLVED]` U-20. |
-| No `admin`, `teacher`, `student`, `owner` or membership concept | — | No role, scope, permission table, or authorization check exists in `backend/app/` (absence search in `03-unresolved.md` §E). |
+| No `admin`, `teacher`, `student`, `owner` or membership concept | — | No role, scope, permission table, or authorization check exists in `backend/app/` (absence search in `03-unresolved.md` §5). |
 
 So the only two actor distinctions the system actually enforces are **authenticated vs not** and
 **active vs locked**.
@@ -171,7 +171,7 @@ whole progression state (`main.py:707-762`).
 
 ## 3. What the product deliberately is *not*
 
-Each of these is an absence, verified by the scan named in `03-unresolved.md` §E rather than by
+Each of these is an absence, verified by the scan named in `03-unresolved.md` §5 rather than by
 reading a file:
 
 - **Not multi-user-facing.** No user list, no switching, no invitation, no sharing, no leaderboard,
@@ -217,7 +217,7 @@ doc-vs-code disagreement, not a judgement about which is right.
 | Doc claim | Code reality | Evidence |
 | --- | --- | --- |
 | `PROJECT_CONTEXT.md:41` "the frontend is already in an English-first state" | 5 of 53 source files are Vietnamese; the whole auth + onboarding entry path is Vietnamese | §4 above |
-| `PROJECT_CONTEXT.md:30-37` lists "error log / writing tracker / speaking tracker / mock test tracker" among Main Feature Surfaces | The backend implements all four (`main.py:1383-1460`); **no frontend component calls any of them**, and the only component that renders them (`TrackersPanel.jsx`, which also carries `TRACKER_MODULES` with statuses `Ready`/`Preparing`) is imported by nothing | `03-unresolved.md` U-10; `06-domain-capability-inventory.md` §D-09 |
+| `PROJECT_CONTEXT.md:30-37` lists "error log / writing tracker / speaking tracker / mock test tracker" among Main Feature Surfaces | The backend implements all four (`main.py:1383-1460`); **no frontend component calls any of them**, and the only component that renders them (`TrackersPanel.jsx`, which also carries `TRACKER_MODULES` with statuses `Ready`/`Preparing`) is imported by nothing | `03-unresolved.md` U-10; `06-domain-capability-inventory.md` §3 D-09 |
 | `TASKS.md:16` describes onboarding as "5-step UI (Name → Campaign → StartDate → **Certificate** → Confirm)" | Step 2 is **target bands**, not certificate entry; the certificate step does not exist in the wizard, and `postManualCertificate` is dead code | `Onboarding.jsx:24-33,170-200`; `api/auth.js:29-34` |
 | `DECISIONS.md` (2026-06-08) "401 handling → immediate logout (no silent refresh)" | Silent refresh-then-retry is implemented in the API client | `frontend/src/api/client.js:17-45` |
 | `DECISIONS.md` (2026-06-08) "Token storage → localStorage. httpOnly cookie deferred" | The refresh token **is** in an httpOnly cookie (`ielts_rt`) | `main.py:452-462`; `TASKS.md:16` records the later migration |

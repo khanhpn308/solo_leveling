@@ -13,8 +13,8 @@ Two independent inventories were compared:
 1. **Client surface** — all 53 files in `frontend/src`, the 62 normalised API paths they call
    (`grep -rn "api(\|apiFetch(" frontend/src`, every call site read), and the import graph that
    determines what can render at all (`05-frontend-routes-and-navigation.md` §4).
-2. **Server surface** — the 121 routes in `backend/app/main.py` and the 72 tables / 94 service
-   functions behind them (`01-discovery-inventory.md` §5-6).
+2. **Server surface** — the 121 routes in `backend/app/main.py` (MF-01) and the 72 tables (MF-09) /
+   94 service functions behind them (`01-discovery-inventory.md` §5-6).
 
 | Label | Meaning |
 | --- | --- |
@@ -341,7 +341,7 @@ domain, where the answers, the scoring and the pass threshold are all server-sid
 - **Gap 1 — calls to routes that do not exist.** `VocabularyOverlay.jsx:142` posts to
   ``/vocabulary/${itemId}/collocations`` and `:161` deletes
   ``/vocabulary/collocations/${collocationId}``. Neither route is declared anywhere in `main.py`
-  (verified against the full 121-route inventory: the only `collocations` routes are the
+  (verified against the full 121-route inventory, MF-01: the only `collocations` routes are the
   `/api/collocations/*` family plus `/api/vocabulary/practice/collocations`). Because
   `VocabularyOverlay` is dead UI (`05` §4.1) this is currently harmless — but it means the *only*
   code in the repo that tries to attach a collocation to a vocabulary word cannot work.
@@ -377,7 +377,7 @@ overlay uses `/study-plan/weeks` + `/main-quests` instead of `/roadmap/phases`.
 
 `POST /api/dev/reset`, `POST /api/dev/run_migrations`, `POST /api/dev/regenerate-quests`
 (`main.py:1498-1583`, `:1587-1597`, `:1877-1899`). No UI references any of them. `reset` deletes
-every row of 57 models and re-seeds; `regenerate-quests` re-runs the daily generator for whichever
+every row of all 72 model tables (MF-09) and re-seeds; `regenerate-quests` re-runs the daily generator for whichever
 player row comes first (`get_player_or_404` → `services.get_active_player` `services.py:235-240`).
 All three are unauthenticated (`02-current-architecture.md` §6.3).
 
@@ -390,13 +390,14 @@ materials/quest-template browsing (D-19), and the dev utilities (D-20). Of these
 user-facing, and `PROJECT_CONTEXT.md:30-37` lists it as a Main Feature Surface.
 
 **F-2 — Three user-facing outcomes are unreachable or unachievable despite complete endpoints**:
-claiming a defeated monthly boss (D-10), passing a rank exam (D-11a), and resuming an in-progress
-rank exam (D-11b). All three are **HALF-WIRED** rather than BACKEND-ONLY, because the UI presents
+claiming a defeated monthly boss (§3 D-10), passing a rank exam (§3 D-11 item (a)), and resuming an
+in-progress rank exam (§3 D-11 item (b)) — `D-11a`/`D-11b` were inline labels here, never sections.
+All three are **HALF-WIRED** rather than BACKEND-ONLY, because the UI presents
 the *state* without the *mechanism* — a "Boss Status" card with no claim action, an exam screen with
 a renderer whose branch condition never matches, and a "Resume Exam" button wired to the wrong
 endpoint.
 
-**F-3 — Nine of 40 components (22%, 1285 JSX lines) can never render.** The largest is
+**F-3 — Nine of 40 components (22%, 1285 JSX lines) can never render** (MF-19). The largest is
 `VocabularyOverlay.jsx` at 870 lines, a complete second implementation of the vocabulary surface that
 `VocabularyWorkspace.jsx` superseded (`05` §4.1). Its presence means the repo contains *two*
 vocabulary UIs, only one of which is wired.

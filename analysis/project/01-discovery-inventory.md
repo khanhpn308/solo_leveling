@@ -23,14 +23,16 @@ segments):
 | `backend/alembic` | 57 | 31 migration scripts + framework + `__pycache__` |
 | `frontend/src` | 53 | application source |
 | `backend/app` | 19 | 8 modules + `__pycache__` |
-| `frontend/dist` | 11 | **built bundle is committed** |
+| `frontend/dist` | 11 | **built bundle is committed** (9 of the 11 are bundles under `dist/assets/`; MF-23) |
 | `docs/current` | 11 | canonical docs |
 | `docs/history` | 5 | history docs |
 | `spec/*` | 7 | product/feature specs |
 | `material/*` | 3 | seed source markdown |
 
 **No root `.gitignore` exists** (`cat .gitignore` → no such file). That is the direct cause of
-`node_modules/`, `dist/`, `__pycache__/` (35 tracked files) and `.vite-dev.log` being tracked.
+`node_modules/`, `dist/`, `__pycache__/` (35 tracked files) and `.vite-dev.log` being tracked. Tracked
+totals at the errata pass: **1754** files, of which `frontend/node_modules/` **1533**, this audit
+**12**, `frontend/dist/` **11**, `__pycache__` **35**, other **163** — **[MF-23]**.
 
 ---
 
@@ -72,10 +74,10 @@ disk** at repo root or in `backend/` (`ls -la .env` → absent).
   `wait_for_database()` → `run_database_bootstrap()` → `seed_database(db, parse_start_date())` →
   `refresh_progress_state(db)`. The process therefore **self-migrates and self-seeds on every boot**
   and will not start without a reachable, writable database plus the material markdown files.
-- Only one ASGI app exists; **there is no router package and no `APIRouter`** — all 121 HTTP routes
+- Only one ASGI app exists; **there is no router package and no `APIRouter`** — all 121 HTTP routes (MF-01)
   are declared directly on `app` in the single 2874-line `backend/app/main.py`
   (`grep -c '^@app\\.(get|post|put|patch|delete)'` → 121; breakdown GET 59, POST 51, PATCH 3,
-  PUT 1, DELETE 7).
+  PUT 1, DELETE 7). **[MF-01, MF-04]**
 
 ### Frontend — Vite + React SPA
 - HTML entry `frontend/index.html:9` loads `/src/main.jsx`.
@@ -119,7 +121,7 @@ disk** at repo root or in `backend/` (`ls -la .env` → absent).
 `grep -rhoE "(api|apiFetch)\\(.[^)]*" src/` over `frontend/src` yields **62 distinct API paths after
 normalising template expressions** (`${…}` → `{}`, trailing `/` stripped) — 64 distinct raw strings
 before normalisation. For comparison, the 121 backend routes collapse to **105 distinct path
-templates** under the same normalisation. Only 11 files call the API at all:
+templates** under the same normalisation. **[MF-01, MF-03, MF-21]** Only 11 files call the API at all:
 
 | Calls | File |
 | --- | --- |
@@ -141,11 +143,11 @@ client's API surface.
 
 | File | Lines | Role |
 | --- | --- | --- |
-| `backend/app/main.py` | 2874 | FastAPI app, CORS, auth dependencies, **all 121 routes**, serializers, dev endpoints |
+| `backend/app/main.py` | 2874 | FastAPI app, CORS, auth dependencies, **all 121 routes** (MF-01), serializers, dev endpoints |
 | `backend/app/services.py` | 3267 | 94 domain functions: XP/level/rank maths, quest completion, recompute passes, vocab/collocation/rank-exam logic |
-| `backend/app/seed.py` | 2784 | 52 functions: idempotent seeding of skills/badges/templates/quests/missions/bosses, markdown parsers |
-| `backend/app/models.py` | 1559 | SQLAlchemy 2.0 models — **72 `__tablename__` declarations** |
-| `backend/app/schemas.py` | 1272 | Pydantic I/O models — **119 classes** |
+| `backend/app/seed.py` | 2784 | 52 functions (MF-16): idempotent seeding of skills/badges/templates/quests/missions/bosses, markdown parsers |
+| `backend/app/models.py` | 1559 | SQLAlchemy 2.0 models — **72 `__tablename__` declarations** (MF-09) |
+| `backend/app/schemas.py` | 1272 | Pydantic I/O models — **119 classes** (MF-10) |
 | `backend/app/test_backend.py` | 3004 | unittest suite (see §9) |
 | `backend/app/database.py` | 67 | engine, session factory, `get_db`, bootstrap/migrate |
 | `backend/app/auth_utils.py` | 74 | hand-rolled JWT + password hashing |
@@ -174,9 +176,9 @@ client's API surface.
 
 ### Dev-facing endpoints with surprising reach
 - `backend/app/main.py:1498-1583` `POST /api/dev/reset`: sets `FOREIGN_KEY_CHECKS = 0`, deletes
-  every row of **57 models** (including `Account`, `Campaign`, `Player`, `Skill`), commits, then
-  re-seeds. No token requirement, no environment gate, and **the frontend never calls it** (absent
-  from the 62-path client list) — it is curl-only.
+  every row of **all 72 model tables** (including `Account`, `Campaign`, `Player`, `Skill`; MF-09),
+  commits, then re-seeds. No token requirement, no environment gate, and **the frontend never calls
+  it** (absent from the 62-path client list; MF-21) — it is curl-only.
 - `backend/app/main.py:1587-1597` `POST /api/dev/run_migrations`: runs
   `alembic_command.upgrade(cfg, "head")` using `AlembicConfig("alembic.ini")` — a **relative** path,
   so it depends on the process CWD.

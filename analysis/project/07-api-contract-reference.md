@@ -20,8 +20,11 @@ determined from the complete call-site dump of `grep -rn "api(\|apiFetch(" front
 read), with dynamic path composition resolved by hand.
 
 - **121 route paths** exist across **118 handler functions** (three handlers carry two decorators —
-  §6.4).
-- Route counts by method: `GET` 59, `POST` 51, `PATCH` 3, `PUT` 1, `DELETE` 7.
+  §6.4). **[MF-01, MF-02]**
+- Route counts by method: `GET` 59, `POST` 51, `PATCH` 3, `PUT` 1, `DELETE` 7. **[MF-04]**
+- Auth-level distribution in §2 is **MF-07**; the 21 paths without a response model in §6.1 are
+  **MF-08**. The counts are owned by `README.md` §Canonical measured facts and are not re-derived
+  here.
 - Every `response_model`-bearing route is listed with its model; `—` means the route declares **no**
   response model and returns an untyped dict (or nothing), so its shape is **not enforced and not
   documented by the code** — those are marked `[UNRESOLVED]` shapes in §7.
@@ -123,7 +126,7 @@ through an exported wrapper that nothing imports (`05` §4.2).
 | --- | --- | --- | --- | --- | --- |
 | 1230 | `GET /api/badges` | campaign | — | `list[BadgeOut]` | — (badges arrive via `/api/summary`) |
 | 1236 | `GET /api/boss-battles` | campaign | — | `list[BossBattleOut]` | `App.jsx:495` |
-| 1246 | `POST /api/boss-battles/{battle_id}/claim` | campaign | — | `BossBattleOut` | **— never called** (`06` §D-10) |
+| 1246 | `POST /api/boss-battles/{battle_id}/claim` | campaign | — | `BossBattleOut` | **— never called** (`06` §3 D-10) |
 
 ### 3.7 Test records & certificates — 4 paths
 
@@ -287,12 +290,12 @@ through an exported wrapper that nothing imports (`05` §4.2).
 
 ## 4. Paths no client calls — the "ignored" set
 
-**49 of 121 paths (40%) have no consumer anywhere in `frontend/src`**, including the four
+**49 of 121 paths (40%) have no consumer anywhere in `frontend/src`** (**MF-21**), including the four
 reachable only through dead wrappers. Grouped by why:
 
 | Group | Count | Paths |
 | --- | --- | --- |
-| Backend-only capabilities with no UI (`06` §D-09, §D-19, §D-20) | 17 | the 8 tracker routes, the 3 dev routes, `quest-templates`, `materials`, `materials/{id}`, `roadmap/phases`, `study-plan/current-week`, `certificates` |
+| Backend-only capabilities with no UI (`06` §3 D-09, D-19, D-20) | 17 | the 8 tracker routes, the 3 dev routes, `quest-templates`, `materials`, `materials/{id}`, `roadmap/phases`, `study-plan/current-week`, `certificates` |
 | Unconsumed sub-features of domains that *are* shipped | 17 | `vocabulary/relations` ×2, `flashcards` GET+POST, single-item `vocabulary/{item_id}`, `vocabulary/errors` GET/PATCH/POST, `practice/collocations`, and all 8 collocation-collection/progress routes |
 | Exists but the UI has no wired action | 4 | `boss-battles/{id}/claim`, `quests/{id}/uncomplete`, `setup`, `skills` |
 | Reachable only through a dead exported wrapper | 4 | `onboarding/status`, `certificates/manual`, `rank-exams/status/{skill_id}`, `rank-exams/{attempt_id}` |
@@ -313,7 +316,7 @@ Exactly two, both in dead UI, both in `VocabularyOverlay.jsx`:
 
 | Client call | Line | Route exists? |
 | --- | --- | --- |
-| `POST /api/vocabulary/{item_id}/collocations` | `VocabularyOverlay.jsx:142` | **No.** Verified against all 121 paths; the only `collocations` routes are `/api/collocations/*` and `/api/vocabulary/practice/collocations` (`06` §D-17). |
+| `POST /api/vocabulary/{item_id}/collocations` | `VocabularyOverlay.jsx:142` | **No.** Verified against all 121 paths; the only `collocations` routes are `/api/collocations/*` and `/api/vocabulary/practice/collocations` (`06` §3 D-17). |
 | `DELETE /api/vocabulary/collocations/{collocation_id}` | `VocabularyOverlay.jsx:161` | **No.** Same verification. |
 
 Because `VocabularyOverlay` is imported by nothing (`05` §4.1), neither call can currently fire. They
@@ -324,7 +327,7 @@ flow — see U-24.
 
 ## 6. Contract-shape observations
 
-### 6.1 Routes with no `response_model` — 21 of 121 paths
+### 6.1 Routes with no `response_model` — 21 of 121 paths (MF-08)
 
 Extracted by testing every decorator for the absence of `response_model=`. These return untyped dicts
 (or nothing), so **their response shape is declared nowhere in the code** and is `[UNRESOLVED]` except

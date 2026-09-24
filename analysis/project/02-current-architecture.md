@@ -17,7 +17,8 @@ backend is one 2874-line module with 121 routes, a 3267-line domain module, a 27
 seeder that runs on every boot, and 72 SQLAlchemy tables managed by 31 Alembic revisions applied
 automatically at process start. Authentication is a hand-rolled HS256 JWT (access, 1 h, in
 `localStorage`) plus an opaque rotating refresh token (30 d, httpOnly cookie), enforced by an
-explicit FastAPI dependency chain that **14 of the 121 routes do not use**.
+explicit FastAPI dependency chain that **14 of the 121 routes do not use**. **[MF-01, MF-05, MF-09,
+MF-11, MF-17]**
 
 ---
 
@@ -67,7 +68,7 @@ condition: service_healthy`), `frontend/Dockerfile:1-14`, `backend/Dockerfile:1-
 | Server-rendered UI | No | `frontend/index.html` is a bare `#root` shell |
 | API service | Yes — 1 FastAPI process | `backend/app/main.py:208`, `docker-compose.yml:25` |
 | Separate worker / cron | **No** | no Celery/RQ/APScheduler/`BackgroundTasks`; only `@app.on_event("startup")` `main.py:431` |
-| Datastore | Yes — MySQL 8.4, 72 tables | `docker-compose.yml:2-20`, `backend/app/models.py` |
+| Datastore | Yes — MySQL 8.4, 72 tables (MF-09) | `docker-compose.yml:2-20`, `backend/app/models.py` |
 | Cache | **No** | no Redis/Memcached/in-process cache; engine has only `pool_pre_ping`/`pool_recycle` (`database.py:15-19`) |
 | Message broker / queue | **No** | no Kafka/RabbitMQ/MQTT/Redis client anywhere |
 | Realtime (WS/SSE) | **No** | see `01-discovery-inventory.md` §7 |
@@ -141,9 +142,9 @@ condition: service_healthy`), `frontend/Dockerfile:1-14`, `backend/Dockerfile:1-
    therefore write derived state, and there is no background job that could do it instead.
 9. **Persistence.** One SQLAlchemy `Session` per request via `get_db`
    (`backend/app/database.py:41-46`), `autocommit=False`, commits performed inside handlers.
-10. **Response shaping.** `response_model` is declared on **100 of the 121 routes**
-    (`grep -c 'response_model=' app/main.py` → 100; `backend/app/schemas.py` holds 119 Pydantic
-    classes), alongside hand-written serializer helpers (`serialize_quest` `main.py:311-353`,
+10. **Response shaping.** `response_model` is declared on **100 of the 121 routes** (MF-08;
+    `grep -c 'response_model=' app/main.py` → 100; `backend/app/schemas.py` holds 119 Pydantic
+    classes — MF-10), alongside hand-written serializer helpers (`serialize_quest` `main.py:311-353`,
     `serialize_skill_state` `main.py:356-376`) used by the routes that return unmodelled shapes.
 
 ---
@@ -173,7 +174,7 @@ condition: service_healthy`), `frontend/Dockerfile:1-14`, `backend/Dockerfile:1-
   Because seeding runs at startup, **the material files are runtime inputs, not just dev fixtures** —
   and in compose they are mounted read-only into the backend container
   (`docker-compose.yml:37-39`).
-- **Table clusters (72 tables, `models.py`):** identity/session (6), learning profile + campaign
+- **Table clusters (72 tables, `models.py` — MF-09):** identity/session (6), learning profile + campaign
   config (8), skills/quests/templates (6), the XP & rank ledger (`campaign_skill_states`,
   `skill_xp_transactions`, `player_xp_transactions`, `rank_xp_thresholds`, three policy tables),
   badges, weekly missions, boss battles, test records, rank suggestions/history, certificates,
@@ -230,14 +231,14 @@ no auth middleware, no identity provider, and no server-side session store.**
   (`grep -rn "\.role\b|role==" main.py services.py seed.py` → no matches). No scopes, no ownership
   checks beyond "does this row belong to the caller's campaign/player" filters written inline in
   each handler, no admin surface.
-- **14 of 121 routes carry no auth dependency** (extracted by reading each decorator and its
-  signature block): `/api/health` (`main.py:443`), `/api/auth/register|login|refresh|logout`
+- **14 of 121 routes carry no auth dependency** (**MF-05**, **MF-06**; extracted by reading each
+  decorator and its signature block): `/api/health` (`main.py:443`), `/api/auth/register|login|refresh|logout`
   (`:470`, `:547`, `:612`, `:653`), `/api/quest-templates` (`:912`), `/api/materials` and
   `/api/materials/{id}` (`:917`, `:922`), and the three `/api/dev/*` routes
   (`:1498`, `:1587`, `:1877`), plus `GET/POST /api/collocation-collections` and
   `GET /api/collocation-collections/{id}` (`:2074`, `:2079`, `:2087`).
-  Consequences worth carrying into later sections: `POST /api/dev/reset` **wipes all 57 model
-  tables and re-seeds with no credential of any kind** (`main.py:1498-1583`), and
+  Consequences worth carrying into later sections: `POST /api/dev/reset` **wipes all 72 model
+  tables (MF-09) and re-seeds with no credential of any kind** (`main.py:1498-1583`), and
   `POST /api/collocation-collections` lets an anonymous caller write global master data
   (`main.py:2079-2085`).
 - **No defence in depth on the identity side either:** the JWT is a stored-value bearer token
@@ -269,9 +270,9 @@ no auth middleware, no identity provider, and no server-side session store.**
    query-before-insert patterns (`seed.py`), so restarts converge rather than duplicate.
 5. **No realtime, no push, no background work.** Freshness depends on the user acting; the SPA loads
    its six datasets exactly once per mount (`App.jsx:169-176`).
-6. **Client-heavy derived state.** 31 pure builder functions in `dashboard-data.js` turn API payloads
-   into view models, including a client reimplementation of rank/XP maths
-   (`dashboard-data.js:461-645`).
+6. **Client-heavy derived state.** 25 exported functions in `dashboard-data.js` (35 top-level
+   `function` declarations — MF-20) turn API payloads into view models, including a client
+   reimplementation of rank/XP maths (`dashboard-data.js:461-645`).
 7. **Dev-mode artifacts are committed** (`node_modules` ×1533, `dist/` ×9 assets, `__pycache__`
    ×35), and **no `.gitignore` exists**, so the repository cannot distinguish source from output.
 8. **No quality gates.** No CI, no lint config, no type checking (plain JSX, plain Python without

@@ -321,6 +321,9 @@ Declared per route as a parameter; classified by the most restrictive dependency
 | `player` | `get_current_player` | + a `players` row for that account | **37** |
 | `campaign` | `get_current_campaign` | + an active campaign for that player | **67** |
 
+All four counts are **MF-07** (MF-05 for the 14); the like-for-like classification also appears in
+`07` §2.
+
 ### 6.2 What a level does *not* imply
 
 A level authenticates; it does not scope. There is no scoping middleware and no row-level policy, so
@@ -372,8 +375,8 @@ client-side route guard between "not logged in" and the onboarding form.
 
 ## 7. The unauthenticated surfaces, and how reachable each one really is
 
-**14 paths carry no auth dependency.** Verified by reading each handler signature; the list matches
-`02` §6.3.
+**14 paths carry no auth dependency** (MF-05). Verified by reading each handler signature; the list
+matches `02` §6.3.
 
 | Path | Line | Reached by the app's own client? | Reached by curl / browser? |
 | --- | --- | --- | --- |
@@ -491,7 +494,7 @@ Facts the auth system relies on, all from tracked files:
 Ordered by what would visibly change if the behaviour were absent. This is a statement of current
 dependency, not a recommendation.
 
-1. **The bearer token on 118 of 121 routes.** Everything except the public surface in §7 depends on
+1. **The bearer token on 107 of 121 routes (MF-06).** Everything except the public surface in §7 depends on
    `get_current_account` resolving `sub` → an `Account` row.
 2. **The silent refresh.** The access token lives 3600 s; a session longer than an hour survives only
    because `client.js:49-52` retries through `/api/auth/refresh`. Without it, every session would end
@@ -512,7 +515,7 @@ dependency, not a recommendation.
 
 ---
 
-## 11. Unresolved (added to `03-unresolved.md` §H)
+## 11. Unresolved (recorded in `03-unresolved.md`: U-35/U-36 in §3, U-37–U-39 in §1)
 
 - **U-35 — Whether `JWT_SECRET_KEY` is set in any real deployment.** The key is absent from
   `.env.example` and `docker-compose.yml`, so the compose configuration uses the hardcoded fallback;

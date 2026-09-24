@@ -191,7 +191,7 @@ outside its own file, then checking the five `React.lazy` call sites in `App.jsx
 | `SuggestionInboxPanel.jsx` | 44 lines | Suggestion inbox panel | zero references; superseded by `SuggestionInboxDropdown.jsx` (live) |
 | `CommandHeader.jsx` | 52 lines | Header with level block and date | zero references |
 
-That is **9 of 40 components (22%)** — 1285 JSX lines — that no code path can render. `PanelFrame.jsx`
+That is **9 of 40 components (22%)** — 1285 JSX lines — that no code path can render (**MF-19**). `PanelFrame.jsx`
 is *not* in this list: it is used by three live components (`MainQuestMapPanel`, `DailyQuestPanel`,
 `BossTimelinePanel`).
 
@@ -229,7 +229,7 @@ labels — Error Log `Ready`, Writing/Speaking/Mock Test `Preparing`. The backen
 (`main.py:1383-1400` error logs, `:1402-1420` writing, `:1421-1439` speaking, `:1440-1461` mock
 tests), and the only component that renders them is the dead `TrackersPanel`. `[DERIVED]` So the
 in-app status labels themselves are unrenderable: nothing in the shipped UI can tell a user whether
-Error Log is "Ready" or "Preparing". This is carried into `06-domain-capability-inventory.md` §D-09.
+Error Log is "Ready" or "Preparing". This is carried into `06-domain-capability-inventory.md` §3 D-09.
 
 ---
 

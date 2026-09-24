@@ -185,8 +185,8 @@ to re-implement. Each is `CLIENT-ONLY`.
 
 ## B1. The component inventory
 
-40 files in `frontend/src/components/` (plus `App.jsx` and 3 route pages), 6276 lines of
-`styles.css`. `[DERIVED]` Counted from the files: 19 components call `useState` and **21 call it zero
+40 files in `frontend/src/components/` (plus `App.jsx` and 3 route pages — MF-19), 6276 lines of
+`styles.css` (MF-20). `[DERIVED]` Counted from the files: 19 components call `useState` and **21 call it zero
 times** — those 21 are pure functions of props and have no stored state to preserve.
 
 **Stateless (21)** — safe to replace without touching behaviour, provided the props keep arriving:
@@ -223,7 +223,7 @@ rule are called out in B4.
 | `SetupSummaryPanel.jsx` *(dead)* | 124 | 4 | setup draft |
 | `RankBossNotif.jsx` | 92 | 1 | banner dismissal |
 
-**Dead by reachability** (`05` §4.1): 9 of the 40 — 1285 lines — plus 5 exported API wrappers that no
+**Dead by reachability** (`05` §4.1; MF-19): 9 of the 40 — 1285 lines — plus 5 exported API wrappers that no
 component imports.
 
 ## B2. Styling and layout
@@ -237,7 +237,7 @@ written and never read (`03` U-20).
 
 ## B3. Formatting helpers and view models
 
-`dashboard-data.js` (817 lines) is the whole client-side derivation layer: **25 exported functions, 6
+`dashboard-data.js` (817 lines — MF-20) is the whole client-side derivation layer: **25 exported functions, 6
 exported constants, plus 14 module-private helpers/tables**.
 
 | Group | Members | Authority |
@@ -282,7 +282,7 @@ Per-screen honesty. Each row is a rule or state whose only implementation is in 
 
 | Fact | Evidence |
 | --- | --- |
-| **100 of 121 paths declare a `response_model`**; the other **21 return untyped dicts or nothing** | `07` §6.1 — the 21 include `GET /api/vocabulary/boss/status` (a nested structure read by both `main.py:2228` and `VocabularyBoss.jsx`) and the three destructive `/api/dev/*` routes |
+| **100 of 121 paths declare a `response_model`**; the other **21 return untyped dicts or nothing** (MF-08) | `07` §6.1 — the 21 include `GET /api/vocabulary/boss/status` (a nested structure read by both `main.py:2228` and `VocabularyBoss.jsx`) and the three destructive `/api/dev/*` routes |
 | `SummaryOut.player` is a raw `dict` while every sibling field is typed | `07` §6.2 |
 | Three handlers are aliased onto two paths each (six paths, three functions) | `main.py:1290-1291`, `:1307-1308`, `:1325-1326` |
 | 14 routes carry no auth dependency; 4 are `account`, 37 `player`, 67 `campaign` | `09` §6.1 |
@@ -343,7 +343,7 @@ today's shapes as authoritative would freeze a defect:
 | Drift | Evidence |
 | --- | --- |
 | Two client calls target routes that do not exist (`POST /api/vocabulary/{id}/collocations`, `DELETE /api/vocabulary/collocations/{id}`) | `VocabularyOverlay.jsx:142`, `:161` — in dead UI, so unreachable today (`07` §5) |
-| Rank exams cannot be answered: the client's only MCQ branch tests `question_type === 'mcq'` while the backend only emits `'multiple_choice'` | `RankExamScreen.jsx:162`; `seed.py:2048`, `main.py:1718` (`06` §D-11a, U-21) |
+| Rank exams cannot be answered: the client's only MCQ branch tests `question_type === 'mcq'` while the backend only emits `'multiple_choice'` | `RankExamScreen.jsx:162`; `seed.py:2048`, `main.py:1718` (`06` §3 D-11 item (a), U-21) |
 | Monthly boss rewards cannot be claimed: the endpoint is complete and no UI calls it | `main.py:1246-1267`; `07` §4 |
 | The vocab boss writes `confirmed_rank` from a client-supplied `score_pct` while its own exam ships `correct_answer` | `services.py:2999`, `:3015`; `schemas.py:890` (`09` §8) |
 | The review screen shows XP nothing awards | `VocabularyWorkspace.jsx:861` vs `services.py:1816-1857` |
@@ -352,7 +352,7 @@ today's shapes as authoritative would freeze a defect:
 | Client skill ladder saturates at 10 000 while rank S needs 13 279 | `dashboard-data.js:4` vs `services.py:79-88` |
 | Client "earned XP" reads `quest.xp` while reward value reads `earned_xp` | `dashboard-data.js:412-414` vs `:420-426` |
 | `POST /api/quests/{id}/uncomplete` exists and is unreachable by construction | `main.py:1078`; `07` §6.5 |
-| 49 of 121 paths have no client consumer; 21 paths have no response model | `07` §4, §6.1 |
+| 49 of 121 paths have no client consumer (MF-21); 21 paths have no response model (MF-08) | `07` §4, §6.1 |
 | Client-side `onboardingCompleted` can only move upward within a session | `AuthProvider.jsx:9-12`, `09` §5 |
 | `error.sessionExpired` set and never read | `client.js:71`, `09` §4.1 |
 | Duplicate refresh logic: the exported `refreshTokens` wrapper is unused while `client.js` refreshes internally | `api/auth.js:64-66` vs `client.js:17-31` |
